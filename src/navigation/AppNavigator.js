@@ -1,19 +1,19 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart } from 'lucide-react-native';
-import DashboardOverview from '../screens/DashboardOverview';
-import ExpenseTracker from '../screens/ExpenseTracker';
-import Budgeting from '../screens/Budgeting';
-import Reports from '../screens/Reports';
-import AIAssistant from '../screens/AIAssistant';
-import LoyaltyCards from '../screens/LoyaltyCards';
-import Shopping from '../screens/Shopping';
-import SharedBudgets from '../screens/SharedBudgets';
-import FinancialSuite from '../screens/FinancialSuite';
+import DashboardOverview from '../screens/DashboardOverview/index';
+import ExpenseTracker from '../screens/ExpenseTracker/index';
+import Budgeting from '../screens/Budgeting/index';
+import Reports from '../screens/Reports/index';
+import AIAssistant from '../screens/AIAssistant/index';
+import LoyaltyCards from '../screens/LoyaltyCards/index';
+import Shopping from '../screens/Shopping/index';
+import SharedBudgets from '../screens/SharedBudgets/index';
+import FinancialSuite from '../screens/FinancialSuite/index';
 import { COLORS } from '../constants/theme';
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import AddTransaction from '../screens/AddTransaction';
+import AddTransaction from '../screens/AddTransaction/index';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();

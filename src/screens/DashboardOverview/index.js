@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES } from '../constants/theme';
-import { Wallet, TrendingUp, Target, Plus, Search, MoreHorizontal, ShoppingCart, Tv, DollarSign, Coffee, LogOut } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../lib/supabase';
+import { COLORS } from '../../constants/theme';
+import { TrendingUp, Target, Plus, Search, MoreHorizontal, DollarSign, LogOut, ReceiptText, Tag, Pencil } from 'lucide-react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { supabase } from '../../lib/supabase';
+import styles from './styles';
 
 const DashboardOverview = () => {
   const navigation = useNavigation();
   const [userEmail, setUserEmail] = useState('Alex Rivera');
+  const [recentTransactions, setRecentTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -17,6 +20,37 @@ const DashboardOverview = () => {
       }
     });
   }, []);
+
+  const fetchRecentTransactions = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          categories (
+            name,
+            color,
+            icon
+          )
+        `)
+        .order('date', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+      setRecentTransactions(data || []);
+    } catch (error) {
+      console.error('Error fetching recent transactions:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchRecentTransactions();
+    }, [])
+  );
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -41,7 +75,6 @@ const DashboardOverview = () => {
             </TouchableOpacity>
           </View>
         </View>
-
 
         {/* Balance Card */}
         <View style={styles.balanceCard}>
@@ -105,59 +138,43 @@ const DashboardOverview = () => {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Recent Transactions */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Expenses')}>
             <Text style={styles.seeAllText}>See All</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.transactionsList}>
-          <TransactionItem 
-            icon={ShoppingCart} 
-            title="Whole Foods Market" 
-            category="Groceries" 
-            time="Today, 10:45 AM" 
-            amount="-PKR 85.00" 
-            method="Debit Card"
-            color="#FF9800"
-          />
-          <TransactionItem 
-            icon={Tv} 
-            title="Netflix Subscription" 
-            category="Entertainment" 
-            time="Yesterday" 
-            amount="-PKR 15.00" 
-            method="Automatic"
-            color="#F44336"
-          />
-          <TransactionItem 
-            icon={DollarSign} 
-            title="Monthly Salary" 
-            category="Income" 
-            time="2 days ago" 
-            amount="+PKR 4,000.00" 
-            method="Deposit"
-            color="#4CAF50"
-            isPositive
-          />
-          <TransactionItem 
-            icon={Coffee} 
-            title="Starbucks Coffee" 
-            category="Food & Drink" 
-            time="3 days ago" 
-            amount="-PKR 6.45" 
-            method="Apple Pay"
-            color="#795548"
-          />
+          {recentTransactions.length > 0 ? (
+            recentTransactions.map((item) => (
+              <TransactionItem 
+                key={item.id}
+                icon={ReceiptText} 
+                title={item.title} 
+                category={item.categories?.name || 'Uncategorized'} 
+                time={new Date(item.date).toLocaleDateString() + ' ' + new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+                amount={`${item.type === 'expense' ? '-' : '+'}PKR ${parseFloat(item.amount).toFixed(2)}`} 
+                method={item.description || 'No note'}
+                color={item.categories?.color || COLORS.primary}
+                isPositive={item.type === 'income'}
+                onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
+              />
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>
+                {loading ? 'Loading transactions...' : 'No recent transactions found.'}
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-const TransactionItem = ({ icon: Icon, title, category, time, amount, method, color, isPositive }) => (
+const TransactionItem = ({ icon: Icon, title, category, time, amount, method, color, isPositive, onEdit }) => (
   <View style={styles.transactionItem}>
     <View style={[styles.transactionIcon, { backgroundColor: color + '20' }]}>
       <Icon color={color} size={24} />
@@ -168,165 +185,15 @@ const TransactionItem = ({ icon: Icon, title, category, time, amount, method, co
     </View>
     <View style={styles.transactionAmountContainer}>
       <Text style={[styles.transactionAmount, isPositive && { color: COLORS.accent }]}>{amount}</Text>
-      <Text style={styles.transactionMethod}>{method}</Text>
+      <TouchableOpacity onPress={onEdit} style={styles.editButton}>
+        <Tag color={COLORS.textSecondary} size={14} style={{ marginRight: 4 }} />
+        <Text style={styles.transactionMethod}>{method}</Text>
+      </TouchableOpacity>
     </View>
+    <TouchableOpacity onPress={onEdit} style={styles.pencilIcon}>
+      <Pencil color={COLORS.textSecondary} size={20} />
+    </TouchableOpacity>
   </View>
 );
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scrollContent: {
-    padding: SIZES.padding,
-    paddingBottom: 40,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  welcomeText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
-  userName: {
-    color: COLORS.text,
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  iconButton: {
-    padding: 8,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-  },
-  balanceCard: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 24,
-    padding: 32,
-    marginBottom: 24,
-  },
-  balanceLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  balanceAmount: {
-    color: COLORS.text,
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 24,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 20,
-    padding: 16,
-  },
-  statItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  statLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-  },
-  statValue: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  sectionTitle: {
-    color: COLORS.text,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  quickActions: {
-    marginBottom: 24,
-  },
-  actionItem: {
-    alignItems: 'center',
-    marginRight: 24,
-  },
-  actionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  actionText: {
-    color: COLORS.text,
-    fontSize: 14,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  seeAllText: {
-    color: COLORS.accent,
-    fontSize: 14,
-  },
-  transactionsList: {
-    gap: 16,
-  },
-  transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 16,
-  },
-  transactionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  transactionDetails: {
-    flex: 1,
-  },
-  transactionTitle: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  transactionSub: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-  },
-  transactionAmountContainer: {
-    alignItems: 'flex-end',
-  },
-  transactionAmount: {
-    color: COLORS.error,
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  transactionMethod: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
-  },
-});
 
 export default DashboardOverview;

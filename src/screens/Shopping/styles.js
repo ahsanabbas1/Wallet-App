@@ -1,0 +1,171 @@
+import { StyleSheet } from 'react-native';
+import { COLORS, SIZES } from '../../constants/theme';
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SIZES.padding,
+    backgroundColor: COLORS.card,
+  },
+  headerTitle: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  iconButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.card,
+    padding: 4,
+    margin: SIZES.padding,
+    borderRadius: 12,
+    gap: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+  },
+  activeTab: {
+    backgroundColor: COLORS.primary + '15',
+  },
+  tabText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  activeTabText: {
+    color: COLORS.primary,
+  },
+  scrollContent: {
+    paddingHorizontal: SIZES.padding,
+    paddingBottom: 100,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  sectionCount: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    marginRight: 16,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemLabel: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  itemSub: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+  },
+  warrantyCard: {
+    backgroundColor: COLORS.card,
+    padding: 20,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  warrantyIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  warrantyInfo: {
+    flex: 1,
+  },
+  warrantyName: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  warrantyDate: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  detailsButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+  },
+  detailsButtonText: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+});

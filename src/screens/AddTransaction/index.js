@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES } from '../constants/theme';
-import { supabase } from '../lib/supabase';
-import { X, Check, ChevronDown, Plus } from 'lucide-react-native';
+import { supabase } from '../../lib/supabase';
+import styles from './styles';
 
-const AddTransaction = ({ navigation }) => {
+const AddTransaction = ({ navigation, route }) => {
+  const editTransaction = route.params?.transaction;
+  const isEdit = !!editTransaction;
+
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [type, setType] = useState('expense'); // 'expense' or 'income'
-  const [amount, setAmount] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [type, setType] = useState(editTransaction?.type || 'expense');
+  const [amount, setAmount] = useState(editTransaction?.amount?.toString() || '');
+  const [title, setTitle] = useState(editTransaction?.title || '');
+  const [description, setDescription] = useState(editTransaction?.description || '');
 
   useEffect(() => {
+    navigation.setOptions({
+      title: isEdit ? 'Edit Record' : 'Add Record'
+    });
     fetchCategories();
-  }, []);
+  }, [isEdit]);
 
   const fetchCategories = async () => {
     try {
@@ -29,9 +34,14 @@ const AddTransaction = ({ navigation }) => {
       
       if (data && data.length > 0) {
         setCategories(data);
-        setSelectedCategory(data[0]);
+        if (isEdit) {
+          const found = data.find(c => c.id === editTransaction.category_id);
+          setSelectedCategory(found || data[0]);
+        } else {
+          setSelectedCategory(data[0]);
+        }
       } else {
-        // Fallback dummy categories if DB is empty or schema not exposed
+        // Fallback dummy categories
         const fallback = [
           { id: '1', name: 'Dining Out', color: '#FF5722' },
           { id: '2', name: 'Grocery', color: '#FF9800' },
@@ -42,7 +52,6 @@ const AddTransaction = ({ navigation }) => {
       }
     } catch (error) {
       console.warn('Error fetching categories:', error.message);
-      // Fallback
       const fallback = [
         { id: '1', name: 'Dining Out', color: '#FF5722' },
         { id: '2', name: 'Grocery', color: '#FF9800' },
@@ -61,24 +70,33 @@ const AddTransaction = ({ navigation }) => {
 
     setLoading(true);
     try {
-      // For this demo, we use the test user ID
       const userId = '00000000-0000-0000-0000-000000000001';
 
-      const { error } = await supabase
-        .from('transactions')
-        .insert({
-          user_id: userId,
-          category_id: selectedCategory.id,
-          amount: parseFloat(amount),
-          type: type,
-          title: title,
-          description: description,
-          date: new Date().toISOString(),
-        });
+      const transactionData = {
+        user_id: userId,
+        category_id: selectedCategory.id,
+        amount: parseFloat(amount),
+        type: type,
+        title: title,
+        description: description,
+        date: isEdit ? editTransaction.date : new Date().toISOString(),
+      };
 
-      if (error) throw error;
+      let result;
+      if (isEdit) {
+        result = await supabase
+          .from('transactions')
+          .update(transactionData)
+          .eq('id', editTransaction.id);
+      } else {
+        result = await supabase
+          .from('transactions')
+          .insert(transactionData);
+      }
 
-      Alert.alert('Success', 'Transaction added successfully!', [
+      if (result.error) throw result.error;
+
+      Alert.alert('Success', `Transaction ${isEdit ? 'updated' : 'added'} successfully!`, [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (error) {
@@ -135,7 +153,7 @@ const AddTransaction = ({ navigation }) => {
           />
         </View>
 
-        {/* Category Picker (Simplified) */}
+        {/* Category Picker */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Category</Text>
           <View style={styles.categoryList}>
@@ -182,118 +200,12 @@ const AddTransaction = ({ navigation }) => {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.saveButtonText}>Save Transaction</Text>
+            <Text style={styles.saveButtonText}>{isEdit ? 'Update Record' : 'Save Transaction'}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scrollContent: {
-    padding: SIZES.padding,
-  },
-  typeContainer: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 6,
-    marginBottom: 24,
-  },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderRadius: 12,
-  },
-  typeButtonActive: {
-    backgroundColor: COLORS.primary,
-  },
-  typeText: {
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  typeTextActive: {
-    color: COLORS.text,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    marginBottom: 8,
-    fontWeight: '600',
-  },
-  amountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
-    paddingVertical: 8,
-  },
-  currencySymbol: {
-    color: COLORS.text,
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginRight: 8,
-  },
-  amountInput: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  input: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 16,
-    color: COLORS.text,
-    fontSize: 16,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  categoryList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: COLORS.card,
-  },
-  categoryChipText: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-  },
-  saveButton: {
-    backgroundColor: COLORS.accent,
-    borderRadius: 16,
-    padding: 18,
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  saveButtonText: {
-    color: COLORS.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-});
 
 export default AddTransaction;
