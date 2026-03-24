@@ -27,14 +27,14 @@ const SharedBudgets = () => {
             </View>
           </View>
           
-          <Text style={styles.budgetAmount}>$2,400 <Text style={styles.budgetTotal}>of $5,000</Text></Text>
+          <Text style={styles.budgetAmount}>PKR 2,400 <Text style={styles.budgetTotal}>of PKR 5,000</Text></Text>
           
           <View style={styles.progressContainer}>
             <View style={[styles.progressBar, { width: '48%' }]} />
           </View>
           <View style={styles.progressLabels}>
             <Text style={styles.progressText}>48% completed</Text>
-            <Text style={styles.progressText}>$2,600 left</Text>
+            <Text style={styles.progressText}>PKR 2,600 left</Text>
           </View>
         </View>
 
@@ -58,7 +58,7 @@ const SharedBudgets = () => {
         <View style={styles.activityList}>
           <ActivityItem 
             user="Sarah J." 
-            action="added $150" 
+            action="added PKR 150" 
             item="Flights" 
             time="2h ago" 
             icon={Plane} 
@@ -66,7 +66,7 @@ const SharedBudgets = () => {
           />
           <ActivityItem 
             user="Mark T." 
-            action="added $45" 
+            action="added PKR 45" 
             item="Dinner" 
             time="5h ago" 
             icon={Utensils} 

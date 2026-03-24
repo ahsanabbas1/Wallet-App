@@ -35,7 +35,7 @@ const LoyaltyCards = () => {
             sub="Grocery Store" 
             mainStat="1,240" 
             unit="Pts" 
-            footer="$12.40 Value" 
+            footer="PKR 12.40 Value" 
             color="#4CAF50"
             progress={0.6}
           />
@@ -45,7 +45,7 @@ const LoyaltyCards = () => {
             sub="Fashion & Apparel" 
             mainStat="450" 
             unit="Pts" 
-            footer="550 pts until next $10 voucher" 
+            footer="550 pts until next PKR 10 voucher" 
             color="#E91E63"
             progress={0.45}
           />

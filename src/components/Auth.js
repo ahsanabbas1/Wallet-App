@@ -59,7 +59,7 @@ export default function Auth() {
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.header}>
                     <View style={styles.logoContainer}>
-                        <Text style={styles.logoText}>$</Text>
+                        <Text style={styles.logoText}>PKR</Text>
                     </View>
                     <Text style={styles.title}>Wallet App</Text>
                     <Text style={styles.subtitle}>Manage your finances with ease</Text>

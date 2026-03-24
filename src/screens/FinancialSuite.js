@@ -14,7 +14,7 @@ const FinancialSuite = () => {
         <View style={styles.netWorthCard}>
           <Text style={styles.netWorthLabel}>Estimated Net Worth</Text>
           <View style={styles.netWorthRow}>
-            <Text style={styles.netWorthAmount}>$125,400.00</Text>
+            <Text style={styles.netWorthAmount}>PKR 125,400.00</Text>
             <View style={styles.trendBadge}>
               <TrendingUp color={COLORS.accent} size={14} />
               <Text style={styles.trendText}>+5.2%</Text>
@@ -41,7 +41,7 @@ const FinancialSuite = () => {
         <View style={styles.toolsGrid}>
           <ToolItem icon={TrendingUp} title="Investment Tracker" sub="Stocks & Crypto" color="#4CAF50" />
           <ToolItem icon={Receipt} title="Tax Planner" sub="Q3 Projections" color="#FF9800" />
-          <ToolItem icon={Calculator} title="Retirement" sub="Goal: $2.5M" color="#2196F3" />
+          <ToolItem icon={Calculator} title="Retirement" sub="Goal: PKR 2.5M" color="#2196F3" />
           <ToolItem icon={ShieldAlert} title="Debt Manager" sub="2 Active Loans" color="#F44336" />
         </View>
 

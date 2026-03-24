@@ -13,7 +13,7 @@ const Budgeting = () => {
         {/* Remaining Balance Card */}
         <View style={styles.remainingCard}>
           <Text style={styles.remainingLabel}>Remaining Balance</Text>
-          <Text style={styles.remainingAmount}>$600.00</Text>
+          <Text style={styles.remainingAmount}>PKR 600.00</Text>
           <View style={styles.progressContainer}>
             <View style={[styles.progressBar, { width: '80%' }]} />
           </View>
@@ -98,7 +98,7 @@ const BudgetItem = ({ icon: Icon, title, used, total, color }) => {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardValue}>${used} of ${total} used</Text>
+          <Text style={styles.cardValue}>PKR {used} of PKR {total} used</Text>
         </View>
       </View>
       <View style={styles.miniProgressContainer}>
@@ -118,7 +118,7 @@ const GoalItem = ({ icon: Icon, title, saved, goal, color }) => {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardValue}>${saved.toLocaleString()} / ${goal.toLocaleString()}</Text>
+          <Text style={styles.cardValue}>PKR {saved.toLocaleString()} / PKR {goal.toLocaleString()}</Text>
         </View>
       </View>
       <View style={styles.miniProgressContainer}>

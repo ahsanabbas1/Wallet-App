@@ -16,13 +16,13 @@ const Reports = () => {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Spent this month</Text>
           <View style={styles.amountRow}>
-            <Text style={styles.summaryAmount}>$2,450.00</Text>
+            <Text style={styles.summaryAmount}>PKR 2,450.00</Text>
             <View style={styles.trendBadge}>
               <ArrowUp color={COLORS.error} size={14} />
               <Text style={styles.trendText}>+12%</Text>
             </View>
           </View>
-          <Text style={styles.comparisonText}>vs $2,180.00 last month</Text>
+          <Text style={styles.comparisonText}>vs PKR 2,180.00 last month</Text>
         </View>
 
         {/* Spending Breakdown */}
@@ -32,11 +32,11 @@ const Reports = () => {
         </View>
 
         <View style={styles.breakdownContainer}>
-          <BreakdownItem label="Food & Drink" percent={35} amount="$857.50" color="#FF9800" />
-          <BreakdownItem label="Transport" percent={20} amount="$490.00" color="#03A9F4" />
-          <BreakdownItem label="Entertainment" percent={15} amount="$367.50" color="#F44336" />
-          <BreakdownItem label="Utilities" percent={10} amount="$245.00" color="#FFC107" />
-          <BreakdownItem label="Others" percent={20} amount="$490.00" color="#9E9E9E" />
+          <BreakdownItem label="Food & Drink" percent={35} amount="PKR 857.50" color="#FF9800" />
+          <BreakdownItem label="Transport" percent={20} amount="PKR 490.00" color="#03A9F4" />
+          <BreakdownItem label="Entertainment" percent={15} amount="PKR 367.50" color="#F44336" />
+          <BreakdownItem label="Utilities" percent={10} amount="PKR 245.00" color="#FFC107" />
+          <BreakdownItem label="Others" percent={20} amount="PKR 490.00" color="#9E9E9E" />
         </View>
 
         {/* Monthly Trend */}

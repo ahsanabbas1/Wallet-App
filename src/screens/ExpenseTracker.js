@@ -29,7 +29,7 @@ const ExpenseTracker = ({ navigation }) => {
               <ArrowUpRight color={COLORS.accent} size={24} />
             </View>
             <Text style={styles.summaryLabel}>Total Income</Text>
-            <Text style={[styles.summaryAmount, { color: COLORS.accent }]}>$4,500.00</Text>
+            <Text style={[styles.summaryAmount, { color: COLORS.accent }]}>PKR 4,500.00</Text>
           </View>
 
           <View style={[styles.summaryCard, { backgroundColor: COLORS.card }]}>
@@ -37,7 +37,7 @@ const ExpenseTracker = ({ navigation }) => {
               <ArrowDownLeft color={COLORS.error} size={24} />
             </View>
             <Text style={styles.summaryLabel}>Total Expenses</Text>
-            <Text style={[styles.summaryAmount, { color: COLORS.error }]}>$2,100.00</Text>
+            <Text style={[styles.summaryAmount, { color: COLORS.error }]}>PKR 2,100.00</Text>
           </View>
         </View>
 
@@ -52,21 +52,21 @@ const ExpenseTracker = ({ navigation }) => {
             icon={ShoppingCart} 
             title="Grocery Store" 
             sub="Weekly shop at Central Market..." 
-            amount="-$156.00" 
+            amount="-PKR 156.00" 
             color="#FF9800"
           />
           <LedgerItem 
             icon={Fuel} 
             title="Fuel Station" 
             sub="Full tank for commute" 
-            amount="-$45.00" 
+            amount="-PKR 45.00" 
             color="#03A9F4"
           />
           <LedgerItem 
             icon={Briefcase} 
             title="Freelance Project" 
             sub="UI Design - Final payment" 
-            amount="+$2,500.00" 
+            amount="+PKR 2,500.00" 
             color={COLORS.accent}
             isPositive
           />
@@ -82,7 +82,7 @@ const ExpenseTracker = ({ navigation }) => {
             icon={Tv} 
             title="Netflix" 
             sub="Monthly subscription fee" 
-            amount="-$15.00" 
+            amount="-PKR 15.00" 
             color="#F44336"
           />
         </View>

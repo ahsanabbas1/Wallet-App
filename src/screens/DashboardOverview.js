@@ -46,7 +46,7 @@ const DashboardOverview = () => {
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>$12,450.00</Text>
+          <Text style={styles.balanceAmount}>PKR 12,450.00</Text>
           
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
@@ -55,7 +55,7 @@ const DashboardOverview = () => {
               </View>
               <View>
                 <Text style={styles.statLabel}>Monthly Spend</Text>
-                <Text style={styles.statValue}>$1,200.00</Text>
+                <Text style={styles.statValue}>PKR 1,200.00</Text>
               </View>
             </View>
             <View style={styles.statItem}>
@@ -119,7 +119,7 @@ const DashboardOverview = () => {
             title="Whole Foods Market" 
             category="Groceries" 
             time="Today, 10:45 AM" 
-            amount="-$85.00" 
+            amount="-PKR 85.00" 
             method="Debit Card"
             color="#FF9800"
           />
@@ -128,7 +128,7 @@ const DashboardOverview = () => {
             title="Netflix Subscription" 
             category="Entertainment" 
             time="Yesterday" 
-            amount="-$15.00" 
+            amount="-PKR 15.00" 
             method="Automatic"
             color="#F44336"
           />
@@ -137,7 +137,7 @@ const DashboardOverview = () => {
             title="Monthly Salary" 
             category="Income" 
             time="2 days ago" 
-            amount="+$4,000.00" 
+            amount="+PKR 4,000.00" 
             method="Deposit"
             color="#4CAF50"
             isPositive
@@ -147,7 +147,7 @@ const DashboardOverview = () => {
             title="Starbucks Coffee" 
             category="Food & Drink" 
             time="3 days ago" 
-            amount="-$6.45" 
+            amount="-PKR 6.45" 
             method="Apple Pay"
             color="#795548"
           />

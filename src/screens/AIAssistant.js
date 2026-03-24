@@ -28,7 +28,7 @@ const AIAssistant = () => {
           <Message bubble="User" text="How much did I spend on groceries this month?" time="10:01 AM" />
           <Message 
             bubble="AI" 
-            text="You've spent $857.50 on groceries so far. This is 5% more than last month." 
+            text="You've spent PKR 857.50 on groceries so far. This is 5% more than last month." 
             time="10:01 AM" 
             hasSparkle 
           />

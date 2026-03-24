@@ -111,7 +111,7 @@ const AddTransaction = ({ navigation }) => {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Amount</Text>
           <View style={styles.amountContainer}>
-            <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.currencySymbol}>PKR </Text>
             <TextInput
               style={styles.amountInput}
               placeholder="0.00"
