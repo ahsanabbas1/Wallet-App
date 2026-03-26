@@ -14,12 +14,32 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
+      if (session?.user) {
+        ensureUserProfile(session.user)
+      }
     })
 
     supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session?.user) {
+        ensureUserProfile(session.user)
+      }
     })
   }, [])
+
+  const ensureUserProfile = async (user) => {
+    try {
+      await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          name: user.email.split('@')[0],
+          email: user.email,
+        }, { onConflict: 'id' })
+    } catch (e) {
+      console.warn('Could not ensure user profile:', e.message)
+    }
+  }
 
   return (
     <SafeAreaProvider>

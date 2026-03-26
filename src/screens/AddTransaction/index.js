@@ -41,24 +41,11 @@ const AddTransaction = ({ navigation, route }) => {
           setSelectedCategory(data[0]);
         }
       } else {
-        // Fallback dummy categories
-        const fallback = [
-          { id: '1', name: 'Dining Out', color: '#FF5722' },
-          { id: '2', name: 'Grocery', color: '#FF9800' },
-          { id: '3', name: 'Transport', color: '#03A9F4' },
-        ];
-        setCategories(fallback);
-        setSelectedCategory(fallback[0]);
+        Alert.alert('No Categories', 'No categories found. Please contact support.');
       }
     } catch (error) {
       console.warn('Error fetching categories:', error.message);
-      const fallback = [
-        { id: '1', name: 'Dining Out', color: '#FF5722' },
-        { id: '2', name: 'Grocery', color: '#FF9800' },
-        { id: '3', name: 'Transport', color: '#03A9F4' },
-      ];
-      setCategories(fallback);
-      setSelectedCategory(fallback[0]);
+      Alert.alert('Error', 'Could not load categories. Please try again.');
     }
   };
 
@@ -70,7 +57,13 @@ const AddTransaction = ({ navigation, route }) => {
 
     setLoading(true);
     try {
-      const userId = '00000000-0000-0000-0000-000000000001';
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        Alert.alert('Error', 'You must be logged in to save a transaction.');
+        setLoading(false);
+        return;
+      }
+      const userId = session.user.id;
 
       const transactionData = {
         user_id: userId,

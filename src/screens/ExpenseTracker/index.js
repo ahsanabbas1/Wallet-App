@@ -15,6 +15,9 @@ const ExpenseTracker = ({ navigation }) => {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
       const { data, error } = await supabase
         .from('transactions')
         .select(`
@@ -25,6 +28,7 @@ const ExpenseTracker = ({ navigation }) => {
             icon
           )
         `)
+        .eq('user_id', session.user.id)
         .order('date', { ascending: false });
 
       if (error) throw error;

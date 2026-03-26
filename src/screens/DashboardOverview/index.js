@@ -24,6 +24,9 @@ const DashboardOverview = () => {
   const fetchRecentTransactions = async () => {
     try {
       setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
       const { data, error } = await supabase
         .from('transactions')
         .select(`
@@ -34,6 +37,7 @@ const DashboardOverview = () => {
             icon
           )
         `)
+        .eq('user_id', session.user.id)
         .order('date', { ascending: false })
         .limit(5);
 
