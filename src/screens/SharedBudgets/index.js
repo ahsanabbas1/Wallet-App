@@ -2,14 +2,22 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { UserPlus, MessageCircle, Settings, Plane, Utensils } from 'lucide-react-native';
+import { UserPlus, MessageCircle, Settings, Plane, Utensils, Menu } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
 import { styles } from './styles';
 
 const SharedBudgets = () => {
+  const { openDrawer } = useDrawer();
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={{ marginRight: 16 }}
+            onPress={openDrawer}
+          >
+            <Menu color={COLORS.text} size={24} />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Shared Budgets</Text>
           <TouchableOpacity style={styles.iconButton}>
             <Settings color={COLORS.text} size={20} />

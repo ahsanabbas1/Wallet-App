@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import styles from './styles';
+import { COLORS } from '../../constants/theme';
 
 const AddTransaction = ({ navigation, route }) => {
   const editTransaction = route.params?.transaction;
@@ -90,7 +91,7 @@ const AddTransaction = ({ navigation, route }) => {
 
       if (result.error) throw result.error;
 
-      Alert.alert('Success', `Transaction ${isEdit ? 'updated' : 'added'} successfully!`);
+      // Alert.alert('Success', `Transaction ${isEdit ? 'updated' : 'added'} successfully!`);
       setTimeout(() => {
         navigation.goBack();
       }, 100);
@@ -188,7 +189,12 @@ const AddTransaction = ({ navigation, route }) => {
 
         {/* Description Input */}
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Note (Optional)</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={styles.label}>Note (Optional)</Text>
+            <Text style={{ color: description.length >= 240 ? COLORS.error : COLORS.textSecondary, fontSize: 10 }}>
+              {description.length}/250
+            </Text>
+          </View>
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Add a note..."
@@ -196,7 +202,7 @@ const AddTransaction = ({ navigation, route }) => {
             multiline
             numberOfLines={3}
             value={description}
-            onChangeText={setDescription}
+            onChangeText={(text) => text.length <= 250 && setDescription(text)}
           />
         </View>
 

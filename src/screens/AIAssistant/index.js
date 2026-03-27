@@ -2,10 +2,12 @@ import React from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { Send, Bot, User, Sparkles, Plus } from 'lucide-react-native';
+import { Send, Bot, User, Sparkles, Plus, Menu } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
 import { styles } from './styles';
 
 const AIAssistant = () => {
+  const { openDrawer } = useDrawer();
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
@@ -14,6 +16,12 @@ const AIAssistant = () => {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={{ marginRight: 16 }}
+            onPress={openDrawer}
+          >
+            <Menu color={COLORS.text} size={24} />
+          </TouchableOpacity>
           <Bot color={COLORS.primary} size={28} />
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle}>AI Assistant</Text>

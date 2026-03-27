@@ -2,14 +2,24 @@ import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { BarChart3, PieChart as PieIcon, ArrowUp, Info } from 'lucide-react-native';
+import { BarChart3, PieChart as PieIcon, ArrowUp, Info, Menu } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
 import { styles } from './styles';
 
 const Reports = () => {
+  const { openDrawer } = useDrawer();
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
+        <TouchableOpacity 
+          style={{ marginRight: 16 }}
+          onPress={openDrawer}
+        >
+          <Menu color={COLORS.text} size={24} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Financial Reports</Text>
+      </View>
 
         {/* Monthly Summary */}
         <View style={styles.summaryCard}>

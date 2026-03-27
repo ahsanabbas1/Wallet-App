@@ -1,24 +1,112 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
-import { Wallet, TrendingUp, Target, Plus, Utensils, Zap, Car, Plane } from 'lucide-react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
+import { Wallet, TrendingUp, Target, Plus, Utensils, Zap, Car, Plane, Menu, ShoppingCart, Fuel, Briefcase, Tv, HelpCircle } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
+import { useFocusEffect } from '@react-navigation/native';
+import { supabase } from '../../lib/supabase';
 import { styles } from './styles';
+import { COLORS } from '../../constants/theme';
 
-const Budgeting = () => {
+const Budgeting = ({ navigation }) => {
+  const { openDrawer } = useDrawer();
+  const [loading, setLoading] = useState(true);
+  const [budgets, setBudgets] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [totals, setTotals] = useState({ remaining: 0, percentUsed: 0 });
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      // Fetch Budgets
+      const { data: budgetData } = await supabase
+        .from('budgets')
+        .select('*, categories(*)')
+        .eq('user_id', session.user.id);
+      
+      // Fetch Transactions for specific period (simplifying to current month)
+      const now = new Date();
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const { data: transData } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('type', 'expense')
+        .gte('date', firstDay);
+
+      // Fetch Goals
+      const { data: goalData } = await supabase
+        .from('savings_goals')
+        .select('*')
+        .eq('user_id', session.user.id);
+
+      const processedBudgets = (budgetData || []).map(b => {
+        const spent = (transData || [])
+          .filter(t => t.category_id === b.category_id)
+          .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+        return { ...b, used: spent };
+      });
+
+      setBudgets(processedBudgets);
+      setGoals(goalData || []);
+
+      const totalBudget = processedBudgets.reduce((sum, b) => sum + parseFloat(b.total_amount), 0);
+      const totalUsed = processedBudgets.reduce((sum, b) => sum + b.used, 0);
+      const remaining = totalBudget - totalUsed;
+      const percentUsed = totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0;
+
+      setTotals({ remaining, percentUsed });
+    } catch (error) {
+      console.error('Error fetching budgeting data:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
+
+  const getIcon = (iconName) => {
+    const icons = {
+      Utensils, Zap, Car, Plane, ShoppingCart, Fuel, Briefcase, Tv
+    };
+    return icons[iconName] || HelpCircle;
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color={COLORS.primary} size="large" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.headerTitle}>July Budget</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
+        <TouchableOpacity 
+          style={{ marginRight: 16 }}
+          onPress={openDrawer}
+        >
+          <Menu color={COLORS.text} size={24} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Monthly Budget</Text>
+      </View>
         
         {/* Remaining Balance Card */}
         <View style={styles.remainingCard}>
-          <Text style={styles.remainingLabel}>Remaining Balance</Text>
-          <Text style={styles.remainingAmount}>PKR 600.00</Text>
+          <Text style={styles.remainingLabel}>Monthly Budget Remaining</Text>
+          <Text style={styles.remainingAmount}>PKR {(totals.remaining || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
           <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { width: '80%' }]} />
+            <View style={[styles.progressBar, { width: `${Math.min(totals.percentUsed || 0, 100)}%` }]} />
           </View>
-          <Text style={styles.progressText}>You've used 80% of your monthly budget.</Text>
+          <Text style={styles.progressText}>You've used {(totals.percentUsed || 0).toFixed(0)}% of your monthly budget.</Text>
         </View>
 
         {/* Category Budgets */}
@@ -30,59 +118,41 @@ const Budgeting = () => {
         </View>
 
         <View style={styles.budgetList}>
-          <BudgetItem 
-            icon={Utensils} 
-            title="Dining Out" 
-            used={450} 
-            total={500} 
-            color="#FF5722"
-          />
-          <BudgetItem 
-            icon={Zap} 
-            title="Utilities" 
-            used={120} 
-            total={150} 
-            color="#FFC107"
-          />
-          <BudgetItem 
-            icon={Car} 
-            title="Transport" 
-            used={85} 
-            total={200} 
-            color="#03A9F4"
-          />
+          {budgets.length > 0 ? budgets.map(b => (
+            <BudgetItem 
+              key={b.id}
+              icon={getIcon(b.categories?.icon)} 
+              title={b.categories?.name || 'Uncategorized'} 
+              used={b.used} 
+              total={parseFloat(b.total_amount)} 
+              color={b.categories?.color || COLORS.primary}
+            />
+          )) : (
+            <Text style={{ color: COLORS.textSecondary, textAlign: 'center', padding: 20 }}>No budgets set for this month.</Text>
+          )}
         </View>
 
         {/* Savings Goals */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Savings Goals</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Savings Goals')}>
             <Plus color={COLORS.primary} size={20} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.goalsList}>
-          <GoalItem 
-            icon={Car} 
-            title="New Car" 
-            saved={15000} 
-            goal={20000} 
-            color={COLORS.primary}
-          />
-          <GoalItem 
-            icon={Wallet} 
-            title="Emergency Fund" 
-            saved={4000} 
-            goal={10000} 
-            color={COLORS.accent}
-          />
-          <GoalItem 
-            icon={Plane} 
-            title="Europe Trip" 
-            saved={500} 
-            goal={5000} 
-            color="#9C27B0"
-          />
+          {goals.length > 0 ? goals.map(g => (
+            <GoalItem 
+              key={g.id}
+              icon={getIcon(g.icon) || Target} 
+              title={g.title} 
+              saved={parseFloat(g.saved_amount || 0)} 
+              goal={parseFloat(g.target_amount)} 
+              color={g.color || COLORS.accent}
+            />
+          )) : (
+            <Text style={{ color: COLORS.textSecondary, textAlign: 'center', padding: 20 }}>No savings goals active.</Text>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

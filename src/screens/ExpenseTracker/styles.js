@@ -31,15 +31,31 @@ export default StyleSheet.create({
     padding: SIZES.padding,
   },
   summaryContainer: {
-    flexDirection: 'row',
-    gap: 16,
     marginBottom: 24,
   },
   summaryCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryItem: {
     flex: 1,
-    padding: 16,
-    borderRadius: 20,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  divider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 16,
+  },
+  summaryValue: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   summaryIcon: {
     width: 40,

@@ -2,14 +2,24 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { PieChart, TrendingUp, Landmark, Calculator, Receipt, ShieldAlert, ChevronRight } from 'lucide-react-native';
+import { PieChart, TrendingUp, Landmark, Calculator, Receipt, ShieldAlert, ChevronRight, Menu } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
 import { styles } from './styles';
 
 const FinancialSuite = () => {
+  const { openDrawer } = useDrawer();
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
+        <TouchableOpacity 
+          style={{ marginRight: 16 }}
+          onPress={openDrawer}
+        >
+          <Menu color={COLORS.text} size={24} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Financial Suite</Text>
+      </View>
 
         {/* Net Worth Card */}
         <View style={styles.netWorthCard}>

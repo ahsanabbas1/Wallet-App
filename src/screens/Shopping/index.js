@@ -2,15 +2,23 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { ShoppingCart, ShieldCheck, Laptop, Refrigerator, ChevronRight, Plus, Search } from 'lucide-react-native';
+import { ShoppingCart, ShieldCheck, Laptop, Refrigerator, ChevronRight, Plus, Search, Menu } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
 import { styles } from './styles';
 
 const Shopping = () => {
+  const { openDrawer } = useDrawer();
   const [activeTab, setActiveTab] = useState('shopping');
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <TouchableOpacity 
+          style={{ marginRight: 16 }}
+          onPress={openDrawer}
+        >
+          <Menu color={COLORS.text} size={24} />
+        </TouchableOpacity>
         <Text style={styles.headerTitle}>Asset Manager</Text>
         <TouchableOpacity style={styles.iconButton}>
           <Search color={COLORS.text} size={20} />

@@ -2,14 +2,22 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { Coffee, Store, ShoppingBag, Fuel, Plus, ScanLine } from 'lucide-react-native';
+import { Coffee, Store, ShoppingBag, Fuel, Plus, ScanLine, Menu } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
 import { styles } from './styles';
 
 const LoyaltyCards = () => {
+  const { openDrawer } = useDrawer();
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
+          <TouchableOpacity 
+            style={{ marginRight: 16 }}
+            onPress={openDrawer}
+          >
+            <Menu color={COLORS.text} size={24} />
+          </TouchableOpacity>
           <Text style={styles.headerTitle}>Loyalty Cards</Text>
           <TouchableOpacity style={styles.scanButton}>
             <ScanLine color={COLORS.text} size={20} />
