@@ -155,6 +155,14 @@ export default StyleSheet.create({
     marginLeft: 12,
     padding: 4,
   },
+  actionButtons: {
+    marginLeft: 12,
+    gap: 8,
+    alignItems: 'center',
+  },
+  deleteIcon: {
+    padding: 4,
+  },
   transactionAmountContainer: {
     alignItems: 'flex-end',
   },

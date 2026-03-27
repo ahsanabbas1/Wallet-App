@@ -116,6 +116,16 @@ export default StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 8,
   },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 8,
+    backgroundColor: 'rgba(255,0,0,0.08)',
+    borderRadius: 8,
+  },
   emptyState: {
     padding: 24,
     backgroundColor: COLORS.card,
@@ -127,5 +137,36 @@ export default StyleSheet.create({
   emptyStateText: {
     color: COLORS.textSecondary,
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  filterOption: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  filterOptionText: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
+  },
+  filterOptionActive: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
   },
 });

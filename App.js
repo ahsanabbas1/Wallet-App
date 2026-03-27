@@ -1,8 +1,11 @@
 import 'react-native-url-polyfill/auto'
 import React, { useState, useEffect } from 'react'
 import { View } from 'react-native'
+
 import { NavigationContainer } from '@react-navigation/native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { DrawerProvider } from './src/context/DrawerContext'
+import GlobalDrawer from './src/components/GlobalDrawer'
 import { StatusBar } from 'expo-status-bar'
 import { supabase } from './src/lib/supabase'
 import Auth from './src/components/Auth/index'
@@ -44,10 +47,13 @@ export default function App() {
   return (
     <SafeAreaProvider>
       {session && session.user ? (
-        <NavigationContainer>
-          <AppNavigator />
-          <StatusBar style="light" />
-        </NavigationContainer>
+        <DrawerProvider>
+          <NavigationContainer>
+            <AppNavigator />
+            <GlobalDrawer />
+            <StatusBar style="light" />
+          </NavigationContainer>
+        </DrawerProvider>
       ) : (
         <Auth />
       )}

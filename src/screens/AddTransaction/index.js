@@ -34,11 +34,12 @@ const AddTransaction = ({ navigation, route }) => {
       
       if (data && data.length > 0) {
         setCategories(data);
+        const filtered = data.filter(c => c.type === type || c.type === 'both');
         if (isEdit) {
           const found = data.find(c => c.id === editTransaction.category_id);
-          setSelectedCategory(found || data[0]);
+          setSelectedCategory(found || filtered[0]);
         } else {
-          setSelectedCategory(data[0]);
+          setSelectedCategory(filtered[0]);
         }
       } else {
         Alert.alert('No Categories', 'No categories found. Please contact support.');
@@ -89,15 +90,30 @@ const AddTransaction = ({ navigation, route }) => {
 
       if (result.error) throw result.error;
 
-      Alert.alert('Success', `Transaction ${isEdit ? 'updated' : 'added'} successfully!`, [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      Alert.alert('Success', `Transaction ${isEdit ? 'updated' : 'added'} successfully!`);
+      setTimeout(() => {
+        navigation.goBack();
+      }, 100);
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleTypeChange = (newType) => {
+    setType(newType);
+    const filtered = categories.filter(c => c.type === newType || c.type === 'both');
+    if (filtered.length > 0) {
+      if (!filtered.find(c => c.id === selectedCategory?.id)) {
+        setSelectedCategory(filtered[0]);
+      }
+    } else {
+      setSelectedCategory(null);
+    }
+  };
+
+  const filteredCategories = categories.filter(c => c.type === type || c.type === 'both');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -106,13 +122,13 @@ const AddTransaction = ({ navigation, route }) => {
         <View style={styles.typeContainer}>
           <TouchableOpacity 
             style={[styles.typeButton, type === 'expense' && styles.typeButtonActive]} 
-            onPress={() => setType('expense')}
+            onPress={() => handleTypeChange('expense')}
           >
             <Text style={[styles.typeText, type === 'expense' && styles.typeTextActive]}>Expense</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.typeButton, type === 'income' && styles.typeButtonActive]} 
-            onPress={() => setType('income')}
+            onPress={() => handleTypeChange('income')}
           >
             <Text style={[styles.typeText, type === 'income' && styles.typeTextActive]}>Income</Text>
           </TouchableOpacity>
@@ -150,7 +166,7 @@ const AddTransaction = ({ navigation, route }) => {
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Category</Text>
           <View style={styles.categoryList}>
-            {categories.map((cat) => (
+            {filteredCategories.map((cat) => (
               <TouchableOpacity 
                 key={cat.id}
                 style={[

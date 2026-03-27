@@ -2,16 +2,20 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { TrendingUp, Target, Plus, Search, MoreHorizontal, DollarSign, LogOut, ReceiptText, Tag, Pencil } from 'lucide-react-native';
+import { TrendingUp, Target, Plus, Search, Menu, MoreHorizontal, DollarSign, LogOut, ReceiptText, Tag, Pencil, Trash2 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import styles from './styles';
 
 const DashboardOverview = () => {
   const navigation = useNavigation();
+  const { openDrawer } = useDrawer();
   const [userEmail, setUserEmail] = useState('Alex Rivera');
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [totals, setTotals] = useState({ balance: 0, monthlySpend: 0 });
+  const [savingsProgress, setSavingsProgress] = useState(0);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -38,16 +42,81 @@ const DashboardOverview = () => {
           )
         `)
         .eq('user_id', session.user.id)
-        .order('date', { ascending: false })
-        .limit(5);
+        .eq('user_id', session.user.id)
+        .order('date', { ascending: false });
 
       if (error) throw error;
-      setRecentTransactions(data || []);
+      const trans = data || [];
+      
+      // Top 5 for recent list
+      setRecentTransactions(trans.slice(0, 5));
+
+      // Calculate totals
+      const income = trans.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      const expense = trans.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      
+      const balance = income - expense;
+      
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      const monthlySpend = trans
+        .filter(t => t.type === 'expense')
+        .filter(t => {
+          const d = new Date(t.date);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        })
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+      setTotals({ balance, monthlySpend });
+
+      // Fetch Savings Goals
+      const { data: goalsData } = await supabase
+        .from('savings_goals')
+        .select('*')
+        .eq('user_id', session.user.id);
+        
+      if (goalsData && goalsData.length > 0) {
+        const totalTarget = goalsData.reduce((sum, g) => sum + parseFloat(g.target_amount), 0);
+        const totalSaved = goalsData.reduce((sum, g) => sum + parseFloat(g.current_amount), 0);
+        const percent = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
+        setSavingsProgress(percent);
+      } else {
+        setSavingsProgress(0);
+      }
+
     } catch (error) {
       console.error('Error fetching recent transactions:', error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteTransaction = (transaction) => {
+    Alert.alert(
+      'Delete Transaction',
+      `Are you sure you want to delete "${transaction.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('transactions')
+                .delete()
+                .eq('id', transaction.id);
+              if (error) throw error;
+              fetchRecentTransactions();
+            } catch (error) {
+              Alert.alert('Error', error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   useFocusEffect(
@@ -66,14 +135,19 @@ const DashboardOverview = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.welcomeText}>Welcome back</Text>
-            <Text style={styles.userName}>{userEmail.split('@')[0]}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity 
+              style={[styles.iconButton, { marginRight: 16 }]}
+              onPress={openDrawer}
+            >
+              <Menu color={COLORS.text} size={24} />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.welcomeText}>Welcome back</Text>
+              <Text style={styles.userName}>{userEmail.split('@')[0]}</Text>
+            </View>
           </View>
           <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity style={[styles.iconButton, { marginRight: 12 }]}>
-              <Search color={COLORS.text} size={24} />
-            </TouchableOpacity>
             <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
               <LogOut color={COLORS.error} size={24} />
             </TouchableOpacity>
@@ -83,7 +157,7 @@ const DashboardOverview = () => {
         {/* Balance Card */}
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceAmount}>PKR 12,450.00</Text>
+          <Text style={styles.balanceAmount}>PKR {totals.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
           
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
@@ -92,7 +166,7 @@ const DashboardOverview = () => {
               </View>
               <View>
                 <Text style={styles.statLabel}>Monthly Spend</Text>
-                <Text style={styles.statValue}>PKR 1,200.00</Text>
+                <Text style={styles.statValue}>PKR {totals.monthlySpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
               </View>
             </View>
             <View style={styles.statItem}>
@@ -101,7 +175,7 @@ const DashboardOverview = () => {
               </View>
               <View>
                 <Text style={styles.statLabel}>Savings Goal</Text>
-                <Text style={styles.statValue}>75%</Text>
+                <Text style={styles.statValue}>{savingsProgress.toFixed(0)}%</Text>
               </View>
             </View>
           </View>
@@ -163,6 +237,7 @@ const DashboardOverview = () => {
                 color={item.categories?.color || COLORS.primary}
                 isPositive={item.type === 'income'}
                 onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
+                onDelete={() => handleDeleteTransaction(item)}
               />
             ))
           ) : (
@@ -178,7 +253,7 @@ const DashboardOverview = () => {
   );
 };
 
-const TransactionItem = ({ icon: Icon, title, category, time, amount, method, color, isPositive, onEdit }) => (
+const TransactionItem = ({ icon: Icon, title, category, time, amount, method, color, isPositive, onEdit, onDelete }) => (
   <View style={styles.transactionItem}>
     <View style={[styles.transactionIcon, { backgroundColor: color + '20' }]}>
       <Icon color={color} size={24} />
@@ -194,9 +269,14 @@ const TransactionItem = ({ icon: Icon, title, category, time, amount, method, co
         <Text style={styles.transactionMethod}>{method}</Text>
       </TouchableOpacity>
     </View>
-    <TouchableOpacity onPress={onEdit} style={styles.pencilIcon}>
-      <Pencil color={COLORS.textSecondary} size={20} />
-    </TouchableOpacity>
+    <View style={styles.actionButtons}>
+      <TouchableOpacity onPress={onEdit} style={styles.pencilIcon}>
+        <Pencil color={COLORS.textSecondary} size={20} />
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onDelete} style={styles.deleteIcon}>
+        <Trash2 color={COLORS.error} size={20} />
+      </TouchableOpacity>
+    </View>
   </View>
 );
 

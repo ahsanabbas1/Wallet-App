@@ -1,6 +1,6 @@
 import React from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart } from 'lucide-react-native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart, Target } from 'lucide-react-native';
 import DashboardOverview from '../screens/DashboardOverview/index';
 import ExpenseTracker from '../screens/ExpenseTracker/index';
 import Budgeting from '../screens/Budgeting/index';
@@ -10,61 +10,33 @@ import LoyaltyCards from '../screens/LoyaltyCards/index';
 import Shopping from '../screens/Shopping/index';
 import SharedBudgets from '../screens/SharedBudgets/index';
 import FinancialSuite from '../screens/FinancialSuite/index';
+import SavingsGoals from '../screens/SavingsGoals/index';
 import { COLORS } from '../constants/theme';
-
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AddTransaction from '../screens/AddTransaction/index';
 
-const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-const TabNavigator = () => {
+const MainStack = () => {
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        tabBarIcon: ({ color, size }) => {
-          let IconComponent;
-          if (route.name === 'Dashboard') IconComponent = Home;
-          else if (route.name === 'Expenses') IconComponent = List;
-          else if (route.name === 'Budgeting') IconComponent = LayoutDashboard;
-          else if (route.name === 'Reports') IconComponent = BarChart;
-          else if (route.name === 'AI Assistant') IconComponent = MessageSquare;
-          else if (route.name === 'Loyalty') IconComponent = CreditCard;
-          else if (route.name === 'Shopping') IconComponent = ShoppingBag;
-          else if (route.name === 'Shared') IconComponent = Users;
-          else if (route.name === 'Financial Suite') IconComponent = PieChart;
-
-          return <IconComponent color={color} size={size} />;
-        },
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.textSecondary,
-        tabBarStyle: {
-          backgroundColor: COLORS.card,
-          borderTopColor: 'transparent',
-        },
-        headerStyle: {
-          backgroundColor: COLORS.card,
-        },
-        headerTintColor: COLORS.text,
-      })}
-    >
-      <Tab.Screen name="Dashboard" component={DashboardOverview} />
-      <Tab.Screen name="Expenses" component={ExpenseTracker} />
-      <Tab.Screen name="Budgeting" component={Budgeting} />
-      <Tab.Screen name="Reports" component={Reports} />
-      <Tab.Screen name="AI Assistant" component={AIAssistant} />
-      <Tab.Screen name="Loyalty" component={LoyaltyCards} />
-      <Tab.Screen name="Shopping" component={Shopping} />
-      <Tab.Screen name="Shared" component={SharedBudgets} />
-      <Tab.Screen name="Financial Suite" component={FinancialSuite} />
-    </Tab.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Dashboard" component={DashboardOverview} />
+      <Stack.Screen name="Expenses" component={ExpenseTracker} />
+      <Stack.Screen name="Savings Goals" component={SavingsGoals} />
+      <Stack.Screen name="Budgeting" component={Budgeting} />
+      <Stack.Screen name="Reports" component={Reports} />
+      <Stack.Screen name="AI Assistant" component={AIAssistant} />
+      <Stack.Screen name="Loyalty" component={LoyaltyCards} />
+      <Stack.Screen name="Shopping" component={Shopping} />
+      <Stack.Screen name="Shared" component={SharedBudgets} />
+      <Stack.Screen name="Financial Suite" component={FinancialSuite} />
+    </Stack.Navigator>
   );
 };
 
 const AppNavigator = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen name="MainTabs" component={MainStack} />
       <Stack.Screen 
         name="AddTransaction" 
         component={AddTransaction} 
