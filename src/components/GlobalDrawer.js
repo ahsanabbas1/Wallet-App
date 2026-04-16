@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { useDrawer } from '../context/DrawerContext';
 import { COLORS, SIZES } from '../constants/theme';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
@@ -53,8 +53,9 @@ const GlobalDrawer = () => {
           <DrawerItem icon={Home} label="Dashboard" onPress={() => handleNavigate('Dashboard')} />
           <DrawerItem icon={List} label="Expenses" onPress={() => handleNavigate('Expenses')} />
           <DrawerItem icon={Target} label="Savings Goals" onPress={() => handleNavigate('Savings Goals')} />
-          <DrawerItem icon={LayoutDashboard} label="Budgeting" onPress={() => handleNavigate('Budgeting')} />
           <DrawerItem icon={BarChart3} label="Reports" onPress={() => handleNavigate('Reports')} />
+          <DrawerItem icon={CalendarClock} label="Planned Payments" onPress={() => handleNavigate('Planned')} />
+          <DrawerItem icon={LayoutDashboard} label="Budgeting" onPress={() => handleNavigate('Budgeting')} />
           <DrawerItem icon={MessageSquare} label="AI Assistant" onPress={() => handleNavigate('AI Assistant')} />
           <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} />
           <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />

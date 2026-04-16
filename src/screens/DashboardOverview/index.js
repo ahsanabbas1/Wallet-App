@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Svg, Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { COLORS } from '../../constants/theme';
-import { TrendingUp, Target, Plus, Search, Menu, MoreHorizontal, DollarSign, LogOut, ReceiptText, Tag, Pencil, Trash2 } from 'lucide-react-native';
+import { TrendingUp, Target, Plus, Search, Menu, MoreHorizontal, DollarSign, LogOut, ReceiptText, Tag, Pencil, Trash2, CalendarClock } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
@@ -23,7 +23,7 @@ const formatAmount = (amount) => {
 const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
-  const [userEmail, setUserEmail] = useState('User');
+  const [userName, setUserName] = useState('User');
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({ balance: 0, monthlySpend: 0, totalSaved: 0, totalIncome: 0 });
@@ -32,12 +32,28 @@ const DashboardOverview = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserEmail(user.email);
+  const fetchUserData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // First try to get it from users table (synced in App.js)
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('name')
+        .eq('id', user.id)
+        .single();
+      
+      if (dbUser?.name) {
+        setUserName(dbUser.name);
+      } else {
+        // Fallback to metadata or email
+        const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0];
+        setUserName(name);
       }
-    });
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
   }, []);
 
   const fetchRecentTransactions = async () => {
@@ -155,6 +171,7 @@ const DashboardOverview = () => {
   useFocusEffect(
     useCallback(() => {
       fetchRecentTransactions();
+      fetchUserData();
     }, [])
   );
 
@@ -306,6 +323,7 @@ const DashboardOverview = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Pressable 
@@ -316,7 +334,7 @@ const DashboardOverview = () => {
             </Pressable>
             <View>
               <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.userName}>{userEmail.split('@')[0]}</Text>
+              <Text style={styles.userName}>{userName}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row' }}>
@@ -326,6 +344,7 @@ const DashboardOverview = () => {
           </View>
         </View>
 
+        {/* Cash & Spend Cards */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
           <View style={[styles.balanceCard, { flex: 1, marginRight: 8, marginBottom: 0, padding: 20 }]}>
             <Text style={styles.balanceLabel}>Cash in PKR</Text>
@@ -337,6 +356,7 @@ const DashboardOverview = () => {
           </View>
         </View>
 
+        {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActions}>
           <Pressable 
@@ -360,11 +380,11 @@ const DashboardOverview = () => {
             </View>
             <Text style={styles.actionText}>Goal</Text>
           </Pressable>
-          <Pressable style={styles.actionItem}>
+          <Pressable style={styles.actionItem} onPress={() => navigation.navigate('Planned')}>
             <View style={[styles.actionIcon, { backgroundColor: COLORS.card }]}>
-              <MoreHorizontal color={COLORS.text} size={24} />
+              <CalendarClock color={COLORS.primary} size={24} />
             </View>
-            <Text style={styles.actionText}>More</Text>
+            <Text style={styles.actionText}>Planned</Text>
           </Pressable>
         </ScrollView>
 

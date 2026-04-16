@@ -11,6 +11,7 @@ import Shopping from '../screens/Shopping/index';
 import SharedBudgets from '../screens/SharedBudgets/index';
 import FinancialSuite from '../screens/FinancialSuite/index';
 import SavingsGoals from '../screens/SavingsGoals/index';
+import PlannedPayments from '../screens/PlannedPayments/index';
 import { COLORS } from '../constants/theme';
 import AddTransaction from '../screens/AddTransaction/index';
 
@@ -22,6 +23,7 @@ const MainStack = () => {
       <Stack.Screen name="Dashboard" component={DashboardOverview} />
       <Stack.Screen name="Expenses" component={ExpenseTracker} />
       <Stack.Screen name="Savings Goals" component={SavingsGoals} />
+      <Stack.Screen name="Planned" component={PlannedPayments} />
       <Stack.Screen name="Budgeting" component={Budgeting} />
       <Stack.Screen name="Reports" component={Reports} />
       <Stack.Screen name="AI Assistant" component={AIAssistant} />
