@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Dimensions, Animated, Easing } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Svg, Path, Circle, G, Text as SvgText } from 'react-native-svg';
 import { COLORS } from '../../constants/theme';
@@ -62,10 +62,8 @@ const DashboardOverview = () => {
       if (error) throw error;
       const trans = data || [];
       
-      // Top 5 for recent list
       setRecentTransactions(trans.slice(0, 5));
 
-      // Calculate totals
       const income = trans.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
       const expense = trans.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
       const balance = income - expense;
@@ -82,7 +80,6 @@ const DashboardOverview = () => {
         })
         .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-      // Fetch Savings Goals
       const { data: goalsData } = await supabase
         .from('savings_goals')
         .select('*')
@@ -100,7 +97,6 @@ const DashboardOverview = () => {
 
       setTotals({ balance, monthlySpend, totalSaved: totalSavedCount, totalIncome: income });
 
-      // Process Category Breakdown (Donut Data)
       const catTotals = {};
       let totalExpense = 0;
       trans.filter(t => t.type === 'expense').forEach(t => {
@@ -119,8 +115,6 @@ const DashboardOverview = () => {
       
       setCategoryBreakdown(breakdown);
 
-      // Calculations for Gauge
-      // balanceScore: (Now vs goal) - simplify to (Income / Expense ratio or something)
       const balanceScore = Math.min(Math.max((income / (expense || 1)) * 50, 0), 100);
       const cashFlowScore = Math.min(Math.max((income - expense) > 0 ? 80 : 20, 0), 100);
       setPerformanceMetrics({ balanceScore, cashFlowScore });
@@ -169,7 +163,6 @@ const DashboardOverview = () => {
     if (error) Alert.alert('Error', error.message);
   };
 
-  // Helper component for Donuts with improved spacing and clickability
   const DonutChart = ({ data }) => {
     const radius = 70;
     const strokeWidth = 32;
@@ -216,17 +209,16 @@ const DashboardOverview = () => {
             </G>
           </Svg>
 
-          {/* Legend Items */}
           <View style={{ maxWidth: '40%', gap: 8 }}>
             {data.slice(0, 4).map((item, idx) => (
-              <TouchableOpacity 
+              <Pressable 
                 key={idx} 
                 style={{ flexDirection: 'row', alignItems: 'center' }}
                 onPress={() => setSelectedCategory(item)}
               >
                 <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color, marginRight: 8 }} />
                 <Text style={{ color: COLORS.text, fontSize: 12, flexShrink: 1 }} numberOfLines={1}>{item.name}</Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
         </View>
@@ -243,9 +235,7 @@ const DashboardOverview = () => {
     );
   };
 
-  // Precise Animated Needle using setNativeProps for performance
   const GaugeChart = ({ score, label }) => {
-    const needleRef = React.useRef(null);
     const [displayScore, setDisplayScore] = useState(0);
 
     useEffect(() => {
@@ -258,11 +248,7 @@ const DashboardOverview = () => {
         const now = Date.now();
         const progress = Math.min((now - startTime) / duration, 1);
         const currentScore = start + (end - start) * progress;
-        
-        // Update needle rotation directly on the Ref if we had access to G rotation...
-        // But for consistency let's update state for the score text
         setDisplayScore(currentScore);
-
         if (progress < 1) requestAnimationFrame(animate);
       };
       animate();
@@ -273,15 +259,10 @@ const DashboardOverview = () => {
     return (
       <View style={{ alignItems: 'center', flex: 1, padding: 5 }}>
         <Svg height="80" width="100" viewBox="0 0 100 60">
-           {/* Background Track */}
            <Path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" strokeLinecap="round" />
-           
-           {/* Highlighted Color Regions */}
            <Path d="M 10 50 A 40 40 0 0 1 30 18" fill="none" stroke={COLORS.error} strokeWidth="8" strokeOpacity="0.8" />
            <Path d="M 30 18 A 40 40 0 0 1 70 18" fill="none" stroke={COLORS.warning} strokeWidth="8" strokeOpacity="0.8" />
            <Path d="M 70 18 A 40 40 0 0 1 90 50" fill="none" stroke={COLORS.accent} strokeWidth="8" strokeOpacity="0.8" />
-           
-           {/* Needle inside SVG for perfect center alignment */}
            <G rotation={rotation} origin="50, 50">
              <Path d="M 50 50 L 50 15" stroke={COLORS.text} strokeWidth="2.5" strokeLinecap="round" />
              <Circle cx="50" cy="50" r="3" fill={COLORS.text} />
@@ -306,18 +287,18 @@ const DashboardOverview = () => {
         <Text style={[styles.transactionAmount, isPositive && { color: COLORS.accent }]} numberOfLines={1} adjustsFontSizeToFit>
           {parseFloat(amount.replace(/[^0-9.-]/g, '')) > 1000000 ? amount.substring(0, 1) + formatAmount(parseFloat(amount.replace(/[^0-9.-]/g, ''))) : amount}
         </Text>
-        <TouchableOpacity onPress={onEdit} style={styles.editButton}>
+        <Pressable onPress={onEdit} style={styles.editButton}>
           <Tag color={COLORS.textSecondary} size={14} style={{ marginRight: 4 }} />
           <Text style={styles.transactionMethod} numberOfLines={1} ellipsizeMode="tail">{method}</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
       <View style={styles.actionButtons}>
-        <TouchableOpacity onPress={onEdit} style={styles.pencilIcon}>
+        <Pressable onPress={onEdit} style={styles.pencilIcon}>
           <Pencil color={COLORS.textSecondary} size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={onDelete} style={styles.deleteIcon}>
+        </Pressable>
+        <Pressable onPress={onDelete} style={styles.deleteIcon}>
           <Trash2 color={COLORS.error} size={20} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );
@@ -325,28 +306,26 @@ const DashboardOverview = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity 
+            <Pressable 
               style={[styles.iconButton, { marginRight: 16 }]}
               onPress={openDrawer}
             >
               <Menu color={COLORS.text} size={24} />
-            </TouchableOpacity>
+            </Pressable>
             <View>
               <Text style={styles.welcomeText}>Welcome back</Text>
               <Text style={styles.userName}>{userEmail.split('@')[0]}</Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row' }}>
-            <TouchableOpacity style={styles.iconButton} onPress={handleSignOut}>
+            <Pressable style={styles.iconButton} onPress={handleSignOut}>
               <LogOut color={COLORS.error} size={24} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 
-        {/* Cash & Spend Cards */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
           <View style={[styles.balanceCard, { flex: 1, marginRight: 8, marginBottom: 0, padding: 20 }]}>
             <Text style={styles.balanceLabel}>Cash in PKR</Text>
@@ -358,10 +337,9 @@ const DashboardOverview = () => {
           </View>
         </View>
 
-        {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActions}>
-          <TouchableOpacity 
+          <Pressable 
             style={styles.actionItem}
             onPress={() => navigation.navigate('AddTransaction')}
           >
@@ -369,25 +347,25 @@ const DashboardOverview = () => {
               <Plus color={COLORS.text} size={24} />
             </View>
             <Text style={styles.actionText}>Add</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Expenses')}>
+          </Pressable>
+          <Pressable style={styles.actionItem} onPress={() => navigation.navigate('Expenses')}>
             <View style={[styles.actionIcon, { backgroundColor: COLORS.accent }]}>
               <DollarSign color={COLORS.text} size={24} />
             </View>
             <Text style={styles.actionText}>Ledger</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem} onPress={() => navigation.navigate('Savings Goals')}>
+          </Pressable>
+          <Pressable style={styles.actionItem} onPress={() => navigation.navigate('Savings Goals')}>
             <View style={[styles.actionIcon, { backgroundColor: COLORS.warning }]}>
               <Target color={COLORS.text} size={24} />
             </View>
             <Text style={styles.actionText}>Goal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionItem}>
+          </Pressable>
+          <Pressable style={styles.actionItem}>
             <View style={[styles.actionIcon, { backgroundColor: COLORS.card }]}>
               <MoreHorizontal color={COLORS.text} size={24} />
             </View>
             <Text style={styles.actionText}>More</Text>
-          </TouchableOpacity>
+          </Pressable>
         </ScrollView>
 
         <View style={styles.sectionHeader}>
@@ -397,9 +375,9 @@ const DashboardOverview = () => {
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Expenses')}>
+          <Pressable onPress={() => navigation.navigate('Expenses')}>
             <Text style={styles.seeAllText}>See All</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <View style={styles.transactionsList}>
@@ -428,7 +406,6 @@ const DashboardOverview = () => {
           )}
         </View>
 
-        {/* Wallet Dashboard Section */}
         <View style={{ marginTop: 30, padding: 16, backgroundColor: COLORS.card, borderRadius: 24, marginBottom: 40 }}>
           <View style={{ marginBottom: 20 }}>
              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: 'bold' }}>Wallet Insights</Text>
@@ -440,7 +417,6 @@ const DashboardOverview = () => {
              <GaugeChart score={performanceMetrics.cashFlowScore} label="Cash-Flow Pred." />
           </View>
 
-          {/* 4x Needle Charts for Outlook/Spendings/Credit/Debit */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
              <GaugeChart score={totals.balance > 0 ? 85 : 15} label="Outlook" />
              <GaugeChart score={Math.min((totals.monthlySpend / (totals.totalIncome || 1)) * 100, 100)} label="Spendings" />
@@ -452,12 +428,5 @@ const DashboardOverview = () => {
     </SafeAreaView>
   );
 };
-
-const OutlookBox = ({ title, value, color }) => (
-  <View style={{ width: '48%', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 12, marginBottom: 16 }}>
-    <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>{title}</Text>
-    <Text style={{ color: color, fontSize: 18, fontWeight: 'bold', marginTop: 4 }}>{value}</Text>
-  </View>
-);
 
 export default DashboardOverview;

@@ -1,17 +1,20 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { useDrawer } from '../context/DrawerContext';
 import { COLORS, SIZES } from '../constants/theme';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart, Target, X } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
 
 const DrawerItem = ({ icon: Icon, label, onPress }) => (
-  <TouchableOpacity style={styles.drawerItem} onPress={onPress}>
+  <Pressable 
+    style={({ pressed }) => [styles.drawerItem, pressed && { backgroundColor: 'rgba(255,255,255,0.05)' }]} 
+    onPress={onPress}
+  >
     <Icon color={COLORS.textSecondary} size={24} style={styles.icon} />
     <Text style={styles.drawerItemText}>{label}</Text>
-  </TouchableOpacity>
+  </Pressable>
 );
 
 const GlobalDrawer = () => {
@@ -41,9 +44,9 @@ const GlobalDrawer = () => {
       <Animated.View style={[styles.drawer, { width: drawerWidth, transform: [{ translateX: slideAnim }] }]}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Menu</Text>
-          <TouchableOpacity onPress={closeDrawer}>
+          <Pressable onPress={closeDrawer} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
             <X color={COLORS.textSecondary} size={24} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         <View style={styles.menuItems}>
@@ -51,7 +54,7 @@ const GlobalDrawer = () => {
           <DrawerItem icon={List} label="Expenses" onPress={() => handleNavigate('Expenses')} />
           <DrawerItem icon={Target} label="Savings Goals" onPress={() => handleNavigate('Savings Goals')} />
           <DrawerItem icon={LayoutDashboard} label="Budgeting" onPress={() => handleNavigate('Budgeting')} />
-          <DrawerItem icon={BarChart} label="Reports" onPress={() => handleNavigate('Reports')} />
+          <DrawerItem icon={BarChart3} label="Reports" onPress={() => handleNavigate('Reports')} />
           <DrawerItem icon={MessageSquare} label="AI Assistant" onPress={() => handleNavigate('AI Assistant')} />
           <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} />
           <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />

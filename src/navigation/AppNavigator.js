@@ -1,6 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart, Target } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target } from 'lucide-react-native';
 import DashboardOverview from '../screens/DashboardOverview/index';
 import ExpenseTracker from '../screens/ExpenseTracker/index';
 import Budgeting from '../screens/Budgeting/index';

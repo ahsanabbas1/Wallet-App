@@ -32,13 +32,23 @@ export default function App() {
 
   const ensureUserProfile = async (user) => {
     try {
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0];
+      await supabase
+        .from('users')
+        .update({
+          name: fullName,
+          email: user.email,
+        })
+        .eq('id', user.id);
+        
+      // Try upsert if update didn't affect anything, but safer to assume profile exists or will be created on first login
       await supabase
         .from('users')
         .upsert({
           id: user.id,
-          name: user.email.split('@')[0],
+          name: fullName,
           email: user.email,
-        }, { onConflict: 'id' })
+        }, { onConflict: 'id' });
     } catch (e) {
       console.warn('Could not ensure user profile:', e.message)
     }
