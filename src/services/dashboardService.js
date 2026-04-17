@@ -71,26 +71,82 @@ export const dashboardService = {
       savingsProgress = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
     }
 
-    // 4. Category Breakdown
+    // 4. Category Breakdown (Rolling up sub-categories to parents)
+    const categoryCache = {};
+    const { data: allCategories } = await supabase.from('categories').select('*');
+    if (allCategories) {
+      allCategories.forEach(c => categoryCache[c.id] = c);
+    }
+
     const catTotals = {};
     let totalExpense = 0;
+    
     transactions.filter(t => t.type === 'expense').forEach(t => {
-      const catName = t.categories?.name || 'Other';
+      const category = categoryCache[t.category_id];
+      let displayCategory = category;
+      
+      // If this is a sub-category, roll up to parent
+      if (category?.parent_id) {
+        displayCategory = categoryCache[category.parent_id] || category;
+      }
+
+      const catName = displayCategory?.name || 'Other';
       const amount = parseFloat(t.amount);
-      catTotals[catName] = (catTotals[catName] || 0) + amount;
+      
+      if (!catTotals[catName]) {
+        catTotals[catName] = {
+          amount: 0,
+          color: displayCategory?.color || '#4051b5'
+        };
+      }
+      
+      catTotals[catName].amount += amount;
       totalExpense += amount;
     });
 
     const breakdown = Object.keys(catTotals).map(name => ({
       name,
-      amount: catTotals[name],
-      percent: totalExpense > 0 ? (catTotals[name] / totalExpense) * 100 : 0,
-      color: transactions.find(t => t.categories?.name === name)?.categories?.color || '#4051b5'
+      amount: catTotals[name].amount,
+      percent: totalExpense > 0 ? (catTotals[name].amount / totalExpense) * 100 : 0,
+      color: catTotals[name].color
     })).sort((a,b) => b.amount - a.amount);
+
+
+    // 5. Calculate vs Previous Month
+    const lastMonthDate = new Date();
+    lastMonthDate.setMonth(now.getMonth() - 1);
+    const lastMonth = lastMonthDate.getMonth();
+    const lastMonthYear = lastMonthDate.getFullYear();
+
+    const lastMonthExpenses = transactions
+      .filter(t => t.type === 'expense')
+      .filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+      })
+      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+    
+    let expenseChange = 0;
+    if (lastMonthExpenses > 0) {
+      expenseChange = ((monthlySpend - lastMonthExpenses) / lastMonthExpenses) * 100;
+    } else if (monthlySpend > 0) {
+      expenseChange = 100; // 100% increase if no expenses last month
+    }
+
+    // 6. Fetch Planned Payments
+    const { data: plannedData } = await supabase
+      .from('planned_payments')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('next_date', { ascending: true })
+      .limit(3);
 
     return {
       recentTransactions: transactions.slice(0, 5),
+      recentPlanned: plannedData || [],
       totals: { balance: income - expense, monthlySpend, totalSaved, totalIncome: income },
+      expenseChange,
       savingsProgress,
       categoryBreakdown: breakdown,
       performanceMetrics: {
@@ -100,3 +156,5 @@ export const dashboardService = {
     };
   }
 };
+
+

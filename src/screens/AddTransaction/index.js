@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  Alert, 
+  KeyboardAvoidingView, 
+  Platform, 
+  TouchableWithoutFeedback, 
+  Keyboard,
+  ActivityIndicator,
+  Pressable
+} from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import styles from './styles';
@@ -135,14 +147,15 @@ const AddTransaction = ({ navigation, route }) => {
                 title="Expense"
                 variant={form.type === 'expense' ? 'primary' : 'secondary'}
                 onPress={() => handleTypeChange('expense')}
-                style={{ flex: 1, height: 45, borderRadius: 12 }}
+                style={{ flex: 1, borderRadius: 12 }}
               />
               <AppButton 
                 title="Income"
                 variant={form.type === 'income' ? 'primary' : 'secondary'}
                 onPress={() => handleTypeChange('income')}
-                style={{ flex: 1, height: 45, borderRadius: 12, marginLeft: 10 }}
+                style={{ flex: 1, borderRadius: 12, marginLeft: 10 }}
               />
+
             </View>
 
             {/* Amount Input */}
@@ -165,28 +178,53 @@ const AddTransaction = ({ navigation, route }) => {
             {/* Category Picker */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Category</Text>
-              <View style={styles.categoryList}>
-                {fetchingCategories ? (
-                  <ActivityIndicator color={COLORS.primary} />
-                ) : filteredCategories.map((cat) => (
-                  <Pressable 
-                    key={cat.id}
-                    style={[
-                      styles.categoryChip, 
-                      selectedCategory?.id === cat.id && { backgroundColor: cat.color + '40', borderColor: cat.color }
-                    ]}
-                    onPress={() => setSelectedCategory(cat)}
-                  >
-                    <Text style={[
-                      styles.categoryChipText,
-                      selectedCategory?.id === cat.id && { color: cat.color, fontWeight: 'bold' }
-                    ]}>
-                      {cat.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
+              {fetchingCategories ? (
+                <ActivityIndicator color={COLORS.primary} />
+              ) : (
+                <View style={{ gap: 20 }}>
+                  {(() => {
+                    const parents = filteredCategories.filter(c => !c.parent_id);
+                    const children = filteredCategories.filter(c => c.parent_id);
+                    
+                    return parents.map(parent => {
+                      const subs = children.filter(child => child.parent_id === parent.id);
+                      if (subs.length === 0) return null;
+
+                      return (
+                        <View key={parent.id} style={styles.categoryGroup}>
+                          <View style={styles.groupHeader}>
+                            <Text style={[styles.groupHeaderText, { color: parent.color }]}>
+                              {parent.name}
+                            </Text>
+                            <View style={[styles.groupLine, { backgroundColor: parent.color + '30' }]} />
+                          </View>
+                          <View style={styles.categoryList}>
+                            {subs.map((cat) => (
+                              <Pressable 
+                                key={cat.id}
+                                style={[
+                                  styles.categoryChip, 
+                                  selectedCategory?.id === cat.id && { backgroundColor: parent.color + '40', borderColor: parent.color }
+                                ]}
+                                onPress={() => setSelectedCategory(cat)}
+                              >
+                                <Text style={[
+                                  styles.categoryChipText,
+                                  selectedCategory?.id === cat.id && { color: parent.color, fontWeight: 'bold' }
+                                ]}>
+                                  {cat.name}
+                                </Text>
+                              </Pressable>
+                            ))}
+                          </View>
+                        </View>
+                      );
+                    });
+                  })()}
+                </View>
+              )}
             </View>
+
 
             {/* Description Input */}
             <AppInput 

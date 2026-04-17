@@ -24,6 +24,15 @@ const GaugeChart = ({ score, label }) => {
 
   const rotation = (displayScore / 100) * 180 - 90;
 
+  // Dynamic color based on score
+  const getScoreColor = (s) => {
+    if (s > 70) return COLORS.accent; // Green-ish Cyan
+    if (s > 40) return COLORS.warning; // Orange
+    return COLORS.error; // Red
+  };
+
+  const currentColor = getScoreColor(displayScore);
+
   return (
     <View style={{ alignItems: 'center', flex: 1, padding: 5 }}>
       <Svg height="80" width="100" viewBox="0 0 100 60">
@@ -34,14 +43,18 @@ const GaugeChart = ({ score, label }) => {
            strokeWidth="8" 
            strokeLinecap="round" 
          />
-         <Path d="M 10 50 A 40 40 0 0 1 30 18" fill="none" stroke={COLORS.error} strokeWidth="8" strokeOpacity="0.8" />
-         <Path d="M 30 18 A 40 40 0 0 1 70 18" fill="none" stroke={COLORS.warning} strokeWidth="8" strokeOpacity="0.8" />
-         <Path d="M 70 18 A 40 40 0 0 1 90 50" fill="none" stroke={COLORS.accent} strokeWidth="8" strokeOpacity="0.8" />
+         {/* Background segments */}
+         <Path d="M 10 50 A 40 40 0 0 1 30 18" fill="none" stroke={COLORS.error} strokeWidth="8" strokeOpacity="0.2" />
+         <Path d="M 30 18 A 40 40 0 0 1 70 18" fill="none" stroke={COLORS.warning} strokeWidth="8" strokeOpacity="0.2" />
+         <Path d="M 70 18 A 40 40 0 0 1 90 50" fill="none" stroke={COLORS.accent} strokeWidth="8" strokeOpacity="0.2" />
+         
+         {/* Active score indicator path (optional but adds flare) */}
          <G rotation={rotation} origin="50, 50">
-           <Path d="M 50 50 L 50 15" stroke={COLORS.text} strokeWidth="2.5" strokeLinecap="round" />
-           <Circle cx="50" cy="50" r="3" fill={COLORS.text} />
+           <Path d="M 50 50 L 50 15" stroke={currentColor} strokeWidth="3" strokeLinecap="round" />
+           <Circle cx="50" cy="50" r="4" fill={currentColor} />
          </G>
       </Svg>
+
       <Text style={{ color: COLORS.textSecondary, fontSize: 10, marginTop: 4 }}>{label}</Text>
       <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: 'bold' }}>{displayScore.toFixed(0)}%</Text>
     </View>

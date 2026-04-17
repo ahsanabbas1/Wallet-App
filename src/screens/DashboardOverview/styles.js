@@ -183,4 +183,79 @@ export default StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 14,
   },
+  // New Insights Styles
+
+
+  insightsCard: {
+    marginTop: 30,
+    padding: 20,
+    backgroundColor: COLORS.card,
+    borderRadius: 28,
+    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  insightsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  insightsTitle: {
+    color: COLORS.text,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  insightsSub: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  insightsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,188,212,0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  insightsPillText: {
+    color: COLORS.accent,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  predictiveRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 20,
+    paddingVertical: 15,
+    marginBottom: 24,
+  },
+  verticalDivider: {
+    width: 1,
+    height: '60%',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  performanceGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginHorizontal: -5,
+  },
+  gridItem: {
+    width: '48%',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    borderRadius: 16,
+    padding: 10,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
 });
+

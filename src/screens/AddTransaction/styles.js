@@ -77,7 +77,29 @@ export default StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginTop: 10,
   },
+  categoryGroup: {
+    marginBottom: 8,
+  },
+  groupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  groupHeaderText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginRight: 10,
+  },
+  groupLine: {
+    flex: 1,
+    height: 1,
+    borderRadius: 1,
+  },
+
   categoryChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,

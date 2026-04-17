@@ -28,7 +28,7 @@ import { supabase } from '../../lib/supabase';
 import MiniCalendar from '../../components/Calendar';
 import AppButton from '../../components/Common/AppButton';
 import AppInput from '../../components/Common/AppInput';
-import PaymentCard from './components/PaymentCard';
+import PaymentCard from '../../components/PaymentCard';
 
 // Services
 import { paymentService } from '../../services/paymentService';

@@ -9,14 +9,17 @@ import {
   DollarSign, 
   LogOut, 
   ReceiptText, 
-  CalendarClock 
+  CalendarClock,
+  TrendingUp
 } from 'lucide-react-native';
+
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 
 // Shared Components
 import TransactionItem from '../../components/TransactionItem';
+import PaymentCard from '../../components/PaymentCard';
 import DonutChart from '../../components/Charts/DonutChart';
 import GaugeChart from '../../components/Charts/GaugeChart';
 
@@ -36,8 +39,10 @@ const DashboardOverview = () => {
   const [userName, setUserName] = useState('User');
   const [loading, setLoading] = useState(true);
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [recentPlanned, setRecentPlanned] = useState([]);
   const [totals, setTotals] = useState({ balance: 0, monthlySpend: 0, totalSaved: 0, totalIncome: 0 });
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
+  const [expenseChange, setExpenseChange] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
 
   const loadProfile = async () => {
@@ -58,8 +63,10 @@ const DashboardOverview = () => {
       const data = await dashboardService.getDashboardData(session.user.id);
       
       setRecentTransactions(data.recentTransactions);
+      setRecentPlanned(data.recentPlanned);
       setTotals(data.totals);
       setCategoryBreakdown(data.categoryBreakdown);
+      setExpenseChange(data.expenseChange);
       setPerformanceMetrics(data.performanceMetrics);
     } catch (error) {
       console.error('Dashboard load error:', error.message);
@@ -86,7 +93,6 @@ const DashboardOverview = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // We could add this to transactionService too
               const { error } = await supabase
                 .from('transactions')
                 .delete()
@@ -102,8 +108,34 @@ const DashboardOverview = () => {
     );
   };
 
+  const handleDeletePlanned = (id) => {
+    Alert.alert(
+      'Delete Planned Payment',
+      'Are you sure you want to stop this planned payment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+             try {
+               const { error } = await supabase
+                 .from('planned_payments')
+                 .delete()
+                 .eq('id', id);
+               if (error) throw error;
+               loadDashboardData();
+             } catch (error) {
+               Alert.alert('Error', error.message);
+             }
+          }
+        }
+      ]
+    );
+  };
+
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await supabase.signOut();
     if (error) Alert.alert('Error', error.message);
   };
 
@@ -182,7 +214,15 @@ const DashboardOverview = () => {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Expense Structure</Text>
         </View>
-        <DonutChart data={categoryBreakdown} />
+        <DonutChart 
+          data={categoryBreakdown} 
+          expenseChange={expenseChange} 
+          monthlySpend={totals.monthlySpend} 
+        />
+
+
+
+
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
@@ -217,25 +257,59 @@ const DashboardOverview = () => {
           )}
         </View>
 
+        {/* Planned Payments Section */}
+        {recentPlanned.length > 0 && (
+          <View style={{ marginTop: 24 }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Upcoming Payments</Text>
+              <Pressable onPress={() => navigation.navigate('Planned')}>
+                <Text style={styles.seeAllText}>See All</Text>
+              </Pressable>
+            </View>
+            {recentPlanned.map((item) => (
+              <PaymentCard 
+                key={item.id} 
+                item={item} 
+                onDelete={handleDeletePlanned}
+              />
+            ))}
+          </View>
+        )}
+
         {/* Insights Section */}
-        <View style={{ marginTop: 30, padding: 16, backgroundColor: COLORS.card, borderRadius: 24, marginBottom: 40 }}>
-          <View style={{ marginBottom: 20 }}>
-             <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: 'bold' }}>Wallet Insights</Text>
-             <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 4 }}>
-                Past 30 days performance and outlook for next 7 days
-             </Text>
+        <View style={styles.insightsCard}>
+          <View style={styles.insightsHeader}>
+             <View>
+               <Text style={styles.insightsTitle}>Wallet Insights</Text>
+               <Text style={styles.insightsSub}>
+                  30-day performance & future outlook
+               </Text>
+             </View>
+             <View style={styles.insightsPill}>
+                <TrendingUp color={COLORS.accent} size={14} style={{ marginRight: 6 }} />
+                <Text style={styles.insightsPillText}>Live Analysis</Text>
+             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+          <View style={styles.predictiveRow}>
              <GaugeChart score={performanceMetrics.balanceScore} label="Balance Pred." />
+             <View style={styles.verticalDivider} />
              <GaugeChart score={performanceMetrics.cashFlowScore} label="Cash-Flow Pred." />
           </View>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-             <GaugeChart score={totals.balance > 0 ? 85 : 15} label="Outlook" />
-             <GaugeChart score={Math.min((totals.monthlySpend / (totals.totalIncome || 1)) * 100, 100)} label="Spendings" />
-             <GaugeChart score={Math.min((totals.totalIncome / 100000) * 100, 100)} label="Credit" />
-             <GaugeChart score={Math.min((totals.monthlySpend / 100000) * 100, 100)} label="Debit" />
+          <View style={styles.performanceGrid}>
+             <View style={styles.gridItem}>
+               <GaugeChart score={totals.balance > 0 ? 85 : 15} label="Outlook" />
+             </View>
+             <View style={styles.gridItem}>
+               <GaugeChart score={Math.min((totals.monthlySpend / (totals.totalIncome || 1)) * 100, 100)} label="Spendings" />
+             </View>
+             <View style={styles.gridItem}>
+               <GaugeChart score={Math.min((totals.totalIncome / 100000) * 100, 100)} label="Credit" />
+             </View>
+             <View style={styles.gridItem}>
+               <GaugeChart score={Math.min((totals.monthlySpend / 100000) * 100, 100)} label="Debit" />
+             </View>
           </View>
         </View>
       </ScrollView>
@@ -244,4 +318,5 @@ const DashboardOverview = () => {
 };
 
 export default DashboardOverview;
+
 
