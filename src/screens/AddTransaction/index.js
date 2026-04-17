@@ -11,6 +11,10 @@ import {
   ActivityIndicator,
   Pressable
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Icons from 'lucide-react-native';
+
+
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
@@ -40,6 +44,10 @@ const AddTransaction = ({ navigation, route }) => {
     title: editTransaction?.title || '',
     description: editTransaction?.description || ''
   });
+  
+  const [date, setDate] = useState(editTransaction?.date ? new Date(editTransaction.date) : new Date());
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState('date'); // 'date' or 'time'
 
   useEffect(() => {
     navigation.setOptions({
@@ -47,6 +55,21 @@ const AddTransaction = ({ navigation, route }) => {
     });
     fetchCategories();
   }, [isEdit]);
+
+  const onDateChange = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowPicker(Platform.OS === 'ios');
+    setDate(currentDate);
+    
+    // On Android, if we just finished picking 'date', we might want to pick 'time' next
+    // but usually user just wants one. Let's make it simple for now.
+  };
+
+  const showMode = (currentMode) => {
+    setPickerMode(currentMode);
+    setShowPicker(true);
+  };
+
 
   const fetchCategories = async () => {
     try {
@@ -96,8 +119,9 @@ const AddTransaction = ({ navigation, route }) => {
         type: type,
         title: title,
         description: description,
-        date: isEdit ? editTransaction.date : new Date().toISOString(),
+        date: date.toISOString(),
       };
+
 
       if (isEdit) {
         await transactionService.updateTransaction(editTransaction.id, transactionData);
@@ -131,7 +155,28 @@ const AddTransaction = ({ navigation, route }) => {
     }
   };
 
+  const [activeParent, setActiveParent] = useState(null);
+
+  // Filter categories by type
   const filteredCategories = categories.filter(c => c.type === form.type || c.type === 'both');
+  const parents = filteredCategories.filter(c => !c.parent_id);
+  const subs = filteredCategories.filter(c => c.parent_id && (activeParent ? c.parent_id === activeParent.id : true));
+
+  // Auto-reset activeParent if type changes and current parent doesn't match
+  useEffect(() => {
+    if (activeParent && !parents.find(p => p.id === activeParent.id)) {
+      setActiveParent(null);
+    }
+  }, [form.type]);
+
+  const handleParentSelect = (parent) => {
+    setActiveParent(parent);
+    // Optional: auto-select first sub if needed, but better to let user pick
+  };
+
+  const handleSubSelect = (cat) => {
+    setSelectedCategory(cat);
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,7 +200,6 @@ const AddTransaction = ({ navigation, route }) => {
                 onPress={() => handleTypeChange('income')}
                 style={{ flex: 1, borderRadius: 12, marginLeft: 10 }}
               />
-
             </View>
 
             {/* Amount Input */}
@@ -177,58 +221,105 @@ const AddTransaction = ({ navigation, route }) => {
 
             {/* Category Picker */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Category</Text>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.label}>
+                  {activeParent ? `Category: ${activeParent.name}` : 'Select Category'}
+                </Text>
+                {activeParent && (
+                  <Pressable onPress={() => setActiveParent(null)}>
+                    <Text style={styles.changeText}>Change Group</Text>
+                  </Pressable>
+                )}
+              </View>
+
               {fetchingCategories ? (
                 <ActivityIndicator color={COLORS.primary} />
-              ) : (
-                <View style={{ gap: 20 }}>
-                  {(() => {
-                    const parents = filteredCategories.filter(c => !c.parent_id);
-                    const children = filteredCategories.filter(c => c.parent_id);
-                    
-                    return parents.map(parent => {
-                      const subs = children.filter(child => child.parent_id === parent.id);
-                      if (subs.length === 0) return null;
+              ) : !activeParent ? (
+                /* STEP 1: Broad Category Grid */
+                <View style={styles.broadGrid}>
+                  {parents.map(parent => (
+                    <Pressable 
+                      key={parent.id} 
+                      style={[styles.broadCard, { borderBottomColor: parent.color }]}
+                      onPress={() => handleParentSelect(parent)}
+                    >
+                      <View style={[styles.broadIconBox, { backgroundColor: parent.color + '10' }]}>
+                        {(() => {
+                           const IconComponent = Icons[parent.icon] || Icons.Circle;
+                           return <IconComponent size={24} color={parent.color} />;
+                        })()}
+                      </View>
 
-                      return (
-                        <View key={parent.id} style={styles.categoryGroup}>
-                          <View style={styles.groupHeader}>
-                            <Text style={[styles.groupHeaderText, { color: parent.color }]}>
-                              {parent.name}
-                            </Text>
-                            <View style={[styles.groupLine, { backgroundColor: parent.color + '30' }]} />
-                          </View>
-                          <View style={styles.categoryList}>
-                            {subs.map((cat) => (
-                              <Pressable 
-                                key={cat.id}
-                                style={[
-                                  styles.categoryChip, 
-                                  selectedCategory?.id === cat.id && { backgroundColor: parent.color + '40', borderColor: parent.color }
-                                ]}
-                                onPress={() => setSelectedCategory(cat)}
-                              >
-                                <Text style={[
-                                  styles.categoryChipText,
-                                  selectedCategory?.id === cat.id && { color: parent.color, fontWeight: 'bold' }
-                                ]}>
-                                  {cat.name}
-                                </Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        </View>
-                      );
-                    });
-                  })()}
+                      <Text style={styles.broadName}>{parent.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                /* STEP 2: Sub-category List */
+                <View style={styles.categoryList}>
+                  {subs.map((cat) => (
+                    <Pressable 
+                      key={cat.id}
+                      style={[
+                        styles.categoryChip, 
+                        selectedCategory?.id === cat.id && { backgroundColor: activeParent.color + '40', borderColor: activeParent.color }
+                      ]}
+                      onPress={() => handleSubSelect(cat)}
+                    >
+                      <Text style={[
+                        styles.categoryChipText,
+                        selectedCategory?.id === cat.id && { color: activeParent.color, fontWeight: 'bold' }
+                      ]}>
+                        {cat.name}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
               )}
             </View>
 
 
+
+            {/* Date & Time Picker */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Date & Time</Text>
+              <View style={styles.dateTimeContainer}>
+                <Pressable 
+                  style={styles.dateTimeField} 
+                  onPress={() => showMode('date')}
+                >
+                  <Text style={styles.dateTimeText}>
+                    {date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </Text>
+                </Pressable>
+                
+                <Pressable 
+                  style={[styles.dateTimeField, { marginLeft: 10 }]} 
+                  onPress={() => showMode('time')}
+                >
+                  <Text style={styles.dateTimeText}>
+                    {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {showPicker && (
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={date}
+                  mode={pickerMode}
+                  is24Hour={false}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateChange}
+                  textColor="white" // Only for iOS spinner
+                />
+              )}
+            </View>
+
             {/* Description Input */}
             <AppInput 
               label={`Note (Optional) ${form.description.length}/250`}
+
               placeholder="Add a note..."
               multiline
               numberOfLines={3}

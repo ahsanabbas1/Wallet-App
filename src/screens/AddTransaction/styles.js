@@ -73,31 +73,52 @@ export default StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
+  pickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  changeText: {
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  broadGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  broadCard: {
+    width: '30%',
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  broadIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  broadName: {
+    color: COLORS.text,
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   categoryList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 10,
-  },
-  categoryGroup: {
-    marginBottom: 8,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  groupHeaderText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginRight: 10,
-  },
-  groupLine: {
-    flex: 1,
-    height: 1,
-    borderRadius: 1,
+    marginTop: 4,
   },
 
   categoryChip: {
@@ -129,4 +150,23 @@ export default StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  dateTimeContainer: {
+    flexDirection: 'row',
+  },
+  dateTimeField: {
+    flex: 1,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateTimeText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
 });
+
