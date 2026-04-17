@@ -1,0 +1,42 @@
+import React from 'react';
+import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { COLORS } from '../../constants/theme';
+
+const AppInput = ({ label, value, onChangeText, placeholder, keyboardType, style, containerStyle, ...props }) => {
+  return (
+    <View style={[styles.container, containerStyle]}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <TextInput 
+        style={[styles.input, style]} 
+        placeholder={placeholder} 
+        placeholderTextColor={COLORS.textSecondary}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        {...props}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    marginBottom: 15,
+  },
+  label: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    padding: 14,
+    color: COLORS.text,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+});
+
+export default AppInput;

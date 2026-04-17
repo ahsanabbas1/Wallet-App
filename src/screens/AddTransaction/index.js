@@ -1,21 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import styles from './styles';
 import { COLORS } from '../../constants/theme';
+
+// Modular Components
+import AppButton from '../../components/Common/AppButton';
+import AppInput from '../../components/Common/AppInput';
+
+// Services
+import { transactionService } from '../../services/transactionService';
 
 const AddTransaction = ({ navigation, route }) => {
   const editTransaction = route.params?.transaction;
   const isEdit = !!editTransaction;
 
   const [loading, setLoading] = useState(false);
+  const [fetchingCategories, setFetchingCategories] = useState(true);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [type, setType] = useState(editTransaction?.type || 'expense');
-  const [amount, setAmount] = useState(editTransaction?.amount?.toString() || '');
-  const [title, setTitle] = useState(editTransaction?.title || '');
-  const [description, setDescription] = useState(editTransaction?.description || '');
+  
+  // Form State
+  const [form, setForm] = useState({
+    type: editTransaction?.type || 'expense',
+    amount: editTransaction?.amount?.toString() || '',
+    title: editTransaction?.title || '',
+    description: editTransaction?.description || ''
+  });
 
   useEffect(() => {
     navigation.setOptions({
@@ -26,16 +38,12 @@ const AddTransaction = ({ navigation, route }) => {
 
   const fetchCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
+      setFetchingCategories(true);
+      const data = await transactionService.getCategories();
       
       if (data && data.length > 0) {
         setCategories(data);
-        const filtered = data.filter(c => c.type === type || c.type === 'both');
+        const filtered = data.filter(c => c.type === form.type || c.type === 'both');
         if (isEdit) {
           const found = data.find(c => c.id === editTransaction.category_id);
           setSelectedCategory(found || filtered[0]);
@@ -43,15 +51,19 @@ const AddTransaction = ({ navigation, route }) => {
           setSelectedCategory(filtered[0]);
         }
       } else {
-        Alert.alert('No Categories', 'No categories found. Please contact support.');
+        Alert.alert('No Categories', 'No categories found.');
       }
     } catch (error) {
       console.warn('Error fetching categories:', error.message);
-      Alert.alert('Error', 'Could not load categories. Please try again.');
+      Alert.alert('Error', 'Could not load categories.');
+    } finally {
+      setFetchingCategories(false);
     }
   };
 
   const handleSave = async () => {
+    const { title, amount, type, description } = form;
+
     if (!title || !amount || !selectedCategory) {
       Alert.alert('Missing Fields', 'Please fill in all required fields.');
       return;
@@ -61,14 +73,12 @@ const AddTransaction = ({ navigation, route }) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
-        Alert.alert('Error', 'You must be logged in to save a transaction.');
-        setLoading(false);
+        Alert.alert('Error', 'You must be logged in.');
         return;
       }
-      const userId = session.user.id;
 
       const transactionData = {
-        user_id: userId,
+        user_id: session.user.id,
         category_id: selectedCategory.id,
         amount: parseFloat(amount),
         type: type,
@@ -77,21 +87,12 @@ const AddTransaction = ({ navigation, route }) => {
         date: isEdit ? editTransaction.date : new Date().toISOString(),
       };
 
-      let result;
       if (isEdit) {
-        result = await supabase
-          .from('transactions')
-          .update(transactionData)
-          .eq('id', editTransaction.id);
+        await transactionService.updateTransaction(editTransaction.id, transactionData);
       } else {
-        result = await supabase
-          .from('transactions')
-          .insert(transactionData);
+        await transactionService.addTransaction(transactionData);
       }
 
-      if (result.error) throw result.error;
-
-      // Alert.alert('Success', `Transaction ${isEdit ? 'updated' : 'added'} successfully!`);
       setTimeout(() => {
         navigation.goBack();
       }, 100);
@@ -102,8 +103,12 @@ const AddTransaction = ({ navigation, route }) => {
     }
   };
 
+  const updateFormField = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
   const handleTypeChange = (newType) => {
-    setType(newType);
+    updateFormField('type', newType);
     const filtered = categories.filter(c => c.type === newType || c.type === 'both');
     if (filtered.length > 0) {
       if (!filtered.find(c => c.id === selectedCategory?.id)) {
@@ -114,113 +119,99 @@ const AddTransaction = ({ navigation, route }) => {
     }
   };
 
-  const filteredCategories = categories.filter(c => c.type === type || c.type === 'both');
+  const filteredCategories = categories.filter(c => c.type === form.type || c.type === 'both');
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Type Selector */}
-        <View style={styles.typeContainer}>
-          <TouchableOpacity 
-            style={[styles.typeButton, type === 'expense' && styles.typeButtonActive]} 
-            onPress={() => handleTypeChange('expense')}
-          >
-            <Text style={[styles.typeText, type === 'expense' && styles.typeTextActive]}>Expense</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.typeButton, type === 'income' && styles.typeButtonActive]} 
-            onPress={() => handleTypeChange('income')}
-          >
-            <Text style={[styles.typeText, type === 'income' && styles.typeTextActive]}>Income</Text>
-          </TouchableOpacity>
-        </View>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            {/* Type Selector */}
+            <View style={styles.typeContainer}>
+              <AppButton 
+                title="Expense"
+                variant={form.type === 'expense' ? 'primary' : 'secondary'}
+                onPress={() => handleTypeChange('expense')}
+                style={{ flex: 1, height: 45, borderRadius: 12 }}
+              />
+              <AppButton 
+                title="Income"
+                variant={form.type === 'income' ? 'primary' : 'secondary'}
+                onPress={() => handleTypeChange('income')}
+                style={{ flex: 1, height: 45, borderRadius: 12, marginLeft: 10 }}
+              />
+            </View>
 
-        {/* Amount Input */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Amount</Text>
-          <View style={styles.amountContainer}>
-            <Text style={styles.currencySymbol}>PKR </Text>
-            <TextInput
-              style={styles.amountInput}
+            {/* Amount Input */}
+            <AppInput 
+              label="Amount"
               placeholder="0.00"
-              placeholderTextColor="rgba(255,255,255,0.3)"
               keyboardType="decimal-pad"
-              value={amount}
-              onChangeText={setAmount}
+              value={form.amount}
+              onChangeText={(val) => updateFormField('amount', val)}
             />
-          </View>
-        </View>
 
-        {/* Title Input */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Title</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Grocery Shop"
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            value={title}
-            onChangeText={setTitle}
-          />
-        </View>
+            {/* Title Input */}
+            <AppInput 
+              label="Title"
+              placeholder="e.g. Grocery Shop"
+              value={form.title}
+              onChangeText={(val) => updateFormField('title', val)}
+            />
 
-        {/* Category Picker */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Category</Text>
-          <View style={styles.categoryList}>
-            {filteredCategories.map((cat) => (
-              <TouchableOpacity 
-                key={cat.id}
-                style={[
-                  styles.categoryChip, 
-                  selectedCategory?.id === cat.id && { backgroundColor: cat.color + '40', borderColor: cat.color }
-                ]}
-                onPress={() => setSelectedCategory(cat)}
-              >
-                <Text style={[
-                  styles.categoryChipText,
-                  selectedCategory?.id === cat.id && { color: cat.color, fontWeight: 'bold' }
-                ]}>
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+            {/* Category Picker */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Category</Text>
+              <View style={styles.categoryList}>
+                {fetchingCategories ? (
+                  <ActivityIndicator color={COLORS.primary} />
+                ) : filteredCategories.map((cat) => (
+                  <Pressable 
+                    key={cat.id}
+                    style={[
+                      styles.categoryChip, 
+                      selectedCategory?.id === cat.id && { backgroundColor: cat.color + '40', borderColor: cat.color }
+                    ]}
+                    onPress={() => setSelectedCategory(cat)}
+                  >
+                    <Text style={[
+                      styles.categoryChipText,
+                      selectedCategory?.id === cat.id && { color: cat.color, fontWeight: 'bold' }
+                    ]}>
+                      {cat.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
 
-        {/* Description Input */}
-        <View style={styles.inputGroup}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={styles.label}>Note (Optional)</Text>
-            <Text style={{ color: description.length >= 240 ? COLORS.error : COLORS.textSecondary, fontSize: 10 }}>
-              {description.length}/250
-            </Text>
-          </View>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            placeholder="Add a note..."
-            placeholderTextColor="rgba(255,255,255,0.3)"
-            multiline
-            numberOfLines={3}
-            value={description}
-            onChangeText={(text) => text.length <= 250 && setDescription(text)}
-          />
-        </View>
+            {/* Description Input */}
+            <AppInput 
+              label={`Note (Optional) ${form.description.length}/250`}
+              placeholder="Add a note..."
+              multiline
+              numberOfLines={3}
+              value={form.description}
+              onChangeText={(text) => text.length <= 250 && updateFormField('description', text)}
+              style={styles.textArea}
+            />
 
-        {/* Save Button */}
-        <TouchableOpacity 
-          style={styles.saveButton} 
-          onPress={handleSave} 
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>{isEdit ? 'Update Record' : 'Save Transaction'}</Text>
-          )}
-        </TouchableOpacity>
-      </ScrollView>
+            {/* Save Button */}
+            <AppButton 
+              title={isEdit ? 'Update Record' : 'Save Transaction'}
+              onPress={handleSave}
+              loading={loading}
+              style={{ marginTop: 20 }}
+            />
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
 
 export default AddTransaction;
+

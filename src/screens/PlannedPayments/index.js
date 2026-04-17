@@ -1,52 +1,76 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Alert, Modal, TextInput, Platform } from 'react-native';
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  Pressable, 
+  ActivityIndicator, 
+  Alert, 
+  Modal, 
+  Platform,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS, SIZES } from '../../constants/theme';
-import { CalendarClock, Plus, Filter, ArrowLeft, Trash2, ChevronRight, Clock, Tag, DollarSign, Calendar as CalendarIcon, ChevronLeft } from 'lucide-react-native';
+import { COLORS } from '../../constants/theme';
+import { 
+  CalendarClock, 
+  Plus, 
+  ArrowLeft, 
+  Clock, 
+  Calendar as CalendarIcon 
+} from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
+
+// Modular Components
+import MiniCalendar from '../../components/Calendar';
+import AppButton from '../../components/Common/AppButton';
+import AppInput from '../../components/Common/AppInput';
+import PaymentCard from './components/PaymentCard';
+
+// Services
+import { paymentService } from '../../services/paymentService';
+
 import styles from './styles';
 
 const PlannedPayments = () => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [plannedPayments, setPlannedPayments] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   
-  // Form State
-  const [title, setTitle] = useState('');
-  const [amount, setAmount] = useState('');
-  const [type, setType] = useState('expense');
-  const [frequency, setFrequency] = useState('monthly');
-  const [nextDate, setNextDate] = useState(new Date().toISOString().split('T')[0]);
-
+  // Table status
   const [tableExists, setTableExists] = useState(true);
-  
+
+  // Form State
+  const [form, setForm] = useState({
+    title: '',
+    amount: '',
+    type: 'expense',
+    frequency: 'monthly',
+    nextDate: new Date().toISOString().split('T')[0]
+  });
+
   const fetchPlannedPayments = async () => {
     try {
       setLoading(true);
       setTableExists(true);
+      
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      const { data, error } = await supabase
-        .from('planned_payments')
-        .select('*')
-        .eq('user_id', session.user.id);
-
-      if (error) {
-        if (error.message.includes('relation "planned_payments" does not exist') || error.message.includes('schema cache')) {
-          setTableExists(false);
-          setPlannedPayments([]);
-        } else {
-          throw error;
-        }
-      } else {
-        setPlannedPayments(data || []);
-      }
+      const data = await paymentService.getPlannedPayments(session.user.id);
+      setPlannedPayments(data);
     } catch (error) {
-      console.error('Error fetching planned payments:', error.message);
+      if (error.message.includes('relation "planned_payments" does not exist')) {
+        setTableExists(false);
+      } else {
+        console.error('Error fetching planned payments:', error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -59,115 +83,58 @@ const PlannedPayments = () => {
   );
 
   const handleAddPlanned = async () => {
+    const { title, amount, type, frequency, nextDate } = form;
+
     if (!title || !amount) {
       Alert.alert('Error', 'Please fill in required fields');
       return;
     }
 
     try {
-      setLoading(true);
+      setSubmitting(true);
       const { data: { session } } = await supabase.auth.getSession();
       
-      const { error } = await supabase
-        .from('planned_payments')
-        .insert({
-          user_id: session.user.id,
-          title,
-          amount: parseFloat(amount),
-          type,
-          frequency,
-          next_date: nextDate,
-          status: 'active'
-        });
-
-      if (error) throw error;
+      await paymentService.addPlannedPayment({
+        user_id: session.user.id,
+        title,
+        amount: parseFloat(amount),
+        type,
+        frequency,
+        next_date: nextDate,
+        status: 'active'
+      });
       
       setShowAddModal(false);
       resetForm();
       fetchPlannedPayments();
     } catch (error) {
-      Alert.alert('Error', 'Ensure you have created the "planned_payments" table in Supabase. Error: ' + error.message);
+      Alert.alert('Error', 'Could not add payment. Error: ' + error.message);
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   const resetForm = () => {
-    setTitle('');
-    setAmount('');
-    setType('expense');
-    setFrequency('monthly');
-    setNextDate(new Date().toISOString().split('T')[0]);
+    setForm({
+      title: '',
+      amount: '',
+      type: 'expense',
+      frequency: 'monthly',
+      nextDate: new Date().toISOString().split('T')[0]
+    });
   };
 
   const deletePlanned = async (id) => {
     try {
-      const { error } = await supabase
-        .from('planned_payments')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      await paymentService.deletePlannedPayment(id);
       fetchPlannedPayments();
     } catch (error) {
       Alert.alert('Error', error.message);
     }
   };
 
-  // Simple Mini Calendar implementation
-  const MiniCalendar = () => {
-    const now = new Date();
-    const [viewDate, setViewDate] = useState(new Date(nextDate));
-    
-    const daysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
-    const firstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
-    
-    const month = viewDate.getMonth();
-    const year = viewDate.getFullYear();
-    const days = daysInMonth(month, year);
-    const firstDay = firstDayOfMonth(month, year);
-    
-    const calendarDays = [];
-    for (let i = 0; i < firstDay; i++) calendarDays.push(null);
-    for (let i = 1; i <= days; i++) calendarDays.push(i);
-
-    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-    const selectDate = (day) => {
-      const newDate = new Date(year, month, day);
-      setNextDate(newDate.toISOString().split('T')[0]);
-      setShowCalendar(false);
-    };
-
-    return (
-      <View style={styles.calendarContainer}>
-        <View style={styles.calendarHeader}>
-          <Pressable onPress={() => setViewDate(new Date(year, month - 1, 1))}>
-            <ChevronLeft color={COLORS.text} size={20} />
-          </Pressable>
-          <Text style={styles.calendarTitle}>{monthNames[month]} {year}</Text>
-          <Pressable onPress={() => setViewDate(new Date(year, month + 1, 1))}>
-            <ChevronRight color={COLORS.text} size={20} />
-          </Pressable>
-        </View>
-        <View style={styles.calendarGrid}>
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, idx) => (
-            <Text key={idx} style={styles.calendarDayHeader}>{d}</Text>
-          ))}
-          {calendarDays.map((d, index) => (
-            <Pressable 
-              key={index} 
-              onPress={() => d && selectDate(d)}
-              style={[
-                styles.calendarDay, 
-                d && d.toString() === nextDate.split('-')[2] && parseInt(nextDate.split('-')[1]) === month + 1 && styles.calendarDaySelected
-              ]}
-            >
-              <Text style={[styles.calendarDayText, !d && { opacity: 0 }]}>{d}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-    );
+  const updateFormField = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -195,133 +162,132 @@ const PlannedPayments = () => {
           <View style={[styles.emptyState, { backgroundColor: 'rgba(239, 68, 68, 0.05)', borderRadius: 24, padding: 32 }]}>
             <Clock color={COLORS.error} size={48} style={{ marginBottom: 16 }} />
             <Text style={[styles.emptyTitle, { color: COLORS.error }]}>Table Not Found</Text>
-            <Text style={styles.emptySub}>The 'planned_payments' table hasn't been created in Supabase yet. Please run the SQL script in your Supabase dashboard.</Text>
-            <Pressable style={[styles.emptyButton, { backgroundColor: COLORS.error }]} onPress={fetchPlannedPayments}>
-              <Text style={styles.emptyButtonText}>Check Again</Text>
-            </Pressable>
+            <Text style={styles.emptySub}>The 'planned_payments' table hasn't been created in Supabase yet.</Text>
+            <AppButton 
+              title="Check Again" 
+              onPress={fetchPlannedPayments} 
+              style={{ backgroundColor: COLORS.error, marginTop: 16 }} 
+            />
           </View>
         ) : plannedPayments.length > 0 ? (
           plannedPayments.map((item) => (
-            <View key={item.id} style={styles.paymentCard}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.iconContainer, { backgroundColor: item.type === 'income' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)' }]}>
-                  <CalendarClock color={item.type === 'income' ? COLORS.success || '#4caf50' : COLORS.error} size={20} />
-                </View>
-                <View style={styles.cardInfo}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  <Text style={styles.cardSub}>{item.frequency.toUpperCase()} • Next: {new Date(item.next_date).toLocaleDateString()}</Text>
-                </View>
-                <Text style={[styles.cardAmount, { color: item.type === 'income' ? COLORS.success || '#4caf50' : COLORS.text }]}>
-                  {item.type === 'income' ? '+' : '-'}PKR {item.amount.toLocaleString()}
-                </Text>
-              </View>
-              <View style={styles.cardActions}>
-                <Pressable onPress={() => deletePlanned(item.id)} style={styles.deleteButton}>
-                  <Trash2 color={COLORS.error} size={18} />
-                </Pressable>
-              </View>
-            </View>
+            <PaymentCard key={item.id} item={item} onDelete={deletePlanned} />
           ))
         ) : (
           <View style={styles.emptyState}>
             <CalendarClock color={COLORS.textSecondary} size={64} style={{ opacity: 0.3, marginBottom: 16 }} />
             <Text style={styles.emptyTitle}>No Planned Payments</Text>
             <Text style={styles.emptySub}>Add your first repeating bill or salary.</Text>
-            <Pressable style={styles.emptyButton} onPress={() => setShowAddModal(true)}>
-              <Text style={styles.emptyButtonText}>Add Planned Payment</Text>
-            </Pressable>
+            <AppButton 
+              title="Add Planned Payment" 
+              onPress={() => setShowAddModal(true)} 
+              style={{ paddingHorizontal: 30 }}
+            />
           </View>
         )}
       </ScrollView>
 
       {/* Add Modal */}
       <Modal visible={showAddModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Planned Payment</Text>
-              <Pressable onPress={() => setShowAddModal(false)}>
-                <Text style={{ color: COLORS.textSecondary }}>Cancel</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-              <Text style={styles.label}>Title</Text>
-              <TextInput 
-                style={styles.input} 
-                placeholder="e.g. House Rent or Salary" 
-                placeholderTextColor={COLORS.textSecondary}
-                value={title}
-                onChangeText={setTitle}
-              />
-
-              <Text style={styles.label}>Amount (PKR)</Text>
-              <TextInput 
-                style={styles.input} 
-                keyboardType="numeric" 
-                placeholder="0.00" 
-                placeholderTextColor={COLORS.textSecondary}
-                value={amount}
-                onChangeText={setAmount}
-              />
-
-              <Text style={styles.label}>Type</Text>
-              <View style={styles.row}>
-                <Pressable 
-                  onPress={() => setType('expense')}
-                  style={[styles.chip, type === 'expense' && styles.activeChip]}
-                >
-                  <Text style={[styles.chipText, type === 'expense' && styles.activeChipText]}>Expense</Text>
-                </Pressable>
-                <Pressable 
-                  onPress={() => setType('income')}
-                  style={[styles.chip, type === 'income' && styles.activeChip]}
-                >
-                  <Text style={[styles.chipText, type === 'income' && styles.activeChipText]}>Income</Text>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>New Planned Payment</Text>
+                <Pressable onPress={() => setShowAddModal(false)}>
+                  <Text style={{ color: COLORS.textSecondary }}>Cancel</Text>
                 </Pressable>
               </View>
 
-              <Text style={styles.label}>Frequency</Text>
-              <View style={[styles.row, { flexWrap: 'wrap' }]}>
-                {['daily', 'weekly', 'monthly', 'yearly'].map(f => (
-                  <Pressable 
-                    key={f}
-                    onPress={() => setFrequency(f)}
-                    style={[styles.smallChip, frequency === f && styles.activeChip]}
-                  >
-                    <Text style={[styles.smallChipText, frequency === f && styles.activeChipText]}>{f}</Text>
-                  </Pressable>
-                ))}
-              </View>
-
-              <Text style={styles.label}>Next Due Date</Text>
-              <View style={styles.dateInputWrapper}>
-                <TextInput 
-                  style={[styles.input, { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]} 
-                  placeholder="2024-05-01" 
-                  placeholderTextColor={COLORS.textSecondary}
-                  value={nextDate}
-                  onChangeText={setNextDate}
+              <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
+                <AppInput 
+                  label="Title"
+                  placeholder="e.g. House Rent or Salary" 
+                  value={form.title}
+                  onChangeText={(val) => updateFormField('title', val)}
                 />
-                <Pressable 
-                  onPress={() => setShowCalendar(!showCalendar)} 
-                  style={styles.calendarTrigger}
-                >
-                  <CalendarIcon color={COLORS.primary} size={20} />
-                </Pressable>
-              </View>
 
-              {showCalendar && <MiniCalendar />}
+                <AppInput 
+                  label="Amount (PKR)"
+                  keyboardType="numeric" 
+                  placeholder="0.00" 
+                  value={form.amount}
+                  onChangeText={(val) => updateFormField('amount', val)}
+                />
 
-              <Pressable style={styles.saveButton} onPress={handleAddPlanned}>
-                <Text style={styles.saveButtonText}>Add Planned Payment</Text>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </View>
+                <Text style={styles.label}>Type</Text>
+                <View style={styles.row}>
+                  <Pressable 
+                    onPress={() => updateFormField('type', 'expense')}
+                    style={[styles.chip, form.type === 'expense' && styles.activeChip]}
+                  >
+                    <Text style={[styles.chipText, form.type === 'expense' && styles.activeChipText]}>Expense</Text>
+                  </Pressable>
+                  <Pressable 
+                    onPress={() => updateFormField('type', 'income')}
+                    style={[styles.chip, form.type === 'income' && styles.activeChip]}
+                  >
+                    <Text style={[styles.chipText, form.type === 'income' && styles.activeChipText]}>Income</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={styles.label}>Frequency</Text>
+                <View style={[styles.row, { flexWrap: 'wrap' }]}>
+                  {['daily', 'weekly', 'monthly', 'yearly'].map(f => (
+                    <Pressable 
+                      key={f}
+                      onPress={() => updateFormField('frequency', f)}
+                      style={[styles.smallChip, form.frequency === f && styles.activeChip]}
+                    >
+                      <Text style={[styles.smallChipText, form.frequency === f && styles.activeChipText]}>{f}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Next Due Date</Text>
+                <View style={styles.dateInputWrapper}>
+                  <AppInput 
+                    placeholder="2024-05-01" 
+                    value={form.nextDate}
+                    onChangeText={(val) => updateFormField('nextDate', val)}
+                    containerStyle={{ flex: 1, marginBottom: 0 }}
+                    style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                  />
+                  <Pressable 
+                    onPress={() => setShowCalendar(!showCalendar)} 
+                    style={styles.calendarTrigger}
+                  >
+                    <CalendarIcon color={COLORS.primary} size={20} />
+                  </Pressable>
+                </View>
+
+                {showCalendar && (
+                  <MiniCalendar 
+                    selectedDate={form.nextDate} 
+                    onSelectDate={(date) => {
+                      updateFormField('nextDate', date);
+                      setShowCalendar(false);
+                    }} 
+                  />
+                )}
+
+                <AppButton 
+                  title="Add Planned Payment" 
+                  onPress={handleAddPlanned}
+                  loading={submitting}
+                  style={{ marginTop: 30 }}
+                />
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
 };
 
 export default PlannedPayments;
+
