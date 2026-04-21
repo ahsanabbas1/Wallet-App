@@ -6,7 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     avatar_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    currency TEXT DEFAULT 'PKR',
+    theme TEXT DEFAULT 'dark',
+    notifications_enabled BOOLEAN DEFAULT true,
+    language TEXT DEFAULT 'en',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Categories table

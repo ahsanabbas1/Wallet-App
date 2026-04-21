@@ -346,3 +346,261 @@ export const getReportInsights = async (userId, period = 'MONTH') => {
     throw error;
   }
 };
+
+/**
+ * Get cash flow data with hierarchical monthly/daily breakdown
+ */
+export const getCashFlowData = async (userId, period = 'MONTH') => {
+  try {
+    const transactions = await getPeriodData(userId, period);
+    const months = {};
+
+    // Group transactions by month and day
+    transactions.forEach(t => {
+      const date = new Date(t.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const dayKey = date.toISOString().split('T')[0];
+
+      // Initialize month if needed
+      if (!months[monthKey]) {
+        months[monthKey] = {
+          month: date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' }),
+          income: 0,
+          expense: 0,
+          net: 0,
+          days: {}
+        };
+      }
+
+      // Initialize day if needed
+      if (!months[monthKey].days[dayKey]) {
+        months[monthKey].days[dayKey] = {
+          date: dayKey,
+          income: 0,
+          expense: 0,
+          net: 0
+        };
+      }
+
+      const amount = parseFloat(t.amount);
+      if (t.type === 'income') {
+        months[monthKey].income += amount;
+        months[monthKey].days[dayKey].income += amount;
+      } else {
+        months[monthKey].expense += amount;
+        months[monthKey].days[dayKey].expense += amount;
+      }
+    });
+
+    // Calculate net and convert days object to array
+    const monthsArray = Object.entries(months).map(([key, monthData]) => {
+      monthData.net = monthData.income - monthData.expense;
+      monthData.isPositive = monthData.net >= 0;
+
+      // Convert days to sorted array
+      monthData.days = Object.values(monthData.days).map(day => ({
+        ...day,
+        net: day.income - day.expense,
+        isPositive: day.net >= 0
+      })).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      return monthData;
+    });
+
+    return monthsArray;
+  } catch (error) {
+    console.error('Error generating cash flow data:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get ledger data with running balance
+ */
+export const getLedgerData = async (userId, period = 'MONTH') => {
+  try {
+    const { startDate, endDate } = getDateRange(period);
+
+    const { data: transactions, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        categories (
+          name,
+          color,
+          icon
+        )
+      `)
+      .eq('user_id', userId)
+      .gte('date', startDate.toISOString())
+      .lte('date', endDate.toISOString())
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+
+    let runningBalance = 0;
+    const ledgerTransactions = (transactions || []).map(t => {
+      const amount = parseFloat(t.amount);
+      runningBalance += t.type === 'income' ? amount : -amount;
+
+      return {
+        date: new Date(t.date).toLocaleDateString('en-PK', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        }),
+        dateISO: t.date,
+        description: t.title,
+        category: t.categories?.name || 'Other',
+        categoryIcon: t.categories?.icon,
+        categoryColor: t.categories?.color || '#4051b5',
+        income: t.type === 'income' ? amount : 0,
+        expense: t.type === 'expense' ? amount : 0,
+        runningBalance,
+        type: t.type,
+        id: t.id
+      };
+    }).reverse(); // Reverse to show oldest first
+
+    const totalIncome = (transactions || [])
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+    const totalExpense = (transactions || [])
+      .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+    return {
+      transactions: ledgerTransactions,
+      summary: {
+        totalIncome,
+        totalExpense,
+        netFlow: totalIncome - totalExpense
+      }
+    };
+  } catch (error) {
+    console.error('Error generating ledger data:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get chart data for all 4 advanced charts
+ */
+export const getChartData = async (userId, period = 'MONTH') => {
+  try {
+    const { startDate, endDate } = getDateRange(period);
+
+    // Fetch all transactions
+    const { data: transactions, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        categories (
+          name,
+          color
+        )
+      `)
+      .eq('user_id', userId)
+      .gte('date', startDate.toISOString())
+      .lte('date', endDate.toISOString());
+
+    if (error) throw error;
+
+    const transactionData = transactions || [];
+
+    // 1. Trend Line Data (monthly spending)
+    const trendData = {};
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    transactionData.forEach(t => {
+      const date = new Date(t.date);
+      const monthKey = `${months[date.getMonth()]} '${String(date.getFullYear()).slice(-2)}`;
+
+      if (!trendData[monthKey]) {
+        trendData[monthKey] = { month: monthKey, amount: 0, date };
+      }
+
+      if (t.type === 'expense') {
+        trendData[monthKey].amount += parseFloat(t.amount);
+      }
+    });
+
+    const trendLine = Object.values(trendData)
+      .sort((a, b) => a.date - b.date)
+      .map(({ month, amount }) => ({ month, amount }));
+
+    // 2. Income vs Expense Bar Chart Data
+    const barData = {};
+    transactionData.forEach(t => {
+      const date = new Date(t.date);
+      const monthKey = `${months[date.getMonth()]} '${String(date.getFullYear()).slice(-2)}`;
+
+      if (!barData[monthKey]) {
+        barData[monthKey] = { month: monthKey, income: 0, expense: 0, date };
+      }
+
+      const amount = parseFloat(t.amount);
+      if (t.type === 'income') {
+        barData[monthKey].income += amount;
+      } else {
+        barData[monthKey].expense += amount;
+      }
+    });
+
+    const incomeExpenseBar = Object.values(barData)
+      .sort((a, b) => a.date - b.date)
+      .map(({ month, income, expense }) => ({ month, income, expense }));
+
+    // 3. Income Breakdown Pie Chart Data
+    const incomeByCategory = {};
+    transactionData
+      .filter(t => t.type === 'income')
+      .forEach(t => {
+        const catName = t.categories?.name || 'Other';
+        incomeByCategory[catName] = (incomeByCategory[catName] || 0) + parseFloat(t.amount);
+      });
+
+    const totalIncome = Object.values(incomeByCategory).reduce((sum, a) => sum + a, 0);
+    const incomeBreakdown = Object.entries(incomeByCategory)
+      .map(([category, amount]) => ({
+        name: category,
+        amount,
+        percent: totalIncome > 0 ? (amount / totalIncome * 100).toFixed(1) : 0,
+        color: transactionData.find(t => t.categories?.name === category && t.type === 'income')?.categories?.color || '#4051b5'
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    // 4. Cumulative Savings Area Chart
+    const savingsData = {};
+    const sortedTransactions = [...transactionData].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    let cumulativeSavings = 0;
+    sortedTransactions.forEach(t => {
+      const date = new Date(t.date);
+      const monthKey = `${months[date.getMonth()]} '${String(date.getFullYear()).slice(-2)}`;
+
+      if (!savingsData[monthKey]) {
+        savingsData[monthKey] = { month: monthKey, cumulativeSavings: 0, date };
+      }
+
+      const amount = parseFloat(t.amount);
+      cumulativeSavings += t.type === 'income' ? amount : -amount;
+      savingsData[monthKey].cumulativeSavings = cumulativeSavings;
+    });
+
+    const savingsArea = Object.values(savingsData)
+      .sort((a, b) => a.date - b.date)
+      .map(({ month, cumulativeSavings }) => ({ month, cumulativeSavings }));
+
+    return {
+      trendLine,
+      incomeExpenseBar,
+      incomeBreakdown,
+      savingsArea
+    };
+  } catch (error) {
+    console.error('Error generating chart data:', error);
+    throw error;
+  }
+};
