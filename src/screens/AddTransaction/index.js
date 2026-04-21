@@ -18,6 +18,7 @@ import * as Icons from 'lucide-react-native';
 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 import styles from './styles';
 import { COLORS } from '../../constants/theme';
 
@@ -29,6 +30,7 @@ import AppInput from '../../components/Common/AppInput';
 import { transactionService } from '../../services/transactionService';
 
 const AddTransaction = ({ navigation, route }) => {
+  const { userId } = useAuth();
   const editTransaction = route.params?.transaction;
   const isEdit = !!editTransaction;
 
@@ -106,14 +108,13 @@ const AddTransaction = ({ navigation, route }) => {
 
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      if (!userId) {
         Alert.alert('Error', 'You must be logged in.');
         return;
       }
 
       const transactionData = {
-        user_id: session.user.id,
+        user_id: userId,
         category_id: selectedCategory.id,
         amount: parseFloat(amount),
         type: type,

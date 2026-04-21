@@ -1,0 +1,442 @@
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, ScrollView, Pressable, TextInput,
+  ActivityIndicator, Alert, StyleSheet
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info } from 'lucide-react-native';
+import { useDrawer } from '../../context/DrawerContext';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
+import { COLORS, SIZES } from '../../constants/theme';
+import { useFocusEffect } from '@react-navigation/native';
+
+const CURRENCIES = [
+  { code: 'PKR', symbol: 'Rs', label: 'Pakistani Rupee' },
+  { code: 'USD', symbol: '$', label: 'US Dollar' },
+  { code: 'EUR', symbol: '€', label: 'Euro' },
+  { code: 'GBP', symbol: '£', label: 'British Pound' },
+  { code: 'SAR', symbol: '﷼', label: 'Saudi Riyal' },
+  { code: 'AED', symbol: 'د.إ', label: 'UAE Dirham' },
+  { code: 'CAD', symbol: 'CA$', label: 'Canadian Dollar' },
+  { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
+];
+
+const SectionHeader = ({ title }) => (
+  <Text style={styles.sectionHeader}>{title}</Text>
+);
+
+const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) => (
+  <Pressable
+    style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+    onPress={onPress}
+  >
+    <View style={[styles.rowIcon, { backgroundColor: (color || COLORS.primary) + '22' }]}>
+      <Icon color={color || COLORS.primary} size={18} />
+    </View>
+    <View style={styles.rowContent}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+    </View>
+    {rightElement || <ChevronRight color={COLORS.textSecondary} size={18} />}
+  </Pressable>
+);
+
+export default function Settings() {
+  const { openDrawer } = useDrawer();
+  const { userId, user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [nameEdit, setNameEdit] = useState('');
+  const [currency, setCurrency] = useState('PKR');
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+
+  const loadProfile = async () => {
+    setLoading(true);
+    try {
+      if (!userId) return;
+      setEmail(user?.email || '');
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('name, preferences')
+        .eq('id', userId)
+        .single();
+
+      if (profile) {
+        setName(profile.name || '');
+        setNameEdit(profile.name || '');
+        setCurrency(profile.preferences?.currency || 'PKR');
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useFocusEffect(useCallback(() => { loadProfile(); }, []));
+
+  const saveName = async () => {
+    if (!nameEdit.trim()) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ name: nameEdit.trim() })
+        .eq('id', userId);
+      if (error) throw error;
+      setName(nameEdit.trim());
+      setEditingName(false);
+      Alert.alert('Saved', 'Your name has been updated.');
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveCurrency = async (code) => {
+    setCurrency(code);
+    setShowCurrencyPicker(false);
+    try {
+      // Merge into existing preferences JSON
+      const { data: profile } = await supabase
+        .from('users')
+        .select('preferences')
+        .eq('id', userId)
+        .single();
+      const prefs = { ...(profile?.preferences || {}), currency: code };
+      await supabase.from('users').update({ preferences: prefs }).eq('id', userId);
+    } catch (e) {
+      console.warn('Could not save currency preference:', e.message);
+    }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await supabase.auth.signOut();
+        }
+      }
+    ]);
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable
+            style={({ pressed }) => [styles.menuBtn, pressed && { opacity: 0.7 }]}
+            onPress={openDrawer}
+          >
+            <Menu color={COLORS.text} size={24} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Settings</Text>
+        </View>
+
+        {/* Avatar / Profile card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {(name || email || 'U').charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <Text style={styles.profileName}>{name || 'No name set'}</Text>
+          <Text style={styles.profileEmail}>{email}</Text>
+        </View>
+
+        {/* Profile settings */}
+        <SectionHeader title="Profile" />
+        <View style={styles.card}>
+          {editingName ? (
+            <View style={styles.editRow}>
+              <View style={[styles.rowIcon, { backgroundColor: COLORS.primary + '22' }]}>
+                <User color={COLORS.primary} size={18} />
+              </View>
+              <TextInput
+                style={styles.input}
+                value={nameEdit}
+                onChangeText={setNameEdit}
+                placeholder="Enter your name"
+                placeholderTextColor={COLORS.textSecondary}
+                autoFocus
+              />
+              <Pressable
+                style={[styles.saveBtn, saving && { opacity: 0.6 }]}
+                onPress={saveName}
+                disabled={saving}
+              >
+                {saving
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Save color="#fff" size={18} />}
+              </Pressable>
+            </View>
+          ) : (
+            <SettingRow
+              icon={User}
+              label="Display Name"
+              value={name || 'Not set'}
+              onPress={() => setEditingName(true)}
+            />
+          )}
+        </View>
+
+        {/* Currency */}
+        <SectionHeader title="Preferences" />
+        <View style={styles.card}>
+          <SettingRow
+            icon={DollarSign}
+            label="Currency"
+            value={`${currency} (${CURRENCIES.find(c => c.code === currency)?.symbol || ''})`}
+            onPress={() => setShowCurrencyPicker(v => !v)}
+          />
+          {showCurrencyPicker && (
+            <View style={styles.picker}>
+              {CURRENCIES.map(c => (
+                <Pressable
+                  key={c.code}
+                  style={({ pressed }) => [
+                    styles.pickerRow,
+                    currency === c.code && styles.pickerRowActive,
+                    pressed && { opacity: 0.6 }
+                  ]}
+                  onPress={() => saveCurrency(c.code)}
+                >
+                  <Text style={[
+                    styles.pickerCode,
+                    currency === c.code && { color: COLORS.primary }
+                  ]}>
+                    {c.code}
+                  </Text>
+                  <Text style={styles.pickerLabel}>{c.label}</Text>
+                  <Text style={styles.pickerSymbol}>{c.symbol}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Account */}
+        <SectionHeader title="Account" />
+        <View style={styles.card}>
+          <SettingRow
+            icon={Shield}
+            label="Email Address"
+            value={email}
+            onPress={null}
+            rightElement={<View />}
+          />
+        </View>
+
+        {/* App info */}
+        <SectionHeader title="About" />
+        <View style={styles.card}>
+          <SettingRow
+            icon={Info}
+            label="App Version"
+            value="1.0.0"
+            onPress={null}
+            rightElement={<View />}
+          />
+        </View>
+
+        {/* Sign out */}
+        <Pressable
+          style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.7 }]}
+          onPress={handleSignOut}
+        >
+          <LogOut color="#f44336" size={20} />
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </Pressable>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  scroll: {
+    padding: SIZES.padding,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    marginBottom: 8,
+  },
+  menuBtn: {
+    marginRight: 16,
+    padding: 8,
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+  },
+  headerTitle: {
+    color: COLORS.text,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  profileCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    alignItems: 'center',
+    paddingVertical: 28,
+    marginBottom: 28,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: 'bold',
+  },
+  profileName: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  profileEmail: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+  },
+  sectionHeader: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 8,
+    paddingHorizontal: 4,
+  },
+  card: {
+    backgroundColor: COLORS.card,
+    borderRadius: 20,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowContent: {
+    flex: 1,
+  },
+  rowLabel: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  rowValue: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  editRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    gap: 12,
+  },
+  input: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  picker: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  pickerRowActive: {
+    backgroundColor: COLORS.primary + '18',
+  },
+  pickerCode: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '600',
+    width: 44,
+  },
+  pickerLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+    flex: 1,
+  },
+  pickerSymbol: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    padding: 16,
+    backgroundColor: 'rgba(244,67,54,0.1)',
+    borderRadius: 18,
+    marginTop: 8,
+  },
+  signOutText: {
+    color: '#f44336',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+});

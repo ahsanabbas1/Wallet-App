@@ -15,6 +15,7 @@ import {
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
+import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 
 // Shared Components
@@ -35,7 +36,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
-  
+  const { userId } = useAuth();
+
   const [userName, setUserName] = useState('User');
   const [loading, setLoading] = useState(true);
   const [recentTransactions, setRecentTransactions] = useState([]);
@@ -45,29 +47,25 @@ const DashboardOverview = () => {
   const [expenseChange, setExpenseChange] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
 
-  const loadProfile = async () => {
-    try {
-      const profile = await dashboardService.getUserProfile();
-      if (profile) setUserName(profile.name);
-    } catch (e) {
-      console.warn('Profile fetch error:', e.message);
-    }
-  };
-
+  // Single load function — uses userId from context, no extra getSession() call
   const loadDashboardData = async () => {
+    if (!userId) return;
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
 
-      const data = await dashboardService.getDashboardData(session.user.id);
-      
-      setRecentTransactions(data.recentTransactions);
-      setRecentPlanned(data.recentPlanned);
-      setTotals(data.totals);
-      setCategoryBreakdown(data.categoryBreakdown);
-      setExpenseChange(data.expenseChange);
-      setPerformanceMetrics(data.performanceMetrics);
+      const [profileData, dashData] = await Promise.all([
+        supabase.from('users').select('name').eq('id', userId).single(),
+        dashboardService.getDashboardData(userId),
+      ]);
+
+      if (profileData.data?.name) setUserName(profileData.data.name);
+
+      setRecentTransactions(dashData.recentTransactions);
+      setRecentPlanned(dashData.recentPlanned);
+      setTotals(dashData.totals);
+      setCategoryBreakdown(dashData.categoryBreakdown);
+      setExpenseChange(dashData.expenseChange);
+      setPerformanceMetrics(dashData.performanceMetrics);
     } catch (error) {
       console.error('Dashboard load error:', error.message);
     } finally {
@@ -77,9 +75,8 @@ const DashboardOverview = () => {
 
   useFocusEffect(
     useCallback(() => {
-      loadProfile();
       loadDashboardData();
-    }, [])
+    }, [userId])
   );
 
   const handleDeleteTransaction = (transaction) => {

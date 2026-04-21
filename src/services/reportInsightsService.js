@@ -348,11 +348,19 @@ export const getReportInsights = async (userId, period = 'MONTH') => {
 };
 
 /**
- * Get cash flow data with hierarchical monthly/daily breakdown
+ * Get cash flow data with hierarchical monthly/daily breakdown (income + expense)
  */
 export const getCashFlowData = async (userId, period = 'MONTH') => {
   try {
-    const transactions = await getPeriodData(userId, period);
+    const { startDate, endDate } = getDateRange(period);
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('id, amount, type, date, categories(name, color)')
+      .eq('user_id', userId)
+      .gte('date', startDate.toISOString())
+      .lte('date', endDate.toISOString());
+    if (error) throw error;
+    const transactions = data || [];
     const months = {};
 
     // Group transactions by month and day

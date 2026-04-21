@@ -6,6 +6,7 @@ import { ArrowUpRight, ArrowDownLeft, Calendar, Filter, Plus, ReceiptText, Penci
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 import styles from './styles';
 import { TextInput } from 'react-native';
 
@@ -20,6 +21,7 @@ const formatAmount = (amount) => {
 
 const ExpenseTracker = ({ navigation }) => {
   const { openDrawer } = useDrawer();
+  const { userId } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({ income: 0, expense: 0 });
@@ -43,8 +45,7 @@ const ExpenseTracker = ({ navigation }) => {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!userId) return;
 
       let query = supabase
         .from('transactions')
@@ -56,7 +57,7 @@ const ExpenseTracker = ({ navigation }) => {
             icon
           )
         `)
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId)
         .order('date', { ascending: false });
 
       if (filterPeriod !== 'ALL') {

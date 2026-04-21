@@ -2,22 +2,16 @@ import { supabase } from '../lib/supabase';
 
 export const dashboardService = {
   /**
-   * Fetch user profile data.
+   * Fetch user profile by id.
    */
-  async getUserProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-
+  async getUserProfile(userId) {
+    if (!userId) return null;
     const { data: dbUser } = await supabase
       .from('users')
       .select('name')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
-
-    return {
-      id: user.id,
-      name: dbUser?.name || user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0]
-    };
+    return dbUser || null;
   },
 
   /**

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 
 // Modular Components
 import MiniCalendar from '../../components/Calendar';
@@ -37,6 +38,7 @@ import styles from './styles';
 
 const PlannedPayments = () => {
   const navigation = useNavigation();
+  const { userId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [plannedPayments, setPlannedPayments] = useState([]);
@@ -59,11 +61,9 @@ const PlannedPayments = () => {
     try {
       setLoading(true);
       setTableExists(true);
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!userId) return;
 
-      const data = await paymentService.getPlannedPayments(session.user.id);
+      const data = await paymentService.getPlannedPayments(userId);
       setPlannedPayments(data);
     } catch (error) {
       if (error.message.includes('relation "planned_payments" does not exist')) {
@@ -92,10 +92,8 @@ const PlannedPayments = () => {
 
     try {
       setSubmitting(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      
       await paymentService.addPlannedPayment({
-        user_id: session.user.id,
+        user_id: userId,
         title,
         amount: parseFloat(amount),
         type,

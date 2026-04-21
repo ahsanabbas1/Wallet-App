@@ -176,7 +176,6 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 24,
-    paddingHorizontal: SIZES.padding,
     justifyContent: 'space-between',
   },
   filterButton: {
@@ -235,5 +234,19 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     marginBottom: 4,
+  },
+  ledgerToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 10,
+    padding: 3,
+    gap: 3,
+  },
+  toggleBtn: {
+    padding: 7,
+    borderRadius: 8,
+  },
+  toggleBtnActive: {
+    backgroundColor: COLORS.primary,
   },
 });

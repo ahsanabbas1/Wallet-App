@@ -4,11 +4,13 @@ import { Wallet, TrendingUp, Target, Plus, Utensils, Zap, Car, Plane, Menu, Shop
 import { useDrawer } from '../../context/DrawerContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 import { styles } from './styles';
 import { COLORS } from '../../constants/theme';
 
 const Budgeting = ({ navigation }) => {
   const { openDrawer } = useDrawer();
+  const { userId } = useAuth();
   const [loading, setLoading] = useState(true);
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
@@ -17,22 +19,21 @@ const Budgeting = ({ navigation }) => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!userId) return;
 
       // Fetch Budgets
       const { data: budgetData } = await supabase
         .from('budgets')
         .select('*, categories(*)')
-        .eq('user_id', session.user.id);
-      
+        .eq('user_id', userId);
+
       // Fetch Transactions for specific period (simplifying to current month)
       const now = new Date();
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
       const { data: transData } = await supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId)
         .eq('type', 'expense')
         .gte('date', firstDay);
 
@@ -40,7 +41,7 @@ const Budgeting = ({ navigation }) => {
       const { data: goalData } = await supabase
         .from('savings_goals')
         .select('*')
-        .eq('user_id', session.user.id);
+        .eq('user_id', userId);
 
       const processedBudgets = (budgetData || []).map(b => {
         const spent = (transData || [])

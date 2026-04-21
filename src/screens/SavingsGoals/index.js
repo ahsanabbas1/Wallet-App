@@ -6,12 +6,14 @@ import { Target, Plus, Menu, Pencil, Trash2, Calendar, X, Clock } from 'lucide-r
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 import styles from './styles';
 import { Modal, TextInput, ActivityIndicator as RNNActivityIndicator } from 'react-native';
 
 const SavingsGoals = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
+  const { userId } = useAuth();
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -29,13 +31,12 @@ const SavingsGoals = () => {
   const fetchGoals = async () => {
     try {
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!userId) return;
 
       const { data, error } = await supabase
         .from('savings_goals')
         .select('*')
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -77,11 +78,10 @@ const SavingsGoals = () => {
 
     try {
       setSaving(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+      if (!userId) return;
 
       const goalData = {
-        user_id: session.user.id,
+        user_id: userId,
         title,
         target_amount: parseFloat(targetAmount),
         start_date: startDate ? new Date(startDate).toISOString() : new Date().toISOString(),
