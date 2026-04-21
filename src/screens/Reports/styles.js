@@ -172,4 +172,68 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 24,
+    paddingHorizontal: SIZES.padding,
+    justifyContent: 'space-between',
+  },
+  filterButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 70,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterButtonText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterButtonTextActive: {
+    color: COLORS.text,
+  },
+  recommendationsSection: {
+    marginBottom: 32,
+  },
+  recommendationCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+  },
+  recommendationTitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  recommendationText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  savingsAmount: {
+    color: COLORS.success || '#4caf50',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  expandedInsights: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  insightItem: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 4,
+  },
 });

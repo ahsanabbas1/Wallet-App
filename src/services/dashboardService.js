@@ -13,11 +13,35 @@ export const dashboardService = {
       .select('name')
       .eq('id', user.id)
       .single();
-    
+
     return {
       id: user.id,
       name: dbUser?.name || user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0]
     };
+  },
+
+  /**
+   * Get date range for a given period
+   */
+  _getDateRange(period = 'MONTH') {
+    const now = new Date();
+    const startDate = new Date(now);
+
+    switch (period) {
+      case 'WEEK':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'MONTH':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'YEAR':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate.setMonth(now.getMonth() - 1);
+    }
+
+    return { startDate, endDate: now };
   },
 
   /**
@@ -46,15 +70,15 @@ export const dashboardService = {
       .from('savings_goals')
       .select('*')
       .eq('user_id', userId);
-    
+
     // 3. Aggregate Totals
     const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
     const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    
+
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
-    
+
     const monthlySpend = transactions
       .filter(t => t.type === 'expense')
       .filter(t => {
@@ -80,11 +104,11 @@ export const dashboardService = {
 
     const catTotals = {};
     let totalExpense = 0;
-    
+
     transactions.filter(t => t.type === 'expense').forEach(t => {
       const category = categoryCache[t.category_id];
       let displayCategory = category;
-      
+
       // If this is a sub-category, roll up to parent
       if (category?.parent_id) {
         displayCategory = categoryCache[category.parent_id] || category;
@@ -92,14 +116,14 @@ export const dashboardService = {
 
       const catName = displayCategory?.name || 'Other';
       const amount = parseFloat(t.amount);
-      
+
       if (!catTotals[catName]) {
         catTotals[catName] = {
           amount: 0,
           color: displayCategory?.color || '#4051b5'
         };
       }
-      
+
       catTotals[catName].amount += amount;
       totalExpense += amount;
     });
@@ -125,7 +149,7 @@ export const dashboardService = {
         return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
       })
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-    
+
     let expenseChange = 0;
     if (lastMonthExpenses > 0) {
       expenseChange = ((monthlySpend - lastMonthExpenses) / lastMonthExpenses) * 100;
@@ -154,6 +178,32 @@ export const dashboardService = {
         cashFlowScore: Math.min(Math.max((income - expense) > 0 ? 80 : 20, 0), 100)
       }
     };
+  },
+
+  /**
+   * Get report data for a specific time period
+   */
+  async getReportData(userId, period = 'MONTH') {
+    const { startDate, endDate } = this._getDateRange(period);
+
+    const { data: transactions, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        categories (
+          name,
+          color,
+          icon
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('type', 'expense')
+      .gte('date', startDate.toISOString())
+      .lte('date', endDate.toISOString())
+      .order('date', { ascending: false });
+
+    if (error) throw error;
+    return transactions || [];
   }
 };
 
