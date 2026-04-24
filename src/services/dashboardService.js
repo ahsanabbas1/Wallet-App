@@ -175,10 +175,12 @@ export const dashboardService = {
   },
 
   /**
-   * Get report data for a specific time period
+   * Get report data for a specific time period (pass customDates for CUSTOM period)
    */
-  async getReportData(userId, period = 'MONTH') {
-    const { startDate, endDate } = this._getDateRange(period);
+  async getReportData(userId, period = 'MONTH', customDates = null) {
+    const { startDate, endDate } = period === 'CUSTOM' && customDates
+      ? { startDate: new Date(customDates.startDate + 'T00:00:00'), endDate: new Date(customDates.endDate + 'T23:59:59') }
+      : this._getDateRange(period);
 
     const { data: transactions, error } = await supabase
       .from('transactions')

@@ -2,15 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
-import { 
-  Target, 
-  Plus, 
-  Menu, 
-  DollarSign, 
-  LogOut, 
-  ReceiptText, 
+import {
+  Target,
+  Plus,
+  Menu,
+  DollarSign,
+  LogOut,
+  ReceiptText,
   CalendarClock,
-  TrendingUp
+  TrendingUp,
+  Bell,
 } from 'lucide-react-native';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -28,6 +29,7 @@ import GaugeChart from '../../components/Charts/GaugeChart';
 import { formatAmount } from '../../utils/formatters';
 import { dashboardService } from '../../services/dashboardService';
 import { transactionService } from '../../services/transactionService';
+import { generateNotifications, getUnreadCount } from '../../services/notificationService';
 
 import styles from './styles';
 
@@ -40,6 +42,7 @@ const DashboardOverview = () => {
 
   const [userName, setUserName] = useState('User');
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [recentPlanned, setRecentPlanned] = useState([]);
   const [totals, setTotals] = useState({ balance: 0, monthlySpend: 0, totalSaved: 0, totalIncome: 0 });
@@ -52,6 +55,11 @@ const DashboardOverview = () => {
     if (!userId) return;
     try {
       setLoading(true);
+
+      // Fire-and-forget notification generation + unread count (non-blocking)
+      generateNotifications(userId).then(() =>
+        getUnreadCount(userId).then(setUnreadCount)
+      );
 
       const [profileData, dashData] = await Promise.all([
         supabase.from('users').select('name').eq('id', userId).single(),
@@ -153,9 +161,28 @@ const DashboardOverview = () => {
               <Text style={styles.userName}>{userName}</Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row' }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Bell color={COLORS.text} size={22} />
+              {unreadCount > 0 && (
+                <View style={{
+                  position: 'absolute', top: 4, right: 4,
+                  backgroundColor: COLORS.error,
+                  borderRadius: 6, minWidth: 14, height: 14,
+                  paddingHorizontal: 3,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
             <Pressable style={styles.iconButton} onPress={handleSignOut}>
-              <LogOut color={COLORS.error} size={24} />
+              <LogOut color={COLORS.error} size={22} />
             </Pressable>
           </View>
         </View>

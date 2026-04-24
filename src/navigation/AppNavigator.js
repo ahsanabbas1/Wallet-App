@@ -12,7 +12,8 @@ import SharedBudgets from '../screens/SharedBudgets/index';
 import FinancialSuite from '../screens/FinancialSuite/index';
 import SavingsGoals from '../screens/SavingsGoals/index';
 import PlannedPayments from '../screens/PlannedPayments/index';
-import Settings from '../screens/Settings/index';
+import Settings       from '../screens/Settings/index';
+import Notifications  from '../screens/Notifications/index';
 import { COLORS } from '../constants/theme';
 import AddTransaction from '../screens/AddTransaction/index';
 
@@ -32,7 +33,8 @@ const MainStack = () => {
       <Stack.Screen name="Shopping" component={Shopping} />
       <Stack.Screen name="Shared" component={SharedBudgets} />
       <Stack.Screen name="Financial Suite" component={FinancialSuite} />
-      <Stack.Screen name="Settings" component={Settings} />
+      <Stack.Screen name="Settings"       component={Settings}       />
+      <Stack.Screen name="Notifications"  component={Notifications}  />
     </Stack.Navigator>
   );
 };

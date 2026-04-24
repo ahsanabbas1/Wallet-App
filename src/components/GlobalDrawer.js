@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions } from 'react-native';
 import { useDrawer } from '../context/DrawerContext';
 import { COLORS, SIZES } from '../constants/theme';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
@@ -61,7 +61,8 @@ const GlobalDrawer = () => {
           <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />
           <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} />
           <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} />
-          <DrawerItem icon={Settings} label="Settings" onPress={() => handleNavigate('Settings')} />
+          <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />
+          <DrawerItem icon={Settings} label="Settings"      onPress={() => handleNavigate('Settings')} />
         </View>
       </Animated.View>
     </View>

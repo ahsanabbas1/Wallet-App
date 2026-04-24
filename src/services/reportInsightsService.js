@@ -1,10 +1,18 @@
 import { supabase } from '../lib/supabase';
 
 /**
- * Calculate date range based on filter period
+ * Calculate date range based on filter period.
+ * Pass customDates = { startDate: 'YYYY-MM-DD', endDate: 'YYYY-MM-DD' } when period === 'CUSTOM'.
  */
-export const getDateRange = (period) => {
+export const getDateRange = (period, customDates = null) => {
   const now = new Date();
+
+  if (period === 'CUSTOM' && customDates?.startDate && customDates?.endDate) {
+    const start = new Date(customDates.startDate + 'T00:00:00');
+    const end   = new Date(customDates.endDate   + 'T23:59:59');
+    return { startDate: start, endDate: end, label: 'Custom', period };
+  }
+
   const startDate = new Date(now);
   let label = '';
 
@@ -32,8 +40,8 @@ export const getDateRange = (period) => {
 /**
  * Get aggregated data for a time period
  */
-export const getPeriodData = async (userId, period = 'MONTH') => {
-  const { startDate, endDate } = getDateRange(period);
+export const getPeriodData = async (userId, period = 'MONTH', customDates = null) => {
+  const { startDate, endDate } = getDateRange(period, customDates);
 
   const { data: transactions, error } = await supabase
     .from('transactions')
@@ -308,10 +316,10 @@ export const generateInsightText = (patterns, overspending, currentSpend, previo
 /**
  * Main function to get all insights
  */
-export const getReportInsights = async (userId, period = 'MONTH') => {
+export const getReportInsights = async (userId, period = 'MONTH', customDates = null) => {
   try {
     // Fetch data
-    const currentTransactions = await getPeriodData(userId, period);
+    const currentTransactions = await getPeriodData(userId, period, customDates);
     const previousTransactions = await getPreviousPeriodData(userId, period);
     const budgets = await getUserBudgets(userId);
 
@@ -350,9 +358,9 @@ export const getReportInsights = async (userId, period = 'MONTH') => {
 /**
  * Get cash flow data with hierarchical monthly/daily breakdown (income + expense)
  */
-export const getCashFlowData = async (userId, period = 'MONTH') => {
+export const getCashFlowData = async (userId, period = 'MONTH', customDates = null) => {
   try {
-    const { startDate, endDate } = getDateRange(period);
+    const { startDate, endDate } = getDateRange(period, customDates);
     const { data, error } = await supabase
       .from('transactions')
       .select('id, amount, type, date, categories(name, color)')
@@ -425,9 +433,9 @@ export const getCashFlowData = async (userId, period = 'MONTH') => {
 /**
  * Get ledger data with running balance
  */
-export const getLedgerData = async (userId, period = 'MONTH') => {
+export const getLedgerData = async (userId, period = 'MONTH', customDates = null) => {
   try {
-    const { startDate, endDate } = getDateRange(period);
+    const { startDate, endDate } = getDateRange(period, customDates);
 
     const { data: transactions, error } = await supabase
       .from('transactions')
@@ -495,9 +503,9 @@ export const getLedgerData = async (userId, period = 'MONTH') => {
 /**
  * Get chart data for all 4 advanced charts
  */
-export const getChartData = async (userId, period = 'MONTH') => {
+export const getChartData = async (userId, period = 'MONTH', customDates = null) => {
   try {
-    const { startDate, endDate } = getDateRange(period);
+    const { startDate, endDate } = getDateRange(period, customDates);
 
     // Fetch all transactions
     const { data: transactions, error } = await supabase
