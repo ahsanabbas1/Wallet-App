@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions, ScrollView } from 'react-native';
+import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
 import { COLORS, SIZES } from '../constants/theme';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
@@ -33,6 +34,14 @@ const GlobalDrawer = () => {
     }, 200);
   };
 
+  const handleLogout = async () => {
+    closeDrawer();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out:', error.message);
+    }
+  };
+
   return (
     <View style={styles.container} pointerEvents="box-none">
       {/* Background Overlay */}
@@ -49,7 +58,7 @@ const GlobalDrawer = () => {
           </Pressable>
         </View>
 
-        <View style={styles.menuItems}>
+        <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false}>
           <DrawerItem icon={Home} label="Dashboard" onPress={() => handleNavigate('Dashboard')} />
           <DrawerItem icon={List} label="Expenses" onPress={() => handleNavigate('Expenses')} />
           <DrawerItem icon={Target} label="Savings Goals" onPress={() => handleNavigate('Savings Goals')} />
@@ -63,7 +72,19 @@ const GlobalDrawer = () => {
           <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} />
           <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />
           <DrawerItem icon={Settings} label="Settings"      onPress={() => handleNavigate('Settings')} />
-        </View>
+          
+          <View style={styles.divider} />
+          
+          <Pressable 
+            style={({ pressed }) => [styles.drawerItem, styles.logoutItem, pressed && { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]} 
+            onPress={handleLogout}
+          >
+            <LogOut color={COLORS.error} size={24} style={styles.icon} />
+            <Text style={[styles.drawerItemText, { color: COLORS.error }]}>Logout</Text>
+          </Pressable>
+          
+          <View style={{ height: 40 }} />
+        </ScrollView>
       </Animated.View>
     </View>
   );
@@ -118,6 +139,15 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 16,
   },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    marginVertical: 10,
+    marginHorizontal: SIZES.padding,
+  },
+  logoutItem: {
+    marginTop: 5,
+  }
 });
 
 export default GlobalDrawer;

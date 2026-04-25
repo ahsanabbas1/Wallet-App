@@ -3,6 +3,7 @@
     "name": "Wallet App",
     "slug": "wallet_app",
     "version": "1.0.0",
+    "scheme": "wallet-app",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -30,7 +31,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
