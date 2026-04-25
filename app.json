@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Wallet App",
+    "name": "Wallet Budget App",
     "slug": "wallet_app",
     "version": "1.0.0",
     "scheme": "wallet-app",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/wallet-budget-app.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash-icon.png",

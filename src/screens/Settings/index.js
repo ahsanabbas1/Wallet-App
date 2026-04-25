@@ -9,7 +9,7 @@ import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, SIZES } from '../../constants/theme';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 const CURRENCIES = [
   { code: 'PKR', symbol: 'Rs', label: 'Pakistani Rupee' },
@@ -43,6 +43,7 @@ const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) 
 );
 
 export default function Settings() {
+  const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId, user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -55,30 +56,54 @@ export default function Settings() {
   const [editingName, setEditingName] = useState(false);
 
   const loadProfile = async () => {
+    if (!userId) return;
     setLoading(true);
     try {
-      if (!userId) return;
       setEmail(user?.email || '');
 
-      const { data: profile } = await supabase
+      // 1. Fetch Name (Required)
+      const { data: profile, error: nameError } = await supabase
         .from('users')
-        .select('name, preferences')
+        .select('name')
         .eq('id', userId)
         .single();
+
+      if (nameError) throw nameError;
 
       if (profile) {
         setName(profile.name || '');
         setNameEdit(profile.name || '');
-        setCurrency(profile.preferences?.currency || 'PKR');
+      }
+
+      // 2. Fetch Preferences/Currency (Optional fallback)
+      // We try 'preferences' first, if it fails we might try a direct 'currency' column
+      const { data: prefData } = await supabase
+        .from('users')
+        .select('preferences, currency')
+        .eq('id', userId)
+        .single();
+
+      if (prefData) {
+        if (prefData.preferences?.currency) {
+          setCurrency(prefData.preferences.currency);
+        } else if (prefData.currency) {
+          setCurrency(prefData.currency);
+        }
       }
     } catch (e) {
-      console.error(e);
+      console.warn('Profile load error:', e.message);
+      // Fallback for name from user object if DB fails
+      if (!name) {
+        const fallbackName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
+        setName(fallbackName);
+        setNameEdit(fallbackName);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  useFocusEffect(useCallback(() => { loadProfile(); }, []));
+  useFocusEffect(useCallback(() => { loadProfile(); }, [userId]));
 
   const saveName = async () => {
     if (!nameEdit.trim()) return;
@@ -103,16 +128,42 @@ export default function Settings() {
     setCurrency(code);
     setShowCurrencyPicker(false);
     try {
-      // Merge into existing preferences JSON
+      // 1. Fetch current preferences to preserve other keys if column exists
       const { data: profile } = await supabase
         .from('users')
-        .select('preferences')
+        .select('preferences, currency')
         .eq('id', userId)
         .single();
-      const prefs = { ...(profile?.preferences || {}), currency: code };
-      await supabase.from('users').update({ preferences: prefs }).eq('id', userId);
+
+      const updates = { updated_at: new Date().toISOString() };
+
+      // 2. Try updating both possible locations for currency
+      // Attempt 1: Standard column
+      updates.currency = code;
+
+      // Attempt 2: JSONB preferences
+      if (profile) {
+        updates.preferences = { ...(profile.preferences || {}), currency: code };
+      } else {
+        updates.preferences = { currency: code };
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userId);
+
+      if (error) {
+        // If bulk update failed (likely due to missing preferences column), try only standard column
+        console.warn('Full update failed, trying standard column only');
+        await supabase
+          .from('users')
+          .update({ currency: code })
+          .eq('id', userId);
+      }
     } catch (e) {
       console.warn('Could not save currency preference:', e.message);
+      // We already set it in state, so UI is snappy. Alert only if it's a hard failure.
     }
   };
 
@@ -254,6 +305,11 @@ export default function Settings() {
             value="1.0.0"
             onPress={null}
             rightElement={<View />}
+          />
+          <SettingRow
+            icon={Info}
+            label="About App"
+            onPress={() => navigation.navigate('About')}
           />
         </View>
 

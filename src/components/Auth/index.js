@@ -259,7 +259,7 @@ export default function Auth() {
                 </Animated.View>
 
                 <Animated.View style={[styles.titleBlock, { opacity: headerFade }]}>
-                    <Text style={styles.title}>Wallet App</Text>
+                    <Text style={styles.title}>Wallet Budget App</Text>
                     <Text style={styles.subtitle}>
                         {activeTab === 'login'
                             ? 'Welcome back! Sign in to continue.'
