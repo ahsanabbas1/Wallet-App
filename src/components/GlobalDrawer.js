@@ -67,7 +67,7 @@ const GlobalDrawer = () => {
           <DrawerItem icon={LayoutDashboard} label="Budgeting" onPress={() => handleNavigate('Budgeting')} />
           <DrawerItem icon={MessageSquare} label="AI Assistant" onPress={() => handleNavigate('AI Assistant')} />
           {/* <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} /> */}
-          <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />
+          <DrawerItem icon={ShoppingBag} label="Asset Manager" onPress={() => handleNavigate('Shopping')} />
           {/* <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} /> */}
           {/* <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} /> */}
           <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />
