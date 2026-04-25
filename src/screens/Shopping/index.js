@@ -10,7 +10,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles } from './styles'; // Make sure this provides basic layout, we'll override some for the new UI
 
-const AssetManager = () => {
+const ShoppingList = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
   const [activeTab, setActiveTab] = useState('active'); // 'active' | 'archive' | 'warranty'
@@ -202,10 +202,18 @@ const AssetManager = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={{ marginRight: 16 }} onPress={openDrawer}>
+        <TouchableOpacity 
+          style={{ width: 40 }} 
+          onPress={openDrawer}
+        >
           <Menu color={COLORS.text} size={24} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Asset Manager</Text>
+        
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>Shopping List</Text>
+        </View>
+
+        <View style={{ width: 40 }} />
       </View>
 
       <View style={styles.tabContainer}>
@@ -449,4 +457,4 @@ const localStyles = {
   btnSave: { color: COLORS.primary, fontSize: 16, fontWeight: 'bold' }
 };
 
-export default AssetManager;
+export default ShoppingList;
