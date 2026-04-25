@@ -66,10 +66,10 @@ const GlobalDrawer = () => {
           <DrawerItem icon={CalendarClock} label="Planned Payments" onPress={() => handleNavigate('Planned')} />
           <DrawerItem icon={LayoutDashboard} label="Budgeting" onPress={() => handleNavigate('Budgeting')} />
           <DrawerItem icon={MessageSquare} label="AI Assistant" onPress={() => handleNavigate('AI Assistant')} />
-          <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} />
+          {/* <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} /> */}
           <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />
-          <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} />
-          <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} />
+          {/* <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} /> */}
+          {/* <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} /> */}
           <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />
           <DrawerItem icon={Settings} label="Settings"      onPress={() => handleNavigate('Settings')} />
           

@@ -29,10 +29,10 @@ const MainStack = () => {
       <Stack.Screen name="Budgeting" component={Budgeting} />
       <Stack.Screen name="Reports" component={Reports} />
       <Stack.Screen name="AI Assistant" component={AIAssistant} />
-      <Stack.Screen name="Loyalty" component={LoyaltyCards} />
+      {/* <Stack.Screen name="Loyalty" component={LoyaltyCards} /> */}
       <Stack.Screen name="Shopping" component={Shopping} />
-      <Stack.Screen name="Shared" component={SharedBudgets} />
-      <Stack.Screen name="Financial Suite" component={FinancialSuite} />
+      {/* <Stack.Screen name="Shared" component={SharedBudgets} /> */}
+      {/* <Stack.Screen name="Financial Suite" component={FinancialSuite} /> */}
       <Stack.Screen name="Settings"       component={Settings}       />
       <Stack.Screen name="Notifications"  component={Notifications}  />
     </Stack.Navigator>

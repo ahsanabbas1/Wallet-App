@@ -13,10 +13,24 @@ import AppNavigator from './src/navigation/AppNavigator'
 
 const ensureUserProfile = async (user) => {
   try {
-    const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0];
-    await supabase
+    // Check if user already exists in our custom 'users' table
+    const { data: existing, error } = await supabase
       .from('users')
-      .upsert({ id: user.id, name: fullName, email: user.email }, { onConflict: 'id' });
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    // If no profile exists, create one with default metadata
+    if (!existing && !error) {
+      const fullName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0];
+      await supabase
+        .from('users')
+        .insert({ 
+          id: user.id, 
+          name: fullName, 
+          email: user.email 
+        });
+    }
   } catch (e) {
     console.warn('Could not ensure user profile:', e.message);
   }
