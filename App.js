@@ -45,7 +45,7 @@ const ensureUserProfile = async (user) => {
 
 // Inner component reads from AuthContext (already initialized by AuthProvider)
 const AppContent = () => {
-  const { session } = useAuth();
+  const { session, loading } = useAuth();
   const [profileReady, setProfileReady] = useState(false);
 
   useEffect(() => {
@@ -56,6 +56,16 @@ const AppContent = () => {
       setProfileReady(false);
     }
   }, [session?.user?.id]);
+
+  // Show loading screen while restoring session from AsyncStorage
+  // This prevents the Auth screen from flashing on every app open
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0e1a' }}>
+        <ActivityIndicator size="large" color="#6c63ff" />
+      </View>
+    );
+  }
 
   if (!session?.user) return <Auth />;
 
