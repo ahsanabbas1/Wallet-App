@@ -7,6 +7,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
   const { colors: COLORS } = useTheme();
+  const styles = React.useMemo(() => makeStyles(COLORS), [COLORS]);
   if (!data.length) {
     return (
       <View style={{ height, justifyContent: 'center', alignItems: 'center' }}>
@@ -111,7 +112,7 @@ const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   legend: {
     flexDirection: 'row',
     justifyContent: 'center',

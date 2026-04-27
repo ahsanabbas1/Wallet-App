@@ -148,7 +148,7 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
