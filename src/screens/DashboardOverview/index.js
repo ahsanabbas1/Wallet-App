@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import {
   Target,
   Plus,
@@ -32,7 +33,6 @@ import { dashboardService } from '../../services/dashboardService';
 import { transactionService } from '../../services/transactionService';
 import { generateNotifications, getUnreadCount } from '../../services/notificationService';
 
-import styles from './styles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -41,6 +41,8 @@ const DashboardOverview = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   const [userName, setUserName] = useState('User');
   const [loading, setLoading] = useState(true);

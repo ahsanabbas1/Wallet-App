@@ -1,26 +1,33 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions, ScrollView } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
-import { COLORS, SIZES } from '../constants/theme';
+import { SIZES } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
 
-const DrawerItem = ({ icon: Icon, label, onPress }) => (
-  <Pressable 
-    style={({ pressed }) => [styles.drawerItem, pressed && { backgroundColor: 'rgba(255,255,255,0.05)' }]} 
-    onPress={onPress}
-  >
-    <Icon color={COLORS.textSecondary} size={24} style={styles.icon} />
-    <Text style={styles.drawerItemText}>{label}</Text>
-  </Pressable>
-);
+const DrawerItem = ({ icon: Icon, label, onPress }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.drawerItem, pressed && { backgroundColor: COLORS.surface }]}
+      onPress={onPress}
+    >
+      <Icon color={COLORS.textSecondary} size={24} style={styles.icon} />
+      <Text style={styles.drawerItemText}>{label}</Text>
+    </Pressable>
+  );
+};
 
 const GlobalDrawer = () => {
   const { isOpen, closeDrawer, slideAnim, overlayAnim, drawerWidth } = useDrawer();
   const navigation = useNavigation();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   if (!isOpen) {
      return null;
@@ -90,7 +97,7 @@ const GlobalDrawer = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,

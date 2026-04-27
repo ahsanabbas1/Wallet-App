@@ -1,9 +1,9 @@
 import { StyleSheet, Dimensions } from 'react-native';
-import { COLORS, SIZES } from '../../constants/theme';
+import { SIZES } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
-export const styles = StyleSheet.create({
+export const makeStyles = (COLORS) => StyleSheet.create({
 
   /* ── Container ─────────────────────────────────────────────────────── */
   container: {

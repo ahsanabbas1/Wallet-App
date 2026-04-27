@@ -1,11 +1,12 @@
 import React from 'react';
 import { View, Text, Dimensions, StyleSheet } from 'react-native';
 import { Svg, Rect, G, Text as SvgText, Line } from 'react-native-svg';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
+  const { colors: COLORS } = useTheme();
   if (!data.length) {
     return (
       <View style={{ height, justifyContent: 'center', alignItems: 'center' }}>

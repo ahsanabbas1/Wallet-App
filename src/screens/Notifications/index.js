@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+// useMemo used for styles + unread count
 import {
   View, Text, ScrollView, Pressable, Switch,
   ActivityIndicator, Alert, StyleSheet,
@@ -13,7 +14,8 @@ import {
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth }   from '../../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { COLORS, SIZES } from '../../constants/theme';
+import { SIZES } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../lib/supabase';
 import {
   NOTIFICATION_TYPES, NOTIFICATION_META, DEFAULT_PREFERENCES,
@@ -63,6 +65,8 @@ const AMOUNT_OPTIONS = [5000, 10000, 25000, 50000];
 export default function Notifications() {
   const { openDrawer } = useDrawer();
   const { userId }     = useAuth();
+  const { colors: COLORS } = useTheme();
+  const s = useMemo(() => makeS(COLORS), [COLORS]);
 
   const [activeTab,     setActiveTab]     = useState(0);
   const [loading,       setLoading]       = useState(true);
@@ -384,6 +388,8 @@ export default function Notifications() {
 /* ─── NotificationCard ───────────────────────────────────────────────────── */
 
 function NotificationCard({ notification: n, onRead, onDelete }) {
+  const { colors: COLORS } = useTheme();
+  const s = useMemo(() => makeS(COLORS), [COLORS]);
   const meta = NOTIFICATION_META[n.type] || { color: COLORS.primary };
   const Icon = TYPE_ICONS[n.type] || Bell;
 
@@ -420,6 +426,8 @@ function NotificationCard({ notification: n, onRead, onDelete }) {
 /* ─── OptionChips ─────────────────────────────────────────────────────────── */
 
 function OptionChips({ label, options, selected, fmt, color, onSelect }) {
+  const { colors: COLORS } = useTheme();
+  const s = useMemo(() => makeS(COLORS), [COLORS]);
   return (
     <View style={{ marginBottom: 12 }}>
       <Text style={s.optLabel}>{label}</Text>
@@ -439,7 +447,7 @@ function OptionChips({ label, options, selected, fmt, color, onSelect }) {
 
 /* ─── Styles ─────────────────────────────────────────────────────────────── */
 
-const s = StyleSheet.create({
+const makeS = (COLORS) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll:    { padding: SIZES.padding, paddingTop: 8 },
 

@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
-import { COLORS, SIZES } from '../../constants/theme';
+import { SIZES } from '../../constants/theme';
 
-export default StyleSheet.create({
+export const makeStyles = (COLORS) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

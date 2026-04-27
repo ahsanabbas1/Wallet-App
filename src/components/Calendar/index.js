@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const MiniCalendar = ({ selectedDate, onSelectDate }) => {
+  const { colors: COLORS } = useTheme();
   const [viewDate, setViewDate] = useState(new Date(selectedDate));
-  
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+
   const daysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
   
@@ -65,7 +67,7 @@ const MiniCalendar = ({ selectedDate, onSelectDate }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   calendarContainer: {
     backgroundColor: 'rgba(255,255,255,0.02)',
     borderRadius: 16,

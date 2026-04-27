@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform,
   TouchableWithoutFeedback, Keyboard, ActivityIndicator, Pressable,
@@ -9,8 +9,8 @@ import * as Icons from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import styles from './styles';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import AppButton from '../../components/Common/AppButton';
 import AppInput from '../../components/Common/AppInput';
 import { transactionService } from '../../services/transactionService';
@@ -27,6 +27,7 @@ const CALC_BUTTONS = [
 ];
 
 const Calculator = ({ onUseResult, onClose }) => {
+  const { colors: COLORS } = useTheme();
   const [display, setDisplay] = useState('0');
   const [expression, setExpression] = useState('');
   const [hasResult, setHasResult] = useState(false);
@@ -149,6 +150,8 @@ const Calculator = ({ onUseResult, onClose }) => {
 
 const AddTransaction = ({ navigation, route }) => {
   const { userId } = useAuth();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const editTransaction = route.params?.transaction;
   const isEdit = !!editTransaction;
 

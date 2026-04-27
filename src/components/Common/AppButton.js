@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const AppButton = ({ title, onPress, loading, style, textStyle, variant = 'primary' }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const isSecondary = variant === 'secondary';
   const isOutline = variant === 'outline';
 
   return (
-    <Pressable 
-      onPress={onPress} 
+    <Pressable
+      onPress={onPress}
       disabled={loading}
       style={({ pressed }) => [
         styles.button,
@@ -19,21 +21,15 @@ const AppButton = ({ title, onPress, loading, style, textStyle, variant = 'prima
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={isOutline ? COLORS.primary : "#fff"} />
+        <ActivityIndicator color={isOutline ? COLORS.primary : '#fff'} />
       ) : (
-        <Text style={[
-          styles.text, 
-          isOutline && styles.outlineText,
-          textStyle
-        ]}>
-          {title}
-        </Text>
+        <Text style={[styles.text, isOutline && styles.outlineText, textStyle]}>{title}</Text>
       )}
     </Pressable>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary,
     paddingVertical: 16,
@@ -47,7 +43,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   secondaryButton: {
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: COLORS.surface,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -65,7 +61,7 @@ const styles = StyleSheet.create({
   },
   outlineText: {
     color: COLORS.primary,
-  }
+  },
 });
 
 export default AppButton;

@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
 import { ArrowUpRight, ArrowDownLeft, Calendar, Filter, Plus, ReceiptText, Pencil, Trash2, Menu, Search, X } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
-import styles from './styles';
 import { TextInput } from 'react-native';
 
 const formatAmount = (amount) => {
@@ -24,6 +24,8 @@ const ExpenseTracker = ({ navigation }) => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({ income: 0, expense: 0 });

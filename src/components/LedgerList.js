@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
-import { COLORS } from '../constants/theme';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 
 const fmt = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const TransactionCard = ({ item }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const isIncome = item.type === 'income';
   return (
     <View style={styles.card}>
@@ -27,15 +29,21 @@ const TransactionCard = ({ item }) => {
   );
 };
 
-const DateGroup = ({ dateStr, items }) => (
-  <View style={styles.group}>
-    <Text style={styles.dateLabel}>{dateStr}</Text>
-    {items.map((item, i) => <TransactionCard key={item.id || i} item={item} />)}
-  </View>
-);
+const DateGroup = ({ dateStr, items }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
+    <View style={styles.group}>
+      <Text style={styles.dateLabel}>{dateStr}</Text>
+      {items.map((item, i) => <TransactionCard key={item.id || i} item={item} />)}
+    </View>
+  );
+};
 
 const LedgerList = ({ transactions = [], summary = {} }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   if (!transactions.length) {
     return (
       <View style={styles.empty}>
@@ -86,7 +94,7 @@ const LedgerList = ({ transactions = [], summary = {} }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   summaryStrip: {
     flexDirection: 'row',
     backgroundColor: 'rgba(64,81,181,0.12)',

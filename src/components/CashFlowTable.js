@@ -1,34 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
-import { COLORS, SIZES } from '../constants/theme';
+import { SIZES } from '../constants/theme';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 
 const fmt = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const NetBadge = ({ value }) => {
   const positive = value >= 0;
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   return (
-    <Text style={[styles.netText, { color: positive ? '#0bda73' : '#f44336' }]}>
-      {positive ? '+' : ''}
-      {fmt(value)}
+    <Text style={[styles.netText, { color: positive ? COLORS.success : COLORS.error }]}>
+      {positive ? '+' : ''}{fmt(value)}
     </Text>
   );
 };
 
-const DayRow = ({ day }) => (
-  <View style={styles.dayRow}>
-    <Text style={styles.dayDate}>
-      {new Date(day.date + 'T00:00:00').toLocaleDateString('en-PK', { day: 'numeric', month: 'short' })}
-    </Text>
-    <Text style={styles.dayIncome}>{day.income > 0 ? fmt(day.income) : '—'}</Text>
-    <Text style={styles.dayExpense}>{day.expense > 0 ? fmt(day.expense) : '—'}</Text>
-    <NetBadge value={day.net} />
-  </View>
-);
+const DayRow = ({ day }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
+    <View style={styles.dayRow}>
+      <Text style={styles.dayDate}>
+        {new Date(day.date + 'T00:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+      </Text>
+      <Text style={styles.dayIncome}>{day.income > 0 ? fmt(day.income) : '—'}</Text>
+      <Text style={styles.dayExpense}>{day.expense > 0 ? fmt(day.expense) : '—'}</Text>
+      <NetBadge value={day.net} />
+    </View>
+  );
+};
 
 const MonthRow = ({ monthData }) => {
   const [open, setOpen] = useState(false);
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   return (
     <View style={styles.monthBlock}>
       <Pressable
@@ -65,6 +73,8 @@ const MonthRow = ({ monthData }) => {
 
 const CashFlowTable = ({ data = [] }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   if (!data.length) {
     return (
       <View style={styles.empty}>
@@ -100,7 +110,7 @@ const CashFlowTable = ({ data = [] }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   wrapper: {
     backgroundColor: COLORS.card,
     borderRadius: 20,

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { Svg, Path, G, Circle } from 'react-native-svg';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const GaugeChart = ({ score, label }) => {
+  const { colors: COLORS } = useTheme();
   const [displayScore, setDisplayScore] = useState(0);
 
   useEffect(() => {

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { Svg, Circle, G, Text as SvgText } from 'react-native-svg';
-import { COLORS } from '../../constants/theme';
 import { formatAmount } from '../../utils/formatters';
 import { useProfile } from '../../context/ProfileContext';
+import { useTheme } from '../../context/ThemeContext';
 
 const DonutChart = ({ data, expenseChange, monthlySpend }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const radius = 85; // Increased radius
   const strokeWidth = 38; // Increased stroke width

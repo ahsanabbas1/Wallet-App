@@ -1,22 +1,29 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Image } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Mail, Github, Globe, Heart, Shield, Zap, Layout, BarChart, Smartphone } from 'lucide-react-native';
-import { COLORS, SIZES } from '../../constants/theme';
+import { ChevronLeft, Mail, Heart, Shield, Zap, Layout, BarChart, Smartphone } from 'lucide-react-native';
+import { SIZES } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
-const FeatureItem = ({ icon: Icon, title, description }) => (
-  <View style={styles.featureItem}>
-    <View style={styles.featureIconContainer}>
-      <Icon color={COLORS.primary} size={22} />
+const FeatureItem = ({ icon: Icon, title, description }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
+    <View style={styles.featureItem}>
+      <View style={styles.featureIconContainer}>
+        <Icon color={COLORS.primary} size={22} />
+      </View>
+      <View style={styles.featureTextContainer}>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDescription}>{description}</Text>
+      </View>
     </View>
-    <View style={styles.featureTextContainer}>
-      <Text style={styles.featureTitle}>{title}</Text>
-      <Text style={styles.featureDescription}>{description}</Text>
-    </View>
-  </View>
-);
+  );
+};
 
 const About = ({ navigation }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const handleEmail = () => {
     Linking.openURL('mailto:AhsanAbbas1991@gmail.com');
   };
@@ -125,7 +132,7 @@ const About = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

@@ -1,27 +1,62 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import {
   ShoppingCart, ShieldCheck, Plus, Menu, CheckCircle2, Circle,
   Trash2, Edit2, Archive, CalendarDays, Tag, Package
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { styles } from './styles';
 
 const ShoppingList = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { currency: userCurrency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+
+  // Inline style map — recomputes only when COLORS changes (theme switch)
+  const S = useMemo(() => ({
+    listCard: { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 16 },
+    listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.divider, paddingBottom: 10 },
+    listTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
+    listMeta: { color: COLORS.textSecondary, fontSize: 12 },
+    itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    itemInfo: { flex: 1, marginLeft: 12 },
+    itemName: { color: COLORS.text, fontSize: 15, fontWeight: '500' },
+    itemDone: { textDecorationLine: 'line-through', color: COLORS.textSecondary },
+    itemMeta: { color: COLORS.textSecondary, fontSize: 11 },
+    addItemBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingVertical: 8, gap: 6 },
+    addItemText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
+    warrantyCard: { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 16, borderLeftWidth: 4 },
+    warHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    warName: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
+    warDate: { color: COLORS.textSecondary, fontSize: 13, marginBottom: 4 },
+    emptyState: { alignItems: 'center', justifyContent: 'center', padding: 40, backgroundColor: COLORS.card, borderRadius: 20 },
+    emptyTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
+    emptyText: { color: COLORS.textSecondary, fontSize: 13, marginTop: 6 },
+    overlay: { flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    modalBox: { backgroundColor: COLORS.card, width: '100%', borderRadius: 20, padding: 24 },
+    modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
+    fieldLabel: { color: COLORS.textSecondary, fontSize: 11, marginBottom: 4, fontWeight: '600' },
+    input: { backgroundColor: COLORS.inputBg, color: COLORS.text, borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
+    dateBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 10, padding: 12, marginBottom: 12 },
+    modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 20 },
+    btnCancel: { color: COLORS.textSecondary, fontSize: 16, fontWeight: 'bold' },
+    btnSave: { color: COLORS.primary, fontSize: 16, fontWeight: 'bold' },
+  }), [COLORS]);
+
   const [activeTab, setActiveTab] = useState('active');
   const [loading, setLoading] = useState(true);
   const [lists, setLists] = useState([]);
   const [archivedLists, setArchivedLists] = useState([]);
   const [warranties, setWarranties] = useState([]);
-  const [userCurrency, setUserCurrency] = useState('PKR');
 
   // Modal states
   const [showListModal, setShowListModal] = useState(false);
@@ -47,16 +82,12 @@ const ShoppingList = () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const [resLists, resWar, profileRes] = await Promise.all([
+      const [resLists, resWar] = await Promise.all([
         supabase.from('shopping_lists').select('*, shopping_items(*)').eq('user_id', userId).order('created_at', { ascending: false }),
         supabase.from('warranties').select('*').eq('user_id', userId).order('expiry_date', { ascending: true }),
-        supabase.from('users').select('currency').eq('id', userId).single(),
       ]);
 
       if (resLists.error) throw resLists.error;
-
-      const currency = profileRes.data?.currency || 'PKR';
-      setUserCurrency(currency);
 
       const processed = (resLists.data || []).map(l => ({
         ...l,
@@ -493,34 +524,5 @@ const ShoppingList = () => {
   );
 };
 
-const S = {
-  listCard: { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 16 },
-  listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', paddingBottom: 10 },
-  listTitle: { color: COLORS.text, fontSize: 18, fontWeight: 'bold' },
-  listMeta: { color: COLORS.textSecondary, fontSize: 12 },
-  itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  itemInfo: { flex: 1, marginLeft: 12 },
-  itemName: { color: COLORS.text, fontSize: 15, fontWeight: '500' },
-  itemDone: { textDecorationLine: 'line-through', color: COLORS.textSecondary },
-  itemMeta: { color: COLORS.textSecondary, fontSize: 11 },
-  addItemBtn: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingVertical: 8, gap: 6 },
-  addItemText: { color: COLORS.primary, fontSize: 14, fontWeight: '600' },
-  warrantyCard: { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 16, borderLeftWidth: 4 },
-  warHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  warName: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
-  warDate: { color: COLORS.textSecondary, fontSize: 13, marginBottom: 4 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', padding: 40, backgroundColor: COLORS.card, borderRadius: 20 },
-  emptyTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
-  emptyText: { color: COLORS.textSecondary, fontSize: 13, marginTop: 6 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalBox: { backgroundColor: COLORS.card, width: '100%', borderRadius: 20, padding: 24 },
-  modalTitle: { color: COLORS.text, fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  fieldLabel: { color: COLORS.textSecondary, fontSize: 11, marginBottom: 4, fontWeight: '600' },
-  input: { backgroundColor: 'rgba(255,255,255,0.05)', color: COLORS.text, borderRadius: 10, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-  dateBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12, marginBottom: 12 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8, gap: 20 },
-  btnCancel: { color: COLORS.textSecondary, fontSize: 16, fontWeight: 'bold' },
-  btnSave: { color: COLORS.primary, fontSize: 16, fontWeight: 'bold' },
-};
 
 export default ShoppingList;

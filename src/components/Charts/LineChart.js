@@ -1,11 +1,13 @@
 import React from 'react';
 import { View, Text, Dimensions } from 'react-native';
 import { Svg, Polyline, Circle, G, Text as SvgText, Line } from 'react-native-svg';
-import { COLORS } from '../../constants/theme';
 import { useProfile } from '../../context/ProfileContext';
+import { useTheme } from '../../context/ThemeContext';
 
-const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
+const LineChart = ({ data, label, color, height = 250 }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const lineColor = color || COLORS.primary;
   const { width } = Dimensions.get('window');
   const chartWidth = width - 40;
   const chartHeight = height - 80;
@@ -89,7 +91,7 @@ const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
         {/* Area under line */}
         <Polyline
           points={areaPoints}
-          fill={color}
+          fill={lineColor}
           fillOpacity="0.1"
           stroke="none"
         />
@@ -97,7 +99,7 @@ const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
         {/* Line */}
         <Polyline
           points={points}
-          stroke={color}
+          stroke={lineColor}
           strokeWidth="3"
           fill="none"
           strokeLinecap="round"
@@ -114,7 +116,7 @@ const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
               cx={x}
               cy={y}
               r="4"
-              fill={color}
+              fill={lineColor}
               stroke={COLORS.card}
               strokeWidth="2"
             />
@@ -144,7 +146,7 @@ const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
 
       {/* Legend */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, justifyContent: 'center' }}>
-        <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: color, marginRight: 8 }} />
+        <View style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: lineColor, marginRight: 8 }} />
         <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '500' }}>Trend</Text>
       </View>
     </View>

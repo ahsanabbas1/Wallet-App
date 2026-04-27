@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Tag, Pencil, Trash2 } from 'lucide-react-native';
-import { COLORS } from '../constants/theme';
 import { formatAmount } from '../utils/formatters';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 
 const TransactionItem = ({
   icon: Icon,
@@ -18,6 +18,8 @@ const TransactionItem = ({
   onDelete
 }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   // Normalize amount — may arrive as a pre-formatted string or raw number
   let displayAmount = amount;
   if (typeof amount === 'string') {
@@ -61,7 +63,7 @@ const TransactionItem = ({
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',

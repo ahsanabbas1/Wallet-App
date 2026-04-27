@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   Alert, Modal, TextInput, Platform, KeyboardAvoidingView
@@ -13,8 +13,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
-import { styles } from './styles';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import * as Icons from 'lucide-react-native';
 
 const currentPeriod = () => {
@@ -34,6 +34,10 @@ const Budgeting = ({ navigation }) => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
   const { currency: userCurrency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const labelStyle = { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 };
+  const inputStyle = { backgroundColor: COLORS.inputBg, color: COLORS.text, padding: 14, borderRadius: 12, marginBottom: 16, fontSize: 15, borderWidth: 1, borderColor: COLORS.border };
 
   const [loading, setLoading] = useState(true);
   const [budgets, setBudgets] = useState([]);
@@ -450,16 +454,5 @@ const Budgeting = ({ navigation }) => {
   );
 };
 
-const labelStyle = { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 };
-const inputStyle = {
-  backgroundColor: COLORS.background,
-  color: COLORS.text,
-  padding: 14,
-  borderRadius: 12,
-  marginBottom: 16,
-  fontSize: 15,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.08)',
-};
 
 export default Budgeting;

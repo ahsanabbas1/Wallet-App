@@ -1,15 +1,16 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
   ActivityIndicator, Alert, StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
-import { COLORS, SIZES } from '../../constants/theme';
+import { SIZES } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 const CURRENCIES = [
@@ -23,31 +24,39 @@ const CURRENCIES = [
   { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
 ];
 
-const SectionHeader = ({ title }) => (
-  <Text style={styles.sectionHeader}>{title}</Text>
-);
+const SectionHeader = ({ title }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return <Text style={styles.sectionHeader}>{title}</Text>;
+};
 
-const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) => (
-  <Pressable
-    style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
-    onPress={onPress}
-  >
-    <View style={[styles.rowIcon, { backgroundColor: (color || COLORS.primary) + '22' }]}>
-      <Icon color={color || COLORS.primary} size={18} />
-    </View>
-    <View style={styles.rowContent}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-    </View>
-    {rightElement || <ChevronRight color={COLORS.textSecondary} size={18} />}
-  </Pressable>
-);
+const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+      onPress={onPress}
+    >
+      <View style={[styles.rowIcon, { backgroundColor: (color || COLORS.primary) + '22' }]}>
+        <Icon color={color || COLORS.primary} size={18} />
+      </View>
+      <View style={styles.rowContent}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+      </View>
+      {rightElement || <ChevronRight color={COLORS.textSecondary} size={18} />}
+    </Pressable>
+  );
+};
 
 export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId, user } = useAuth();
   const { updateCurrency } = useProfile();
+  const { colors: COLORS, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState('');
@@ -254,6 +263,35 @@ export default function Settings() {
           )}
         </View>
 
+        {/* Appearance */}
+        <SectionHeader title="Appearance" />
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: COLORS.primary + '22' }]}>
+              {isDark ? <Moon color={COLORS.primary} size={18} /> : <Sun color={COLORS.primary} size={18} />}
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Theme</Text>
+              <Text style={styles.rowValue}>{isDark ? 'Dark Mode' : 'Light Mode'}</Text>
+            </View>
+            {/* Theme toggle switch */}
+            <View style={styles.themeToggle}>
+              <Pressable
+                style={[styles.themeBtn, !isDark && styles.themeBtnActive]}
+                onPress={() => !isDark ? null : toggleTheme()}
+              >
+                <Sun color={!isDark ? '#fff' : COLORS.textSecondary} size={16} />
+              </Pressable>
+              <Pressable
+                style={[styles.themeBtn, isDark && styles.themeBtnActive]}
+                onPress={() => isDark ? null : toggleTheme()}
+              >
+                <Moon color={isDark ? '#fff' : COLORS.textSecondary} size={16} />
+              </Pressable>
+            </View>
+          </View>
+        </View>
+
         {/* Account */}
         <SectionHeader title="Account" />
         <View style={styles.card}>
@@ -298,7 +336,7 @@ export default function Settings() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -449,6 +487,23 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 14,
     fontWeight: '500',
+  },
+  themeToggle: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 3,
+    gap: 2,
+  },
+  themeBtn: {
+    width: 36,
+    height: 30,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeBtnActive: {
+    backgroundColor: COLORS.primary,
   },
   signOutBtn: {
     flexDirection: 'row',

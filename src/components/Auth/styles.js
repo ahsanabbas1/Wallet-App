@@ -1,9 +1,8 @@
 import { StyleSheet, Dimensions } from 'react-native';
-import { COLORS } from '../../constants/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-export default StyleSheet.create({
+export const makeStyles = (COLORS) => StyleSheet.create({
     /* ── Root ── */
     container: {
         flex: 1,

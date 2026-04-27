@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import { Send, Bot, User, Sparkles, Menu, TrendingUp, PieChart, ShoppingCart, Target } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { styles } from './styles';
 
 const VERCEL_PROXY_URL = 'https://wallet-app-ten-sooty.vercel.app/api/chat';
 const DAILY_LIMIT = 10;
@@ -14,6 +14,8 @@ const DAILY_LIMIT = 10;
 const AIAssistant = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const scrollViewRef = useRef();
 
   const [messages, setMessages] = useState([
@@ -319,6 +321,8 @@ const AIAssistant = () => {
 };
 
 const Message = ({ bubble, text, time, hasSparkle }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const isAI = bubble === 'AI';
   return (
     <View style={[styles.messageRow, isAI ? styles.aiRow : styles.userRow]}>
@@ -333,11 +337,16 @@ const Message = ({ bubble, text, time, hasSparkle }) => {
   );
 };
 
-const SuggestionChip = ({ label, icon: Icon, onPress }) => (
-  <TouchableOpacity style={styles.chip} onPress={onPress}>
-    {Icon && <Icon color={COLORS.primary} size={12} style={{ marginRight: 4 }} />}
-    <Text style={styles.chipText}>{label}</Text>
-  </TouchableOpacity>
-);
+const SuggestionChip = ({ label, icon: Icon, onPress }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
+    <TouchableOpacity style={styles.chip} onPress={onPress}>
+      {Icon && <Icon color={COLORS.primary} size={12} style={{ marginRight: 4 }} />}
+      <Text style={styles.chipText}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
 
 export default AIAssistant;
+

@@ -1,14 +1,17 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { useTheme } from '../../context/ThemeContext';
 
 const AppInput = ({ label, value, onChangeText, placeholder, keyboardType, style, containerStyle, ...props }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
-      <TextInput 
-        style={[styles.input, style]} 
-        placeholder={placeholder} 
+      <TextInput
+        style={[styles.input, style]}
+        placeholder={placeholder}
         placeholderTextColor={COLORS.textSecondary}
         value={value}
         onChangeText={onChangeText}
@@ -19,7 +22,7 @@ const AppInput = ({ label, value, onChangeText, placeholder, keyboardType, style
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   container: {
     marginBottom: 15,
   },
@@ -29,13 +32,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: COLORS.inputBg,
     borderRadius: 12,
     padding: 14,
     color: COLORS.text,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.border,
   },
 });
 

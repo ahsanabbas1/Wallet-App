@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -13,7 +13,6 @@ import {
   Keyboard
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
 import { 
   CalendarClock, 
   Plus, 
@@ -25,6 +24,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
+import { useTheme } from '../../context/ThemeContext';
 
 // Modular Components
 import MiniCalendar from '../../components/Calendar';
@@ -35,12 +35,14 @@ import PaymentCard from '../../components/PaymentCard';
 // Services
 import { paymentService } from '../../services/paymentService';
 
-import styles from './styles';
+import { makeStyles } from './styles';
 
 const PlannedPayments = () => {
   const navigation = useNavigation();
   const { userId } = useAuth();
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [plannedPayments, setPlannedPayments] = useState([]);

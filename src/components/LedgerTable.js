@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
-import { COLORS } from '../constants/theme';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 
 const fmt = (n) => (Number(n) || 0) > 0 ? (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
 const fmtBal = (n) => (n >= 0 ? '+' : '') + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const LedgerTable = ({ transactions = [], summary = {} }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   if (!transactions.length) {
     return (
       <View style={styles.empty}>
@@ -87,7 +89,7 @@ const LedgerTable = ({ transactions = [], summary = {} }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   summaryStrip: {
     flexDirection: 'row',
     backgroundColor: 'rgba(64,81,181,0.12)',

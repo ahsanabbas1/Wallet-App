@@ -1,12 +1,13 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   Alert, Modal, TextInput, Platform, KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { COLORS } from '../../constants/theme';
 import { Target, Plus, Menu, Pencil, Trash2, Calendar, X, Clock, PiggyBank, RefreshCw } from 'lucide-react-native';
+import { useTheme } from '../../context/ThemeContext';
+import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
@@ -17,6 +18,11 @@ import { generateNotifications } from '../../services/notificationService';
 const SavingsGoals = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const labelStyle = { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 };
+  const inputStyle = { backgroundColor: COLORS.inputBg, color: COLORS.text, padding: 14, borderRadius: 12, marginBottom: 16, fontSize: 15, borderWidth: 1, borderColor: COLORS.border };
+  const dateBtnStyle = { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.inputBg, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border };
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userCurrency, setUserCurrency] = useState('PKR');
@@ -471,25 +477,5 @@ const SavingsGoals = () => {
   );
 };
 
-const labelStyle = { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 };
-const inputStyle = {
-  backgroundColor: COLORS.background,
-  color: COLORS.text,
-  padding: 14,
-  borderRadius: 12,
-  marginBottom: 16,
-  fontSize: 15,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.08)',
-};
-const dateBtnStyle = {
-  flexDirection: 'row',
-  alignItems: 'center',
-  backgroundColor: COLORS.background,
-  borderRadius: 12,
-  padding: 14,
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.08)',
-};
 
 export default SavingsGoals;

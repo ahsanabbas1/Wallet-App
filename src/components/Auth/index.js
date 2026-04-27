@@ -1,6 +1,6 @@
 import * as Linking from 'expo-linking'
 import * as WebBrowser from 'expo-web-browser'
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 
 WebBrowser.maybeCompleteAuthSession()
 import {
@@ -17,9 +17,9 @@ import {
     Dimensions,
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
-import { COLORS } from '../../constants/theme'
 import { Mail, Lock, LogIn, UserPlus, Eye, EyeOff, User, Shield, ArrowRight } from 'lucide-react-native'
-import styles from './styles'
+import { useTheme } from '../../context/ThemeContext'
+import { makeStyles } from './styles'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -47,6 +47,8 @@ const getPasswordStrength = (password) => {
 }
 
 export default function Auth() {
+    const { colors: COLORS } = useTheme()
+    const styles = useMemo(() => makeStyles(COLORS), [COLORS])
     const [activeTab, setActiveTab] = useState('login') // 'login' | 'register'
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')

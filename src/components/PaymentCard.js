@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { CalendarClock, Trash2 } from 'lucide-react-native';
-import { COLORS } from '../constants/theme';
 import { useProfile } from '../context/ProfileContext';
+import { useTheme } from '../context/ThemeContext';
 
 const PaymentCard = ({ item, onDelete }) => {
   const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const isIncome = item.type === 'income';
   
   return (
@@ -33,7 +35,7 @@ const PaymentCard = ({ item, onDelete }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   paymentCard: {
     backgroundColor: COLORS.card,
     borderRadius: 20,

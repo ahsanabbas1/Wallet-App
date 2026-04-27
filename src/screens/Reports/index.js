@@ -1,10 +1,9 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react'; // useMemo used for styles, fmt, and derived data
 import {
   View, Text, ScrollView, Pressable, Modal,
   ActivityIndicator, TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/theme';
 import {
   Menu, CalendarDays, X,
   TrendingUp, TrendingDown, ArrowUp, ArrowDown,
@@ -14,6 +13,7 @@ import {
 import { useDrawer }       from '../../context/DrawerContext';
 import { useAuth }         from '../../context/AuthContext';
 import { useProfile }      from '../../context/ProfileContext';
+import { useTheme }        from '../../context/ThemeContext';
 import { supabase }        from '../../lib/supabase';
 import { useFocusEffect }  from '@react-navigation/native';
 
@@ -25,7 +25,7 @@ import LineChart               from '../../components/Charts/LineChart';
 import IncomeExpenseBarChart   from '../../components/Charts/IncomeExpenseBarChart';
 import SavingsAreaChart        from '../../components/Charts/SavingsAreaChart';
 
-import { styles } from './styles';
+import { makeStyles } from './styles';
 
 /* ─── helpers ────────────────────────────────────────────────────────────── */
 
@@ -312,7 +312,9 @@ const Reports = () => {
   const { openDrawer }       = useDrawer();
   const { userId }           = useAuth();
   const { currency }         = useProfile();
-  const fmt                  = React.useMemo(() => fmtAmt(currency), [currency]);
+  const { colors: COLORS }   = useTheme();
+  const styles               = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const fmt                  = useMemo(() => fmtAmt(currency), [currency]);
 
   /* ── period / date state ──────────────────────────────────────────── */
   const [filterPeriod,   setFilterPeriod]   = useState('MONTH');
