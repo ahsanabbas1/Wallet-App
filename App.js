@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { DrawerProvider } from './src/context/DrawerContext'
 import { AuthProvider, useAuth } from './src/context/AuthContext'
+import { ProfileProvider } from './src/context/ProfileContext'
 import GlobalDrawer from './src/components/GlobalDrawer'
 import { StatusBar } from 'expo-status-bar'
 import { supabase } from './src/lib/supabase'
@@ -79,13 +80,15 @@ const AppContent = () => {
   }
 
   return (
-    <DrawerProvider>
-      <NavigationContainer>
-        <AppNavigator />
-        <GlobalDrawer />
-        <StatusBar style="light" />
-      </NavigationContainer>
-    </DrawerProvider>
+    <ProfileProvider>
+      <DrawerProvider>
+        <NavigationContainer>
+          <AppNavigator />
+          <GlobalDrawer />
+          <StatusBar style="light" />
+        </NavigationContainer>
+      </DrawerProvider>
+    </ProfileProvider>
   );
 };
 

@@ -1,12 +1,13 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { COLORS } from '../constants/theme';
+import { useProfile } from '../context/ProfileContext';
 
-const fmt = (n) => n > 0 ? n.toLocaleString('en-PK', { maximumFractionDigits: 0 }) : '—';
-const fmtBal = (n) =>
-  (n >= 0 ? '+' : '') + n.toLocaleString('en-PK', { maximumFractionDigits: 0 });
+const fmt = (n) => (Number(n) || 0) > 0 ? (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+const fmtBal = (n) => (n >= 0 ? '+' : '') + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const LedgerTable = ({ transactions = [], summary = {} }) => {
+  const { currency } = useProfile();
   if (!transactions.length) {
     return (
       <View style={styles.empty}>
@@ -22,21 +23,21 @@ const LedgerTable = ({ transactions = [], summary = {} }) => {
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Total Income</Text>
           <Text style={[styles.summaryValue, { color: '#0bda73' }]}>
-            PKR {(summary.totalIncome || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+            {currency} {fmt(summary.totalIncome || 0)}
           </Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Total Expense</Text>
           <Text style={[styles.summaryValue, { color: '#f44336' }]}>
-            PKR {(summary.totalExpense || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+            {currency} {fmt(summary.totalExpense || 0)}
           </Text>
         </View>
         <View style={styles.divider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Net Flow</Text>
           <Text style={[styles.summaryValue, { color: (summary.netFlow || 0) >= 0 ? '#0bda73' : '#f44336' }]}>
-            PKR {fmtBal(summary.netFlow || 0)}
+            {currency} {fmtBal(summary.netFlow || 0)}
           </Text>
         </View>
       </View>

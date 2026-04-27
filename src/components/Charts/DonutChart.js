@@ -3,8 +3,10 @@ import { View, Text, Pressable } from 'react-native';
 import { Svg, Circle, G, Text as SvgText } from 'react-native-svg';
 import { COLORS } from '../../constants/theme';
 import { formatAmount } from '../../utils/formatters';
+import { useProfile } from '../../context/ProfileContext';
 
 const DonutChart = ({ data, expenseChange, monthlySpend }) => {
+  const { currency } = useProfile();
   const [selectedCategory, setSelectedCategory] = useState(null);
   const radius = 85; // Increased radius
   const strokeWidth = 38; // Increased stroke width
@@ -33,7 +35,7 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
         <View>
           <Text style={{ color: COLORS.textSecondary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>This Month</Text>
           <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>
-            PKR: {monthlySpend ? monthlySpend.toLocaleString() : '0'}
+            {currency} {monthlySpend ? monthlySpend.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}
           </Text>
         </View>
 
@@ -120,7 +122,7 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
         }}>
           <Text style={{ color: selectedCategory.color, fontSize: 18, fontWeight: 'bold' }}>{selectedCategory.name}</Text>
           <Text style={{ color: COLORS.text, fontSize: 16, marginTop: 4 }}>
-            PKR {formatAmount(selectedCategory.amount)}  •  {selectedCategory.percent.toFixed(1)}%
+            {currency} {formatAmount(selectedCategory.amount)}  •  {selectedCategory.percent.toFixed(1)}%
           </Text>
         </View>
       )}

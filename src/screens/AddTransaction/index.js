@@ -59,8 +59,10 @@ const Calculator = ({ onUseResult, onClose }) => {
     if (btn === '=') {
       try {
         const full = expression + display;
-        // eslint-disable-next-line no-eval
+        // Safe evaluation: only allow digits, operators, dots and parentheses
+        if (!/^[\d+\-*/().\s]+$/.test(full)) throw new Error('Invalid');
         const result = Function('"use strict"; return (' + full + ')')();
+        if (!isFinite(result)) throw new Error('Invalid');
         const formatted = parseFloat(result.toFixed(8)).toString();
         setDisplay(formatted);
         setExpression(full + '=');
@@ -205,8 +207,17 @@ const AddTransaction = ({ navigation, route }) => {
 
   const handleSave = async () => {
     const { title, amount, type, description } = form;
-    if (!title || !amount || !selectedCategory) {
-      Alert.alert('Missing Fields', 'Please fill in all required fields.');
+    const parsedAmount = parseFloat(amount);
+    if (!title.trim()) {
+      Alert.alert('Missing Title', 'Please enter a title for this transaction.');
+      return;
+    }
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid amount greater than zero.');
+      return;
+    }
+    if (!selectedCategory) {
+      Alert.alert('No Category', 'Please select a category.');
       return;
     }
     setLoading(true);

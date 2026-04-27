@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
@@ -17,6 +17,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import { supabase } from '../../lib/supabase';
 
 // Shared Components
@@ -39,6 +40,7 @@ const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { currency } = useProfile();
 
   const [userName, setUserName] = useState('User');
   const [loading, setLoading] = useState(true);
@@ -87,12 +89,13 @@ const DashboardOverview = () => {
     }, [userId])
   );
 
-  // Realtime: re-fetch data when transactions/payments change,
-  // and update the bell badge live when notifications change.
+  // Realtime subscriptions — one channel, three tables.
+  // Transactions/payments: reload dashboard data (which also refreshes bell count).
+  // Notifications only: lightweight unread-count refresh, no full reload.
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel(`dashboard_realtime_${userId}`)
+      .channel(`dashboard_rt_${userId}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
         () => loadDashboardData()
@@ -101,7 +104,6 @@ const DashboardOverview = () => {
         { event: '*', schema: 'public', table: 'planned_payments', filter: `user_id=eq.${userId}` },
         () => loadDashboardData()
       )
-      // Live bell count: re-query unread count whenever notifications table changes
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         () => getUnreadCount(userId).then(setUnreadCount)
@@ -215,13 +217,13 @@ const DashboardOverview = () => {
           <View style={[styles.balanceCard, { flex: 1, marginRight: 8, marginBottom: 0, padding: 20 }]}>
             <Text style={styles.balanceLabel}>Cash in PKR</Text>
             <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.06 }]} numberOfLines={1} adjustsFontSizeToFit>
-              PKR {formatAmount(totals.balance)}
+              {currency} {formatAmount(totals.balance)}
             </Text>
           </View>
           <View style={[styles.balanceCard, { flex: 1, marginLeft: 8, marginBottom: 0, padding: 20, backgroundColor: COLORS.accent }]}>
             <Text style={styles.balanceLabel}>Monthly Spend</Text>
             <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.06 }]} numberOfLines={1} adjustsFontSizeToFit>
-              PKR {formatAmount(totals.monthlySpend)}
+              {currency} {formatAmount(totals.monthlySpend)}
             </Text>
           </View>
         </View>
@@ -289,7 +291,7 @@ const DashboardOverview = () => {
                 title={item.title} 
                 category={item.categories?.name || 'Uncategorized'} 
                 time={new Date(item.date).toLocaleDateString() + ' ' + new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
-                amount={`${item.type === 'expense' ? '-' : '+'}PKR ${parseFloat(item.amount).toFixed(2)}`} 
+                amount={`${item.type === 'expense' ? '-' : '+'}${currency} ${parseFloat(item.amount).toFixed(2)}`} 
                 method={item.description || 'No note'}
                 color={item.categories?.color || COLORS.primary}
                 isPositive={item.type === 'income'}

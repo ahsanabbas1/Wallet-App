@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import { COLORS, SIZES } from '../constants/theme';
+import { useProfile } from '../context/ProfileContext';
 
-const fmt = (n) =>
-  n.toLocaleString('en-PK', { maximumFractionDigits: 0 });
+const fmt = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const NetBadge = ({ value }) => {
   const positive = value >= 0;
@@ -64,6 +64,7 @@ const MonthRow = ({ monthData }) => {
 };
 
 const CashFlowTable = ({ data = [] }) => {
+  const { currency } = useProfile();
   if (!data.length) {
     return (
       <View style={styles.empty}>
@@ -79,7 +80,7 @@ const CashFlowTable = ({ data = [] }) => {
         <Text style={[styles.headerCell, { flex: 2 }]}>Period</Text>
         <Text style={[styles.headerCell, { flex: 1, textAlign: 'right' }]}>Income</Text>
         <Text style={[styles.headerCell, { flex: 1, textAlign: 'right' }]}>Expense</Text>
-        <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'right' }]}>Net (PKR)</Text>
+        <Text style={[styles.headerCell, { flex: 1.2, textAlign: 'right' }]}>Net ({currency})</Text>
       </View>
 
       {data.map((m, i) => <MonthRow key={i} monthData={m} />)}

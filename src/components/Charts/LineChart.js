@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text, Dimensions } from 'react-native';
 import { Svg, Polyline, Circle, G, Text as SvgText, Line } from 'react-native-svg';
 import { COLORS } from '../../constants/theme';
+import { useProfile } from '../../context/ProfileContext';
 
 const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
+  const { currency } = useProfile();
   const { width } = Dimensions.get('window');
   const chartWidth = width - 40;
   const chartHeight = height - 80;
@@ -45,7 +47,7 @@ const LineChart = ({ data, label, color = COLORS.primary, height = 250 }) => {
   for (let i = 0; i <= yAxisSteps; i++) {
     const value = (range / yAxisSteps) * i;
     yAxisLabels.push({
-      label: `PKR ${(maxValue - value).toFixed(0)}`,
+      label: `${currency} ${(maxValue - value).toFixed(0)}`,
       y: 20 + (chartHeight / yAxisSteps) * i
     });
   }

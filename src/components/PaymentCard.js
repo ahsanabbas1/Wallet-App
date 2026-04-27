@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { CalendarClock, Trash2 } from 'lucide-react-native';
 import { COLORS } from '../constants/theme';
+import { useProfile } from '../context/ProfileContext';
 
 const PaymentCard = ({ item, onDelete }) => {
+  const { currency } = useProfile();
   const isIncome = item.type === 'income';
   
   return (
@@ -19,7 +21,7 @@ const PaymentCard = ({ item, onDelete }) => {
           </Text>
         </View>
         <Text style={[styles.cardAmount, { color: isIncome ? COLORS.success || '#4caf50' : COLORS.text }]}>
-          {isIncome ? '+' : '-'}PKR {item.amount.toLocaleString()}
+          {isIncome ? '+' : '-'}{currency} {parseFloat(item.amount || 0).toLocaleString()}
         </Text>
       </View>
       <View style={styles.cardActions}>

@@ -24,6 +24,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 
 // Modular Components
 import MiniCalendar from '../../components/Calendar';
@@ -39,6 +40,7 @@ import styles from './styles';
 const PlannedPayments = () => {
   const navigation = useNavigation();
   const { userId } = useAuth();
+  const { currency } = useProfile();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [plannedPayments, setPlannedPayments] = useState([]);
@@ -209,7 +211,7 @@ const PlannedPayments = () => {
                 />
 
                 <AppInput 
-                  label="Amount (PKR)"
+                  label={`Amount (${currency})`}
                   keyboardType="numeric" 
                   placeholder="0.00" 
                   value={form.amount}

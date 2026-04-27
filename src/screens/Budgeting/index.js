@@ -12,6 +12,7 @@ import { useDrawer } from '../../context/DrawerContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import { styles } from './styles';
 import { COLORS } from '../../constants/theme';
 import * as Icons from 'lucide-react-native';
@@ -32,14 +33,14 @@ const getRelatedCategoryIds = (categoryId, allCategories) => {
 const Budgeting = ({ navigation }) => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { currency: userCurrency } = useProfile();
 
   const [loading, setLoading] = useState(true);
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
-  const [expenseCategories, setExpenseCategories] = useState([]); // parent cats for picker
-  const [allCategories, setAllCategories] = useState([]);         // full list for hierarchy
+  const [expenseCategories, setExpenseCategories] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
   const [totals, setTotals] = useState({ remaining: 0, percentUsed: 0, totalBudget: 0, totalUsed: 0 });
-  const [userCurrency, setUserCurrency] = useState('PKR');
 
   // Add/Edit budget modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -59,18 +60,12 @@ const Budgeting = ({ navigation }) => {
       const now = new Date();
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-      const [budgetRes, txRes, goalRes, allCatRes, profileRes] = await Promise.all([
+      const [budgetRes, txRes, goalRes, allCatRes] = await Promise.all([
         supabase.from('budgets').select('*, categories(*)').eq('user_id', userId).eq('period', period),
-        // Fetch ALL expense transactions this month (no category filter — we filter in JS with hierarchy)
         supabase.from('transactions').select('category_id, amount').eq('user_id', userId).eq('type', 'expense').gte('date', firstDay),
         supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        // All categories (parent + children) for hierarchy lookup
         supabase.from('categories').select('id, parent_id, name, icon, color, type').or(`user_id.eq.${userId},user_id.is.null`),
-        supabase.from('users').select('currency').eq('id', userId).single(),
       ]);
-
-      const currency = profileRes.data?.currency || 'PKR';
-      setUserCurrency(currency);
 
       const cats = allCatRes.data || [];
       setAllCategories(cats);
@@ -102,23 +97,7 @@ const Budgeting = ({ navigation }) => {
         totalUsed,
       });
 
-      // ── Budget alerts ──────────────────────────────────────────────────────
-      processedBudgets.forEach(b => {
-        const pct = parseFloat(b.total_amount) > 0 ? (b.used / parseFloat(b.total_amount)) * 100 : 0;
-        if (pct >= 100) {
-          Alert.alert(
-            '⚠️ Budget Exceeded',
-            `"${b.categories?.name}" budget exceeded! ${pct.toFixed(0)}% used.\n${currency} ${b.used.toLocaleString()} of ${currency} ${parseFloat(b.total_amount).toLocaleString()}.`,
-            [{ text: 'OK' }]
-          );
-        } else if (pct >= 80) {
-          Alert.alert(
-            '⚡ Approaching Limit',
-            `"${b.categories?.name}" is at ${pct.toFixed(0)}%. Only ${currency} ${(parseFloat(b.total_amount) - b.used).toLocaleString()} remaining.`,
-            [{ text: 'Got it' }]
-          );
-        }
-      });
+      // Budget alerts are handled by notificationService — no inline Alert.alert here
 
     } catch (error) {
       console.error('Budgeting fetch error:', error.message);

@@ -3,25 +3,27 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Tag, Pencil, Trash2 } from 'lucide-react-native';
 import { COLORS } from '../constants/theme';
 import { formatAmount } from '../utils/formatters';
+import { useProfile } from '../context/ProfileContext';
 
-const TransactionItem = ({ 
-  icon: Icon, 
-  title, 
-  category, 
-  time, 
-  amount, 
-  method, 
-  color, 
-  isPositive, 
-  onEdit, 
-  onDelete 
+const TransactionItem = ({
+  icon: Icon,
+  title,
+  category,
+  time,
+  amount,
+  method,
+  color,
+  isPositive,
+  onEdit,
+  onDelete
 }) => {
-  // Extract number from amount string if it's passed as a string like "-PKR 1000"
+  const { currency } = useProfile();
+  // Normalize amount — may arrive as a pre-formatted string or raw number
   let displayAmount = amount;
   if (typeof amount === 'string') {
     const rawNum = parseFloat(amount.replace(/[^0-9.-]/g, ''));
-    if (!isNaN(rawNum) && rawNum > 1000000) {
-      displayAmount = (isPositive ? '+' : '-') + 'PKR ' + formatAmount(rawNum);
+    if (!isNaN(rawNum)) {
+      displayAmount = (isPositive ? '+' : '-') + currency + ' ' + formatAmount(rawNum);
     }
   }
 

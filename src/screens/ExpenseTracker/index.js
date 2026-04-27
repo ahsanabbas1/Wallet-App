@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import styles from './styles';
 import { TextInput } from 'react-native';
 
@@ -22,6 +23,7 @@ const formatAmount = (amount) => {
 const ExpenseTracker = ({ navigation }) => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { currency } = useProfile();
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({ income: 0, expense: 0 });
@@ -151,28 +153,21 @@ const ExpenseTracker = ({ navigation }) => {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
-  // Group transactions by date and filter by search
-  const filteredTransactions = transactions.filter(t => {
-    const searchLower = searchText.toLowerCase();
-    return (
-      t.title.toLowerCase().includes(searchLower) ||
-      (t.description && t.description.toLowerCase().includes(searchLower)) ||
-      (t.categories?.name && t.categories.name.toLowerCase().includes(searchLower))
+  // Memoised filter + group — only recalculates when transactions or searchText changes
+  const groupedTransactions = useMemo(() => {
+    const lower = searchText.toLowerCase();
+    const filtered = transactions.filter(t =>
+      (t.title || '').toLowerCase().includes(lower) ||
+      (t.description || '').toLowerCase().includes(lower) ||
+      (t.categories?.name || '').toLowerCase().includes(lower)
     );
-  });
-
-  const groupedTransactions = filteredTransactions.reduce((groups, transaction) => {
-    const date = new Date(transaction.date).toLocaleDateString(undefined, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    if (!groups[date]) {
-      groups[date] = [];
-    }
-    groups[date].push(transaction);
-    return groups;
-  }, {});
+    return filtered.reduce((groups, tx) => {
+      const date = new Date(tx.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(tx);
+      return groups;
+    }, {});
+  }, [transactions, searchText]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -238,7 +233,7 @@ const ExpenseTracker = ({ navigation }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.summaryLabel}>Income</Text>
-                <Text style={styles.summaryValue} numberOfLines={1}>PKR {formatAmount(totals.income)}</Text>
+                <Text style={styles.summaryValue} numberOfLines={1}>{currency} {formatAmount(totals.income)}</Text>
               </View>
             </View>
             <View style={styles.divider} />
@@ -248,7 +243,7 @@ const ExpenseTracker = ({ navigation }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.summaryLabel}>Expenses</Text>
-                <Text style={styles.summaryValue} numberOfLines={1}>PKR {formatAmount(totals.expense)}</Text>
+                <Text style={styles.summaryValue} numberOfLines={1}>{currency} {formatAmount(totals.expense)}</Text>
               </View>
             </View>
           </View>
@@ -270,7 +265,8 @@ const ExpenseTracker = ({ navigation }) => {
                   icon={ReceiptText}
                   title={item.title}
                   sub={item.description || item.categories?.name || 'No details'}
-                  amount={item.amount} // Pass raw amount to LedgerItem
+                  amount={item.amount}
+                  currency={currency}
                   color={item.categories?.color || COLORS.primary}
                   isPositive={item.type === 'income'}
                   onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
@@ -355,7 +351,7 @@ const ExpenseTracker = ({ navigation }) => {
   );
 };
 
-const LedgerItem = ({ icon: Icon, title, sub, amount, color, isPositive, onEdit, onDelete }) => (
+const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, isPositive, onEdit, onDelete }) => (
   <View style={styles.ledgerItem}>
     <View style={[styles.ledgerIcon, { backgroundColor: color + '20' }]}>
       <Icon color={color} size={24} />
@@ -366,7 +362,7 @@ const LedgerItem = ({ icon: Icon, title, sub, amount, color, isPositive, onEdit,
     </View>
     <View style={styles.ledgerRight}>
       <Text style={[styles.ledgerAmount, isPositive && { color: COLORS.accent }]}>
-        {isPositive ? '+' : '-'}PKR {formatAmount(amount)}
+        {isPositive ? '+' : '-'}{currency} {formatAmount(amount)}
       </Text>
       <View style={styles.actionButtons}>
         <TouchableOpacity onPress={onEdit} style={styles.pencilButton}>

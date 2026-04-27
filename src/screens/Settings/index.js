@@ -8,6 +8,7 @@ import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info 
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { useProfile } from '../../context/ProfileContext';
 import { COLORS, SIZES } from '../../constants/theme';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
@@ -46,6 +47,7 @@ export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId, user } = useAuth();
+  const { updateCurrency } = useProfile();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [email, setEmail] = useState('');
@@ -75,21 +77,14 @@ export default function Settings() {
         setNameEdit(profile.name || '');
       }
 
-      // 2. Fetch Preferences/Currency (Optional fallback)
-      // We try 'preferences' first, if it fails we might try a direct 'currency' column
+      // 2. Fetch currency
       const { data: prefData } = await supabase
         .from('users')
-        .select('preferences, currency')
+        .select('currency')
         .eq('id', userId)
         .single();
 
-      if (prefData) {
-        if (prefData.preferences?.currency) {
-          setCurrency(prefData.preferences.currency);
-        } else if (prefData.currency) {
-          setCurrency(prefData.currency);
-        }
-      }
+      if (prefData?.currency) setCurrency(prefData.currency);
     } catch (e) {
       console.warn('Profile load error:', e.message);
       // Fallback for name from user object if DB fails
@@ -127,43 +122,18 @@ export default function Settings() {
   const saveCurrency = async (code) => {
     setCurrency(code);
     setShowCurrencyPicker(false);
+    updateCurrency(code); // update global ProfileContext immediately
     try {
-      // 1. Fetch current preferences to preserve other keys if column exists
-      const { data: profile } = await supabase
-        .from('users')
-        .select('preferences, currency')
-        .eq('id', userId)
-        .single();
-
-      const updates = { updated_at: new Date().toISOString() };
-
-      // 2. Try updating both possible locations for currency
-      // Attempt 1: Standard column
-      updates.currency = code;
-
-      // Attempt 2: JSONB preferences
-      if (profile) {
-        updates.preferences = { ...(profile.preferences || {}), currency: code };
-      } else {
-        updates.preferences = { currency: code };
-      }
-
       const { error } = await supabase
         .from('users')
-        .update(updates)
+        .update({ currency: code, updated_at: new Date().toISOString() })
         .eq('id', userId);
-
-      if (error) {
-        // If bulk update failed (likely due to missing preferences column), try only standard column
-        console.warn('Full update failed, trying standard column only');
-        await supabase
-          .from('users')
-          .update({ currency: code })
-          .eq('id', userId);
-      }
+      if (error) throw error;
     } catch (e) {
-      console.warn('Could not save currency preference:', e.message);
-      // We already set it in state, so UI is snappy. Alert only if it's a hard failure.
+      // Revert on failure
+      setCurrency(currency);
+      updateCurrency(currency);
+      Alert.alert('Error', 'Could not save currency. Please try again.');
     }
   };
 

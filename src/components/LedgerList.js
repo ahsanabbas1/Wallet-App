@@ -2,11 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { COLORS } from '../constants/theme';
+import { useProfile } from '../context/ProfileContext';
 
-const fmt = (n) =>
-  n.toLocaleString('en-PK', { maximumFractionDigits: 0 });
+const fmt = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
 const TransactionCard = ({ item }) => {
+  const { currency } = useProfile();
   const isIncome = item.type === 'income';
   return (
     <View style={styles.card}>
@@ -20,7 +21,7 @@ const TransactionCard = ({ item }) => {
         <Text style={styles.cardMeta}>{item.category} · {item.date}</Text>
       </View>
       <Text style={[styles.cardAmount, { color: isIncome ? '#0bda73' : '#f44336' }]}>
-        {isIncome ? '+' : '-'} PKR {fmt(isIncome ? item.income : item.expense)}
+        {isIncome ? '+' : '-'} {currency} {fmt(isIncome ? item.income : item.expense)}
       </Text>
     </View>
   );
@@ -34,6 +35,7 @@ const DateGroup = ({ dateStr, items }) => (
 );
 
 const LedgerList = ({ transactions = [], summary = {} }) => {
+  const { currency } = useProfile();
   if (!transactions.length) {
     return (
       <View style={styles.empty}>
@@ -57,21 +59,21 @@ const LedgerList = ({ transactions = [], summary = {} }) => {
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Income</Text>
           <Text style={[styles.summaryValue, { color: '#0bda73' }]}>
-            PKR {(summary.totalIncome || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+            {currency} {fmt(summary.totalIncome || 0)}
           </Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Expense</Text>
           <Text style={[styles.summaryValue, { color: '#f44336' }]}>
-            PKR {(summary.totalExpense || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+            {currency} {fmt(summary.totalExpense || 0)}
           </Text>
         </View>
         <View style={styles.summaryDivider} />
         <View style={styles.summaryItem}>
           <Text style={styles.summaryLabel}>Net</Text>
           <Text style={[styles.summaryValue, { color: (summary.netFlow || 0) >= 0 ? '#0bda73' : '#f44336' }]}>
-            PKR {((summary.netFlow || 0) >= 0 ? '+' : '') + (summary.netFlow || 0).toLocaleString('en-PK', { maximumFractionDigits: 0 })}
+            {currency} {((summary.netFlow || 0) >= 0 ? '+' : '')}{fmt(summary.netFlow || 0)}
           </Text>
         </View>
       </View>

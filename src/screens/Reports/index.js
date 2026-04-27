@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, Modal,
   ActivityIndicator, TouchableWithoutFeedback,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { useDrawer }       from '../../context/DrawerContext';
 import { useAuth }         from '../../context/AuthContext';
+import { useProfile }      from '../../context/ProfileContext';
 import { supabase }        from '../../lib/supabase';
 import { useFocusEffect }  from '@react-navigation/native';
 
@@ -30,8 +31,9 @@ import { styles } from './styles';
 
 const today = () => new Date().toISOString().split('T')[0];
 
-const fmtPKR = (n = 0, decimals = 0) =>
-  `PKR ${Math.abs(n).toLocaleString('en-PK', { maximumFractionDigits: decimals })}`;
+// Currency formatter — currency injected at call-site from ProfileContext
+const fmtAmt = (currency) => (n = 0, decimals = 0) =>
+  `${currency} ${Math.abs(Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: decimals })}`;
 
 const fmtDate = (iso) => {
   if (!iso) return '—';
@@ -181,7 +183,7 @@ const deriveCategoryVariance = (current, previous) => {
   return result;
 };
 
-const deriveInsights = (metrics, breakdown, catVariance) => {
+const deriveInsights = (metrics, breakdown, catVariance, fmt) => {
   const tips = [];
   const { expense, expenseChange, income, net } = metrics;
 
@@ -191,9 +193,9 @@ const deriveInsights = (metrics, breakdown, catVariance) => {
     tips.push({ type: 'good', text: `Great job! Spending is down ${Math.abs(expenseChange).toFixed(1)}% vs last period.` });
 
   if (net > 0)
-    tips.push({ type: 'good', text: `You saved ${fmtPKR(net)} this period (${income > 0 ? ((net / income) * 100).toFixed(0) : 0}% of income).` });
+    tips.push({ type: 'good', text: `You saved ${fmt(net)} this period (${income > 0 ? ((net / income) * 100).toFixed(0) : 0}% of income).` });
   else if (net < 0)
-    tips.push({ type: 'warn', text: `Expenses exceeded income by ${fmtPKR(Math.abs(net))} this period.` });
+    tips.push({ type: 'warn', text: `Expenses exceeded income by ${fmt(Math.abs(net))} this period.` });
 
   const topCat = breakdown[0];
   if (topCat && expense > 0)
@@ -307,8 +309,10 @@ const deriveLedger = (current) => {
    ════════════════════════════════════════════════════════════════════════════ */
 
 const Reports = () => {
-  const { openDrawer } = useDrawer();
-  const { userId }     = useAuth();
+  const { openDrawer }       = useDrawer();
+  const { userId }           = useAuth();
+  const { currency }         = useProfile();
+  const fmt                  = React.useMemo(() => fmtAmt(currency), [currency]);
 
   /* ── period / date state ──────────────────────────────────────────── */
   const [filterPeriod,   setFilterPeriod]   = useState('MONTH');
@@ -326,6 +330,7 @@ const Reports = () => {
   const [activeTab,  setActiveTab]  = useState(0);
   const [ledgerView, setLedgerView] = useState('TABLE');
   const [loading,    setLoading]    = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   /* ── raw data from Supabase (single fetch) ────────────────────────── */
   const [rawData, setRawData] = useState({
@@ -340,10 +345,12 @@ const Reports = () => {
     if (!userId) return;
     try {
       setLoading(true);
+      setFetchError(false);
       const data = await fetchAllReportData(userId, effectivePeriod, customDates);
       setRawData(data);
     } catch (err) {
       console.error('Reports fetch error:', err.message);
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -351,11 +358,24 @@ const Reports = () => {
 
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
+  // Realtime: re-fetch when transactions change
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`reports_realtime_${userId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
+        () => fetchData()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
+
   /* ── memoised derived data ───────────────────────────────────────── */
-  const metrics        = useMemo(() => deriveMetrics(rawData.current, rawData.previous),             [rawData]);
-  const breakdown      = useMemo(() => deriveBreakdown(rawData.current, metrics.expense),             [rawData, metrics.expense]);
-  const catVariance    = useMemo(() => deriveCategoryVariance(rawData.current, rawData.previous),    [rawData]);
-  const insights       = useMemo(() => deriveInsights(metrics, breakdown, catVariance),              [metrics, breakdown, catVariance]);
+  const metrics        = useMemo(() => deriveMetrics(rawData.current, rawData.previous),                      [rawData]);
+  const breakdown      = useMemo(() => deriveBreakdown(rawData.current, metrics.expense),                      [rawData, metrics.expense]);
+  const catVariance    = useMemo(() => deriveCategoryVariance(rawData.current, rawData.previous),             [rawData]);
+  const insights       = useMemo(() => deriveInsights(metrics, breakdown, catVariance, fmt),                  [metrics, breakdown, catVariance, fmt]);
   const chartData      = useMemo(() => deriveChartData(rawData.current, rawData.sixMonthBars),       [rawData]);
   const cashFlowData   = useMemo(() => deriveCashFlow(rawData.current),                              [rawData]);
   const ledgerData     = useMemo(() => deriveLedger(rawData.current),                                [rawData]);
@@ -401,6 +421,21 @@ const Reports = () => {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator color={COLORS.primary} size="large" />
+      </SafeAreaView>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Text style={{ color: COLORS.error, fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>Failed to load reports</Text>
+        <Text style={{ color: COLORS.textSecondary, textAlign: 'center', marginBottom: 24 }}>Check your connection and try again.</Text>
+        <Pressable
+          style={{ backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 }}
+          onPress={fetchData}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Retry</Text>
+        </Pressable>
       </SafeAreaView>
     );
   }
@@ -451,7 +486,7 @@ const Reports = () => {
         {/* ── Hero card ───────────────────────────────────────────── */}
         <View style={styles.heroCard}>
           <Text style={styles.heroPeriod}>{periodLabel}</Text>
-          <Text style={styles.heroAmount}>{fmtPKR(metrics.expense, 0)}</Text>
+          <Text style={styles.heroAmount}>{fmt(metrics.expense, 0)}</Text>
           <Text style={styles.heroLabel}>Total Expenses</Text>
 
           {/* Trend badge */}
@@ -473,13 +508,13 @@ const Reports = () => {
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>Income</Text>
-              <Text style={[styles.heroStatValue, { color: '#0bda73' }]}>{fmtPKR(metrics.income)}</Text>
+              <Text style={[styles.heroStatValue, { color: '#0bda73' }]}>{fmt(metrics.income)}</Text>
             </View>
             <View style={styles.heroStatDivider} />
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>Net</Text>
               <Text style={[styles.heroStatValue, { color: metrics.net >= 0 ? '#0bda73' : '#f44336' }]}>
-                {metrics.net >= 0 ? '+' : '-'}{fmtPKR(Math.abs(metrics.net))}
+                {metrics.net >= 0 ? '+' : '-'}{fmt(Math.abs(metrics.net))}
               </Text>
             </View>
             <View style={styles.heroStatDivider} />
@@ -531,7 +566,7 @@ const Reports = () => {
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Avg / Day</Text>
                 <Text style={[styles.kpiValue, { color: COLORS.text }]}>
-                  {fmtPKR(metrics.expense / Math.max(rawData.current.filter(t => t.type === 'expense').length || 1, 1))}
+                  {fmt(metrics.expense / Math.max(rawData.current.filter(t => t.type === 'expense').length || 1, 1))}
                 </Text>
               </View>
               <View style={styles.kpiCard}>
@@ -574,7 +609,7 @@ const Reports = () => {
                           </View>
                         )}
                       </View>
-                      <Text style={styles.catAmount}>{fmtPKR(item.amount)}</Text>
+                      <Text style={styles.catAmount}>{fmt(item.amount)}</Text>
                     </View>
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, {
@@ -633,7 +668,7 @@ const Reports = () => {
                           </Text>
                           {catData && (
                             <Text style={[styles.alertValue, { color: '#f44336' }]}>
-                              {fmtPKR(catData.amount)} spent
+                              {fmt(catData.amount)} spent
                             </Text>
                           )}
                         </View>
@@ -654,7 +689,7 @@ const Reports = () => {
             <View style={styles.kpiRow}>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Total Income</Text>
-                <Text style={[styles.kpiValue, { color: '#0bda73' }]}>{fmtPKR(metrics.income)}</Text>
+                <Text style={[styles.kpiValue, { color: '#0bda73' }]}>{fmt(metrics.income)}</Text>
                 <View style={styles.kpiChange}>
                   {metrics.incomeChange >= 0
                     ? <TrendingUp  color="#0bda73" size={12} />
@@ -666,7 +701,7 @@ const Reports = () => {
               </View>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Total Expense</Text>
-                <Text style={[styles.kpiValue, { color: '#f44336' }]}>{fmtPKR(metrics.expense)}</Text>
+                <Text style={[styles.kpiValue, { color: '#f44336' }]}>{fmt(metrics.expense)}</Text>
                 <View style={styles.kpiChange}>
                   {metrics.expenseChange <= 0
                     ? <TrendingDown color="#0bda73" size={12} />
@@ -714,7 +749,7 @@ const Reports = () => {
                           {item.percent}%
                         </Text>
                       </View>
-                      <Text style={[styles.catAmount, { color: '#0bda73' }]}>{fmtPKR(item.amount)}</Text>
+                      <Text style={[styles.catAmount, { color: '#0bda73' }]}>{fmt(item.amount)}</Text>
                     </View>
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, {
