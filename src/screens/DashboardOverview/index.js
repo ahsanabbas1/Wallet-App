@@ -87,7 +87,8 @@ const DashboardOverview = () => {
     }, [userId])
   );
 
-  // Realtime: re-fetch instantly when transactions or planned_payments change
+  // Realtime: re-fetch data when transactions/payments change,
+  // and update the bell badge live when notifications change.
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
@@ -99,6 +100,11 @@ const DashboardOverview = () => {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'planned_payments', filter: `user_id=eq.${userId}` },
         () => loadDashboardData()
+      )
+      // Live bell count: re-query unread count whenever notifications table changes
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        () => getUnreadCount(userId).then(setUnreadCount)
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };

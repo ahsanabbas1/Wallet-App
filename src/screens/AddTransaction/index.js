@@ -14,6 +14,7 @@ import { COLORS } from '../../constants/theme';
 import AppButton from '../../components/Common/AppButton';
 import AppInput from '../../components/Common/AppInput';
 import { transactionService } from '../../services/transactionService';
+import { generateNotifications } from '../../services/notificationService';
 
 // ─── Inline Calculator ──────────────────────────────────────────────────────
 
@@ -225,6 +226,8 @@ const AddTransaction = ({ navigation, route }) => {
       } else {
         await transactionService.addTransaction(transactionData);
       }
+      // Fire-and-forget: generate notifications after every save (budget alerts, spending spikes, etc.)
+      generateNotifications(userId).catch(() => {});
       setTimeout(() => navigation.goBack(), 100);
     } catch (error) {
       Alert.alert('Error', error.message);

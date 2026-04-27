@@ -12,6 +12,7 @@ import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import styles from './styles';
+import { generateNotifications } from '../../services/notificationService';
 
 const SavingsGoals = () => {
   const { openDrawer } = useDrawer();
@@ -169,6 +170,8 @@ const SavingsGoals = () => {
 
       setShowContribModal(false);
       fetchGoals();
+      // Generate milestone / goal notifications after a contribution
+      generateNotifications(userId).catch(() => {});
 
       if (isComplete) {
         Alert.alert('🎉 Goal Reached!', `Congratulations! You've reached your "${contribGoal.title}" goal!`);
