@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
@@ -86,6 +86,23 @@ const DashboardOverview = () => {
       loadDashboardData();
     }, [userId])
   );
+
+  // Realtime: re-fetch instantly when transactions or planned_payments change
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`dashboard_realtime_${userId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
+        () => loadDashboardData()
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'planned_payments', filter: `user_id=eq.${userId}` },
+        () => loadDashboardData()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
 
   const handleDeleteTransaction = (transaction) => {
     Alert.alert(

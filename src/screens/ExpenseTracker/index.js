@@ -138,6 +138,19 @@ const ExpenseTracker = ({ navigation }) => {
     }, [filterPeriod])
   );
 
+  // Realtime: re-fetch instantly when any transaction changes
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`expenses_realtime_${userId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
+        () => fetchTransactions()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
+
   // Group transactions by date and filter by search
   const filteredTransactions = transactions.filter(t => {
     const searchLower = searchText.toLowerCase();
