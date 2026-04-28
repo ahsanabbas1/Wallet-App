@@ -98,7 +98,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 3,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
   },
   broadIconBox: {
     width: 40,
@@ -110,9 +110,10 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   broadName: {
     color: COLORS.text,
-    fontSize: 10,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     textAlign: 'center',
+    marginTop: 2,
   },
   categoryList: {
     flexDirection: 'row',

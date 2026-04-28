@@ -31,6 +31,7 @@ import AppButton from '../../components/Common/AppButton';
 import AppInput from '../../components/Common/AppInput';
 import PaymentCard from '../../components/PaymentCard';
 import { paymentService } from '../../services/paymentService';
+import { transactionService } from '../../services/transactionService';
 import { makeStyles } from './styles';
 
 const INITIAL_FREQUENCY = 'monthly';
@@ -57,6 +58,9 @@ const PlannedPayments = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
   const [recordingId, setRecordingId] = useState(null);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [fetchingCategories, setFetchingCategories] = useState(false);
 
   const [tableExists, setTableExists] = useState(true);
   const [form, setForm] = useState(buildDefaultForm());
@@ -80,19 +84,49 @@ const PlannedPayments = () => {
     }
   };
 
+  const fetchCategories = async () => {
+    if (!userId) return;
+    try {
+      setFetchingCategories(true);
+      const data = await transactionService.getCategories(userId);
+      if (data && data.length > 0) {
+        const filtered = data.filter(c => c.type === form.type || c.type === 'both');
+        setCategories(data);
+        setSelectedCategory(filtered[0] || null);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error.message);
+    } finally {
+      setFetchingCategories(false);
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchPlannedPayments();
     }, [userId])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (showAddModal) {
+        fetchCategories();
+      }
+    }, [showAddModal, form.type, userId])
+  );
+
   const resetForm = () => {
     setForm(buildDefaultForm());
     setShowCalendar(false);
+    setSelectedCategory(null);
   };
 
   const updateFormField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'type') {
+      const filtered = categories.filter(c => c.type === value || c.type === 'both');
+      setSelectedCategory(filtered[0] || null);
+    }
   };
 
   const handleAddPlanned = async () => {
@@ -123,6 +157,7 @@ const PlannedPayments = () => {
         frequency,
         custom_days: customDays,
         next_date: nextDate,
+        category_id: selectedCategory?.id || null,
       });
 
       setShowAddModal(false);
@@ -263,6 +298,38 @@ const PlannedPayments = () => {
                   >
                     <Text style={[styles.chipText, form.type === 'income' && styles.activeChipText]}>Income</Text>
                   </Pressable>
+                </View>
+
+                {/* Category Selector */}
+                <View style={{ marginBottom: 20, marginTop: 10 }}>
+                  <Text style={styles.label}>Category (Optional)</Text>
+                  {fetchingCategories ? (
+                    <ActivityIndicator color={COLORS.primary} size="small" style={{ marginVertical: 12 }} />
+                  ) : (
+                    <View style={styles.categoryList}>
+                      {categories
+                        .filter(c => c.type === form.type || c.type === 'both')
+                        .map((cat) => (
+                          <Pressable
+                            key={cat.id}
+                            style={[
+                              styles.categoryChip,
+                              selectedCategory?.id === cat.id && styles.activeChip,
+                            ]}
+                            onPress={() => setSelectedCategory(cat)}
+                          >
+                            <Text
+                              style={[
+                                styles.chipText,
+                                selectedCategory?.id === cat.id && styles.activeChipText,
+                              ]}
+                            >
+                              {cat.name}
+                            </Text>
+                          </Pressable>
+                        ))}
+                    </View>
+                  )}
                 </View>
 
                 <View style={styles.sectionBlock}>

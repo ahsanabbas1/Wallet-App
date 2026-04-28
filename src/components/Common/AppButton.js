@@ -21,9 +21,16 @@ const AppButton = ({ title, onPress, loading, style, textStyle, variant = 'prima
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={isOutline ? COLORS.primary : '#fff'} />
+        <ActivityIndicator color={isOutline || isSecondary ? COLORS.primary : '#fff'} />
       ) : (
-        <Text style={[styles.text, isOutline && styles.outlineText, textStyle]}>{title}</Text>
+        <Text style={[
+          styles.text,
+          isSecondary && styles.secondaryText,
+          isOutline   && styles.outlineText,
+          textStyle,
+        ]}>
+          {title}
+        </Text>
       )}
     </Pressable>
   );
@@ -44,6 +51,8 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -58,6 +67,10 @@ const makeStyles = (COLORS) => StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  secondaryText: {
+    color: COLORS.text,
+    fontWeight: '600',
   },
   outlineText: {
     color: COLORS.primary,

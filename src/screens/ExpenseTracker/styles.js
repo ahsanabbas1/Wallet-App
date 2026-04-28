@@ -106,30 +106,35 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   ledgerDetails: {
     flex: 1,
+    minWidth: 0,      // allows flex child to shrink below its content size
+    marginRight: 8,
   },
   ledgerTitle: {
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   ledgerSub: {
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.textSecondary,  // was hardcoded rgba(255,255,255,0.7) — dark mode only
     fontSize: 12,
   },
   ledgerAmount: {
     color: COLORS.error,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
+    textAlign: 'right',
+    flexShrink: 0,
   },
   ledgerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    flexShrink: 0,   // never shrink the right side; let ledgerDetails shrink instead
+    gap: 8,
   },
   pencilButton: {
     padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: COLORS.surface,
     borderRadius: 8,
   },
   actionButtons: {

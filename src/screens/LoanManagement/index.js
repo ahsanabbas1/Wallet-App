@@ -183,16 +183,13 @@ const LoanManagement = () => {
         if (error) throw error;
 
         // Auto-create ledger transaction
-        const isGiven   = loanType === GIVEN;
-        const txTitle   = isGiven
-          ? `Loan to ${personName.trim()}`
-          : `Loan from ${personName.trim()}`;
+        const isGiven = loanType === GIVEN;
         await supabase.from('transactions').insert({
           user_id:     userId,
           amount:      amt,
           type:        isGiven ? 'expense' : 'income',
-          title:       txTitle,
-          description: `Loan ID: ${inserted.id}`,
+          title:       isGiven ? `Loan to ${personName.trim()}` : `Loan from ${personName.trim()}`,
+          description: loanNotes.trim() || 'Loan',
           date:        loanDate.toISOString(),
         });
       }
@@ -272,7 +269,7 @@ const LoanManagement = () => {
         title:       isGiven
           ? `Loan repaid by ${paymentLoan.person_name}`
           : `Loan repaid to ${paymentLoan.person_name}`,
-        description: `Loan payment`,
+        description: paymentNotes.trim() || 'Loan repayment',
         date:        paymentDate.toISOString(),
       });
 

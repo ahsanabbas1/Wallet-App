@@ -39,9 +39,9 @@ const TransactionItem = ({
         <Text style={styles.transactionSub}>{category} • {time}</Text>
       </View>
       <View style={[styles.transactionAmountContainer, { maxWidth: '30%' }]}>
-        <Text 
-          style={[styles.transactionAmount, isPositive && { color: COLORS.accent }]} 
-          numberOfLines={1} 
+        <Text
+          style={[styles.transactionAmount, isPositive && { color: COLORS.accent }]}
+          numberOfLines={1}
           adjustsFontSizeToFit
         >
           {displayAmount}
@@ -82,16 +82,18 @@ const makeStyles = (COLORS) => StyleSheet.create({
   transactionDetails: {
     flex: 1,
     marginLeft: 16,
+    overflow: 'hidden',
   },
   transactionTitle: {
     color: COLORS.text,
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   transactionSub: {
     color: COLORS.textSecondary,
-    fontSize: 12,
-    marginTop: 4,
+    fontSize: 11,
+    marginTop: 2,
   },
   transactionAmountContainer: {
     alignItems: 'flex-end',

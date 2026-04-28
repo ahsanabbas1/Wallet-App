@@ -227,10 +227,14 @@ const ExpenseTracker = ({ navigation }) => {
                   key={item.id}
                   icon={ReceiptText}
                   title={item.title}
-                  sub={item.description || item.categories?.name || 'No details'}
+                  sub={
+                    item.categories?.name
+                      ? item.categories.name + (item.description ? `  ·  ${item.description}` : '')
+                      : (item.description || (item.type === 'income' ? 'Income' : 'Expense'))
+                  }
                   amount={item.amount}
                   currency={currency}
-                  color={item.categories?.color || COLORS.primary}
+                  color={item.categories?.color || COLORS.primary || '#4f5ff7'}
                   isPositive={item.type === 'income'}
                   onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
                   onDelete={() => handleDeleteTransaction(item)}
@@ -324,10 +328,15 @@ const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, i
     </View>
     <View style={styles.ledgerDetails}>
       <Text style={styles.ledgerTitle} numberOfLines={1} ellipsizeMode="tail">{title}</Text>
-      <Text style={styles.ledgerSub} numberOfLines={1} ellipsizeMode="tail">{sub}</Text>
+      <Text style={styles.ledgerSub}   numberOfLines={1} ellipsizeMode="tail">{sub}</Text>
     </View>
     <View style={styles.ledgerRight}>
-      <Text style={[styles.ledgerAmount, isPositive && { color: COLORS.accent }]}>
+      <Text
+        style={[styles.ledgerAmount, isPositive && { color: COLORS.accent }]}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.7}
+      >
         {isPositive ? '+' : '-'}{currency} {formatAmount(amount)}
       </Text>
       <View style={styles.actionButtons}>
