@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
 import { SIZES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut, Banknote } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
@@ -75,6 +75,7 @@ const GlobalDrawer = () => {
           <DrawerItem icon={MessageSquare} label="AI Assistant" onPress={() => handleNavigate('AI Assistant')} />
           {/* <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} /> */}
           <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />
+          <DrawerItem icon={Banknote}   label="Loan Management" onPress={() => handleNavigate('Loans')} />
           {/* <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} /> */}
           {/* <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} /> */}
           <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />
