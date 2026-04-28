@@ -40,8 +40,9 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   infoText: {
     color: COLORS.textSecondary,
-    fontSize: 12,
+    fontSize: 13,
     flex: 1,
+    lineHeight: 18,
   },
   paymentCard: {
     backgroundColor: COLORS.card,
@@ -151,6 +152,26 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     marginBottom: 10,
     marginTop: 15,
   },
+  sectionBlock: {
+    marginTop: 8,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: COLORS.inputBg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  helperText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 17,
+  },
   input: {
     backgroundColor: 'rgba(255,255,255,0.03)',
     borderRadius: 12,
@@ -174,7 +195,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     borderColor: 'transparent',
   },
   activeChip: {
-    backgroundColor: 'rgba(124, 77, 255, 0.15)',
+    backgroundColor: COLORS.primary + '1f',
     borderColor: COLORS.primary,
   },
   chipText: {
@@ -188,7 +209,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   smallChip: {
     backgroundColor: 'rgba(255,255,255,0.03)',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 20,
     marginBottom: 8,
     borderWidth: 1,
@@ -197,6 +218,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   smallChipText: {
     color: COLORS.textSecondary,
     fontSize: 12,
+    fontWeight: '600',
   },
   saveButton: {
     backgroundColor: COLORS.primary,

@@ -13,10 +13,13 @@ import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { generateNotifications } from '../../services/notificationService';
+import { useProfile } from '../../context/ProfileContext';
+import savingsGoalService from '../../services/savingsGoalService';
 
 const SavingsGoals = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const labelStyle = { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 };
@@ -51,13 +54,9 @@ const SavingsGoals = () => {
     try {
       setLoading(true);
       if (!userId) return;
-      const [{ data, error }, profileRes] = await Promise.all([
-        supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('users').select('currency').eq('id', userId).single(),
-      ]);
-      if (error) throw error;
+      const { data } = await savingsGoalService.getSavingsGoals(userId);
       setGoals(data || []);
-      setUserCurrency(profileRes.data?.currency || 'PKR');
+      setUserCurrency(currency || 'PKR');
     } catch (error) {
       console.error('Error fetching goals:', error.message);
     } finally {
@@ -65,7 +64,7 @@ const SavingsGoals = () => {
     }
   };
 
-  useFocusEffect(useCallback(() => { fetchGoals(); }, [userId]));
+  useFocusEffect(useCallback(() => { fetchGoals(); }, [userId, currency]));
 
   // Realtime: update instantly when savings_goals change
   useEffect(() => {
@@ -121,10 +120,11 @@ const SavingsGoals = () => {
         repeat_basis: repeatBasis,
         repeat_value: parseInt(repeatValue) || 0,
       };
-      const { error } = currentGoal
-        ? await supabase.from('savings_goals').update(goalData).eq('id', currentGoal.id)
-        : await supabase.from('savings_goals').insert(goalData);
-      if (error) throw error;
+      if (currentGoal) {
+        await savingsGoalService.saveSavingsGoal(userId, { ...currentGoal, ...goalData }, currentGoal.id);
+      } else {
+        await savingsGoalService.saveSavingsGoal(userId, goalData);
+      }
       setShowModal(false);
       fetchGoals();
     } catch (error) {
@@ -139,9 +139,12 @@ const SavingsGoals = () => {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
-          const { error } = await supabase.from('savings_goals').delete().eq('id', goal.id);
-          if (error) Alert.alert('Error', error.message);
-          else fetchGoals();
+          try {
+            await savingsGoalService.deleteSavingsGoal(userId, goal.id);
+            fetchGoals();
+          } catch (error) {
+            Alert.alert('Error', error.message);
+          }
         }
       }
     ]);
@@ -167,11 +170,7 @@ const SavingsGoals = () => {
       const newSaved = currentSaved + amount;
       const isComplete = newSaved >= parseFloat(contribGoal.target_amount);
 
-      const { error } = await supabase
-        .from('savings_goals')
-        .update({ saved_amount: newSaved })
-        .eq('id', contribGoal.id);
-      if (error) throw error;
+      await savingsGoalService.updateSavingsGoal(userId, contribGoal.id, { saved_amount: newSaved });
 
       setShowContribModal(false);
       fetchGoals();

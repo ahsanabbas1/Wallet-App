@@ -10,6 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { TextInput } from 'react-native';
+import { transactionService } from '../../services/transactionService';
 
 const formatAmount = (amount) => {
   const num = parseFloat(amount || 0);
@@ -51,47 +52,11 @@ const ExpenseTracker = ({ navigation }) => {
       setLoading(true);
       if (!userId) return;
 
-      let query = supabase
-        .from('transactions')
-        .select(`
-          *,
-          categories (
-            name,
-            color,
-            icon
-          )
-        `)
-        .eq('user_id', userId)
-        .order('date', { ascending: false });
-
-      if (filterPeriod !== 'ALL') {
-        const now = new Date();
-        let startDate = new Date();
-        if (filterPeriod === 'TODAY') startDate.setHours(0, 0, 0, 0);
-        else if (filterPeriod === '1W') startDate.setDate(now.getDate() - 7);
-        else if (filterPeriod === '1M') startDate.setMonth(now.getMonth() - 1);
-        else if (filterPeriod === '6M') startDate.setMonth(now.getMonth() - 6);
-        else if (filterPeriod === '1Y') startDate.setFullYear(now.getFullYear() - 1);
-        else if (filterPeriod === 'CUSTOM' && customStartDate) {
-          startDate = new Date(customStartDate);
-        }
-        
-        if (filterPeriod !== 'CUSTOM' || (filterPeriod === 'CUSTOM' && customStartDate)) {
-          query = query.gte('date', startDate.toISOString());
-        }
-
-        if (filterPeriod === 'CUSTOM' && customEndDate) {
-          const endDate = new Date(customEndDate);
-          endDate.setHours(23, 59, 59, 999);
-          query = query.lte('date', endDate.toISOString());
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      
-      const trans = data || [];
+      const { data: trans } = await transactionService.getTransactions(userId, {
+        period: filterPeriod,
+        customStartDate,
+        customEndDate,
+      });
       setTransactions(trans);
 
       // Calculate totals
@@ -121,11 +86,7 @@ const ExpenseTracker = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
-                .from('transactions')
-                .delete()
-                .eq('id', transaction.id);
-              if (error) throw error;
+              await transactionService.deleteTransaction(userId, transaction.id);
               fetchTransactions();
             } catch (error) {
               Alert.alert('Error', error.message);
@@ -381,6 +342,5 @@ const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, i
   </View>
   );
 };
-);
 
 export default ExpenseTracker;

@@ -12,7 +12,10 @@ import { StatusBar } from 'expo-status-bar'
 import { supabase } from './src/lib/supabase'
 import Auth from './src/components/Auth/index'
 import AppNavigator from './src/navigation/AppNavigator'
-import { View, ActivityIndicator } from 'react-native'
+import { View, ActivityIndicator, AppState } from 'react-native'
+import offlineSync from './src/services/offlineSync'
+import transactionSyncService from './src/services/transactionSyncService'
+import financeSyncService from './src/services/financeSyncService'
 
 const ensureUserProfile = async (user) => {
   try {
@@ -56,6 +59,28 @@ const AppContent = () => {
     } else {
       setProfileReady(false);
     }
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+
+    offlineSync.syncIfPossible().catch(() => {});
+    transactionSyncService.initialize().catch(() => {});
+    transactionSyncService.refreshTransactions(session.user.id).catch(() => {});
+    financeSyncService.initialize().catch(() => {});
+    financeSyncService.refreshAll(session.user.id).catch(() => {});
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        offlineSync.syncIfPossible().catch(() => {});
+        transactionSyncService.refreshTransactions(session.user.id).catch(() => {});
+        financeSyncService.refreshAll(session.user.id).catch(() => {});
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [session?.user?.id]);
 
   if (loading) {

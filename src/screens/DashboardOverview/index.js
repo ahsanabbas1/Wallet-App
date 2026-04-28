@@ -40,7 +40,7 @@ const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
-  const { currency } = useProfile();
+  const { currency, name } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
@@ -61,16 +61,13 @@ const DashboardOverview = () => {
       setLoading(true);
 
       // Fire-and-forget notification generation + unread count (non-blocking)
-      generateNotifications(userId).then(() =>
-        getUnreadCount(userId).then(setUnreadCount)
-      );
+      generateNotifications(userId)
+        .then(() => getUnreadCount(userId).then(setUnreadCount))
+        .catch(() => {});
 
-      const [profileData, dashData] = await Promise.all([
-        supabase.from('users').select('name').eq('id', userId).single(),
-        dashboardService.getDashboardData(userId),
-      ]);
+      const dashData = await dashboardService.getDashboardData(userId);
 
-      if (profileData.data?.name) setUserName(profileData.data.name);
+      if (name) setUserName(name);
 
       setRecentTransactions(dashData.recentTransactions);
       setRecentPlanned(dashData.recentPlanned);
@@ -88,7 +85,7 @@ const DashboardOverview = () => {
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
-    }, [userId])
+    }, [userId, name])
   );
 
   // Realtime subscriptions — one channel, three tables.
@@ -125,11 +122,7 @@ const DashboardOverview = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              const { error } = await supabase
-                .from('transactions')
-                .delete()
-                .eq('id', transaction.id);
-              if (error) throw error;
+              await transactionService.deleteTransaction(userId, transaction.id);
               loadDashboardData();
             } catch (error) {
               Alert.alert('Error', error.message);
@@ -369,5 +362,3 @@ const DashboardOverview = () => {
 };
 
 export default DashboardOverview;
-
-

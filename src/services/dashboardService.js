@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import offlineSync from './offlineSync';
+import { transactionService } from './transactionService';
+import savingsGoalService from './savingsGoalService';
+import { paymentService } from './paymentService';
 
 export const dashboardService = {
   /**
@@ -6,12 +10,8 @@ export const dashboardService = {
    */
   async getUserProfile(userId) {
     if (!userId) return null;
-    const { data: dbUser } = await supabase
-      .from('users')
-      .select('name')
-      .eq('id', userId)
-      .single();
-    return dbUser || null;
+    const { data } = await offlineSync.getUserProfile(userId);
+    return data || null;
   },
 
   /**
@@ -42,28 +42,10 @@ export const dashboardService = {
    * Fetch all dashboard stats and transactions.
    */
   async getDashboardData(userId) {
-    // 1. Fetch Transactions
-    const { data: transData, error: transError } = await supabase
-      .from('transactions')
-      .select(`
-        *,
-        categories (
-          name,
-          color,
-          icon
-        )
-      `)
-      .eq('user_id', userId)
-      .order('date', { ascending: false });
+    await paymentService.syncDuePlannedPayments(userId).catch(() => {});
+    const { data: transactions } = await transactionService.getTransactions(userId, { period: 'ALL' });
 
-    if (transError) throw transError;
-    const transactions = transData || [];
-
-    // 2. Fetch Goals
-    const { data: goalsData } = await supabase
-      .from('savings_goals')
-      .select('*')
-      .eq('user_id', userId);
+    const { data: goalsData } = await savingsGoalService.getSavingsGoals(userId);
 
     // 3. Aggregate Totals
     const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + parseFloat(t.amount), 0);
@@ -91,9 +73,11 @@ export const dashboardService = {
 
     // 4. Category Breakdown (Rolling up sub-categories to parents)
     const categoryCache = {};
-    const { data: allCategories } = await supabase.from('categories').select('*');
+    const allCategories = await transactionService.getCategories(userId);
     if (allCategories) {
-      allCategories.forEach(c => categoryCache[c.id] = c);
+      allCategories.forEach((c) => {
+        categoryCache[c.id] = c;
+      });
     }
 
     const catTotals = {};
@@ -152,13 +136,10 @@ export const dashboardService = {
     }
 
     // 6. Fetch Planned Payments
-    const { data: plannedData } = await supabase
-      .from('planned_payments')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .order('next_date', { ascending: true })
-      .limit(3);
+    let plannedData = [];
+    try {
+      plannedData = (await paymentService.getPlannedPayments(userId)).slice(0, 3);
+    } catch {}
 
     return {
       recentTransactions: transactions.slice(0, 5),
@@ -202,5 +183,3 @@ export const dashboardService = {
     return transactions || [];
   }
 };
-
-

@@ -7,7 +7,6 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Icons from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
@@ -175,7 +174,7 @@ const AddTransaction = ({ navigation, route }) => {
   useEffect(() => {
     navigation.setOptions({ title: isEdit ? 'Edit Record' : 'Add Record' });
     fetchCategories();
-  }, [isEdit]);
+  }, [isEdit, userId]);
 
   const onDateChange = (event, selectedDate) => {
     setShowPicker(Platform.OS === 'ios');
@@ -190,7 +189,7 @@ const AddTransaction = ({ navigation, route }) => {
   const fetchCategories = async () => {
     try {
       setFetchingCategories(true);
-      const data = await transactionService.getCategories();
+      const data = await transactionService.getCategories(userId);
       if (data && data.length > 0) {
         setCategories(data);
         const filtered = data.filter(c => c.type === form.type || c.type === 'both');
@@ -235,13 +234,17 @@ const AddTransaction = ({ navigation, route }) => {
         description,
         date: date.toISOString(),
       };
+      let result;
       if (isEdit) {
-        await transactionService.updateTransaction(editTransaction.id, transactionData);
+        result = await transactionService.updateTransaction(editTransaction.id, transactionData);
       } else {
-        await transactionService.addTransaction(transactionData);
+        result = await transactionService.addTransaction(transactionData);
       }
       // Fire-and-forget: generate notifications after every save (budget alerts, spending spikes, etc.)
       generateNotifications(userId).catch(() => {});
+      if (result?.queued) {
+        Alert.alert('Saved Offline', 'Your record was saved locally and will sync when internet returns.');
+      }
       setTimeout(() => navigation.goBack(), 100);
     } catch (error) {
       Alert.alert('Error', error.message);

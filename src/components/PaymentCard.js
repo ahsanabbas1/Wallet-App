@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { CalendarClock, Trash2 } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, Trash2 } from 'lucide-react-native';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
+import { paymentService } from '../services/paymentService';
 
-const PaymentCard = ({ item, onDelete }) => {
+const PaymentCard = ({ item, onDelete, onRecord }) => {
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -19,7 +20,7 @@ const PaymentCard = ({ item, onDelete }) => {
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{item.title}</Text>
           <Text style={styles.cardSub}>
-            {item.frequency.toUpperCase()} • Next: {new Date(item.next_date).toLocaleDateString()}
+            {paymentService.getFrequencyLabel(item.frequency)} • Next: {item.next_date ? paymentService.parseLocalDate(item.next_date).toLocaleDateString() : 'No date'}
           </Text>
         </View>
         <Text style={[styles.cardAmount, { color: isIncome ? COLORS.success || '#4caf50' : COLORS.text }]}>
@@ -27,6 +28,12 @@ const PaymentCard = ({ item, onDelete }) => {
         </Text>
       </View>
       <View style={styles.cardActions}>
+        {onRecord ? (
+          <Pressable onPress={() => onRecord(item)} style={styles.recordButton}>
+            <CheckCircle2 color={COLORS.success || '#4caf50'} size={18} />
+            <Text style={[styles.recordButtonText, { color: COLORS.success || '#4caf50' }]}>Record Now</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
           <Trash2 color={COLORS.error} size={18} />
         </Pressable>
@@ -83,6 +90,17 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   deleteButton: {
     padding: 4,
+  },
+  recordButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 14,
+    padding: 4,
+  },
+  recordButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

@@ -5,9 +5,23 @@ import { useTheme } from '../../context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
+const parseLocalDate = (dateString) => {
+  if (!dateString) return new Date();
+  const [year, month, day] = dateString.split('-').map(Number);
+  if (!year || !month || !day) return new Date();
+  return new Date(year, month - 1, day);
+};
+
+const formatLocalDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const MiniCalendar = ({ selectedDate, onSelectDate }) => {
   const { colors: COLORS } = useTheme();
-  const [viewDate, setViewDate] = useState(new Date(selectedDate));
+  const [viewDate, setViewDate] = useState(parseLocalDate(selectedDate));
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   const daysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
@@ -26,7 +40,7 @@ const MiniCalendar = ({ selectedDate, onSelectDate }) => {
 
   const handleSelectDate = (day) => {
     const newDate = new Date(year, month, day);
-    onSelectDate(newDate.toISOString().split('T')[0]);
+    onSelectDate(formatLocalDate(newDate));
   };
 
   return (

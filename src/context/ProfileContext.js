@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import offlineSync from '../services/offlineSync';
 
 const ProfileContext = createContext({
   currency: 'PKR',
@@ -19,11 +19,7 @@ export const ProfileProvider = ({ children }) => {
   const refresh = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     try {
-      const { data } = await supabase
-        .from('users')
-        .select('name, currency')
-        .eq('id', userId)
-        .single();
+      const { data } = await offlineSync.getUserProfile(userId);
       if (data) {
         setCurrency(data.currency || 'PKR');
         setName(data.name || '');
@@ -37,7 +33,10 @@ export const ProfileProvider = ({ children }) => {
   // Called from Settings after a successful DB save — updates context immediately
   const updateCurrency = useCallback((code) => {
     setCurrency(code);
-  }, []);
+    if (userId) {
+      offlineSync.saveUserProfile(userId, { currency: code }).catch(() => {});
+    }
+  }, [userId]);
 
   return (
     <ProfileContext.Provider value={{ currency, name, loading, refresh, updateCurrency }}>

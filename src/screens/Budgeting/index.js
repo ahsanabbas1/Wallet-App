@@ -16,6 +16,9 @@ import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import * as Icons from 'lucide-react-native';
+import budgetService from '../../services/budgetService';
+import savingsGoalService from '../../services/savingsGoalService';
+import { transactionService } from '../../services/transactionService';
 
 const currentPeriod = () => {
   const d = new Date();
@@ -65,20 +68,22 @@ const Budgeting = ({ navigation }) => {
       const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
       const [budgetRes, txRes, goalRes, allCatRes] = await Promise.all([
-        supabase.from('budgets').select('*, categories(*)').eq('user_id', userId).eq('period', period),
-        supabase.from('transactions').select('category_id, amount').eq('user_id', userId).eq('type', 'expense').gte('date', firstDay),
-        supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('categories').select('id, parent_id, name, icon, color, type').or(`user_id.eq.${userId},user_id.is.null`),
+        budgetService.getBudgets(userId),
+        transactionService.getTransactions(userId, { period: 'ALL' }),
+        savingsGoalService.getSavingsGoals(userId),
+        transactionService.getCategories(userId),
       ]);
 
-      const cats = allCatRes.data || [];
+      const cats = allCatRes || [];
       setAllCategories(cats);
 
       // Parent expense categories only — used in the creation picker
       const parentExpCats = cats.filter(c => !c.parent_id && (c.type === 'expense' || c.type === 'both'));
       setExpenseCategories(parentExpCats);
 
-      const txData = txRes.data || [];
+      const txData = (txRes.data || []).filter(
+        (tx) => tx.type === 'expense' && new Date(tx.date) >= new Date(firstDay)
+      );
 
       // ── KEY FIX: match transactions against category + all its children ──
       const processedBudgets = (budgetRes.data || []).map(b => {
@@ -159,18 +164,27 @@ const Budgeting = ({ navigation }) => {
       const data = { user_id: userId, category_id: selCategoryId, total_amount: parseFloat(budgetAmount), period };
 
       if (editingBudget) {
-        const { error } = await supabase.from('budgets').update(data).eq('id', editingBudget.id);
-        if (error) throw error;
+        await budgetService.saveBudget(userId, {
+          ...editingBudget,
+          ...data,
+          categories: editingBudget.categories,
+        }, editingBudget.id);
       } else {
-        // Check for existing budget for this category this month
-        const { data: existing } = await supabase.from('budgets')
-          .select('id').eq('user_id', userId).eq('category_id', selCategoryId).eq('period', period).maybeSingle();
+        const existing = budgets.find((budget) =>
+          budget.category_id === selCategoryId && budget.period === period
+        );
         if (existing) {
-          const { error } = await supabase.from('budgets').update({ total_amount: parseFloat(budgetAmount) }).eq('id', existing.id);
-          if (error) throw error;
+          await budgetService.saveBudget(userId, {
+            ...existing,
+            total_amount: parseFloat(budgetAmount),
+            categories: existing.categories,
+          }, existing.id);
         } else {
-          const { error } = await supabase.from('budgets').insert(data);
-          if (error) throw error;
+          const category = allCategories.find((item) => item.id === selCategoryId);
+          await budgetService.saveBudget(userId, {
+            ...data,
+            categories: category || null,
+          });
         }
       }
       setShowAddModal(false);
@@ -187,9 +201,12 @@ const Budgeting = ({ navigation }) => {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete', style: 'destructive', onPress: async () => {
-          const { error } = await supabase.from('budgets').delete().eq('id', budget.id);
-          if (error) Alert.alert('Error', error.message);
-          else fetchData();
+          try {
+            await budgetService.deleteBudget(userId, budget.id);
+            fetchData();
+          } catch (error) {
+            Alert.alert('Error', error.message);
+          }
         }
       }
     ]);

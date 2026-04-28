@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { paymentService } from './paymentService';
 
 /* ─── Notification type registry ─────────────────────────────────────────── */
 
@@ -156,12 +157,7 @@ const checkPlannedPayments = async (userId, prefs, currency) => {
   if (!prefs[NOTIFICATION_TYPES.PAYMENT_DUE]?.enabled) return;
   const daysBefore = prefs[NOTIFICATION_TYPES.PAYMENT_DUE]?.daysBefore ?? 1;
 
-  // FIX: use is_active (boolean) not status (text)
-  const { data: payments } = await supabase
-    .from('planned_payments')
-    .select('id, title, amount, frequency, next_date')
-    .eq('user_id', userId)
-    .eq('is_active', true);
+  const payments = await paymentService.getPlannedPayments(userId);
 
   if (!payments?.length) return;
 
