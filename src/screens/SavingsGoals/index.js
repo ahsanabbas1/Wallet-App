@@ -12,7 +12,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import styles from './styles';
 import { generateNotifications } from '../../services/notificationService';
 
 const SavingsGoals = () => {

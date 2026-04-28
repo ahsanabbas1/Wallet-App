@@ -353,7 +353,10 @@ const ExpenseTracker = ({ navigation }) => {
   );
 };
 
-const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, isPositive, onEdit, onDelete }) => (
+const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, isPositive, onEdit, onDelete }) => {
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  return (
   <View style={styles.ledgerItem}>
     <View style={[styles.ledgerIcon, { backgroundColor: color + '20' }]}>
       <Icon color={color} size={24} />
@@ -376,6 +379,8 @@ const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, i
       </View>
     </View>
   </View>
+  );
+};
 );
 
 export default ExpenseTracker;

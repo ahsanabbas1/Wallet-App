@@ -39,11 +39,11 @@ const getPasswordStrength = (password) => {
     if (/[0-9]/.test(password)) score++
     if (/[^A-Za-z0-9]/.test(password)) score++
 
-    if (score <= 1) return { level: 1, label: 'Weak', color: COLORS.error }
-    if (score <= 2) return { level: 2, label: 'Fair', color: COLORS.warning }
-    if (score <= 3) return { level: 3, label: 'Good', color: '#f0c420' }
-    if (score <= 4) return { level: 4, label: 'Strong', color: COLORS.success }
-    return { level: 5, label: 'Very Strong', color: '#00e676' }
+    if (score <= 1) return { level: 1, label: 'Weak',       color: '#ef4444' }
+    if (score <= 2) return { level: 2, label: 'Fair',       color: '#f97316' }
+    if (score <= 3) return { level: 3, label: 'Good',       color: '#f0c420' }
+    if (score <= 4) return { level: 4, label: 'Strong',     color: '#22c55e' }
+    return           { level: 5, label: 'Very Strong', color: '#00e676' }
 }
 
 export default function Auth() {

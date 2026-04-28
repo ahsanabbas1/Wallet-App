@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -v \"//.*COLORS\")",
+      "Bash(sort -t: -k1,1)",
+      "Bash(sed -n '33,50p' src/components/Auth/index.js)",
+      "Bash(sed -n '356,380p' src/screens/ExpenseTracker/index.js)",
+      "Bash(sed -n '20,30p' src/screens/SavingsGoals/index.js)",
+      "Bash(sed -n '448,455p' src/screens/Notifications/index.js)",
+      "Bash(sed -n '138,148p' src/components/LedgerList.js)",
+      "Bash(awk '/^const derive|^const build|^const fetch/{found=1} found && /COLORS\\\\./{print NR\": \"$0} /^};/{found=0}' src/screens/Reports/index.js)"
+    ]
+  }
+}

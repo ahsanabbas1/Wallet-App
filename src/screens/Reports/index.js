@@ -152,7 +152,7 @@ const deriveBreakdown = (current, totalExpense) => {
   const map = {};
   current.filter(t => t.type === 'expense').forEach(t => {
     const n = t.categories?.name || 'Other';
-    if (!map[n]) map[n] = { amount: 0, color: t.categories?.color || COLORS.primary };
+    if (!map[n]) map[n] = { amount: 0, color: t.categories?.color || '#4f5ff7' };
     map[n].amount += parseFloat(t.amount);
   });
   return Object.entries(map)
