@@ -41,7 +41,9 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     gap: 8,
   },
   activeTab: {
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: COLORS.primary + '18',
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primary,
   },
   tabText: {
     color: COLORS.textSecondary,
@@ -50,6 +52,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   activeTabText: {
     color: COLORS.primary,
+    fontWeight: '700',
   },
   scrollContent: {
     paddingHorizontal: SIZES.padding,

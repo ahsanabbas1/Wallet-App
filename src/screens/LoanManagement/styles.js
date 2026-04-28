@@ -86,9 +86,11 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   tabActive: {
     backgroundColor: COLORS.card,
-    shadowColor: '#000',
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    shadowColor: COLORS.isDark ? '#000' : '#0000001a',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: COLORS.isDark ? 0.15 : 0.08,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -98,7 +100,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     color: COLORS.textSecondary,
   },
   tabTextActive: {
-    color: COLORS.text,
+    color: COLORS.primary,
     fontWeight: '700',
   },
 
