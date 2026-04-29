@@ -76,14 +76,23 @@ export const transactionService = {
 
   async getCategories(userId) {
     await this.initialize(userId);
+    const local = await localDatabase.getCategories(userId);
+    if (local.length > 0) {
+      // Return local immediately — refresh categories in background
+      transactionSyncService.refreshCategories(userId).catch(() => {});
+      return local;
+    }
+    // First-ever launch: must wait for network to populate local cache
     await transactionSyncService.refreshCategories(userId);
     return await localDatabase.getCategories(userId);
   },
 
   async getTransactions(userId, options = {}) {
     await this.initialize(userId);
-    await transactionSyncService.refreshTransactions(userId);
+    // ── INSTANT: return local data without waiting for network ──
     const data = await readLocalTransactions(userId, options);
+    // Background sync — does not block the response
+    transactionSyncService.refreshTransactions(userId).catch(() => {});
     return { data, fromLocal: true };
   },
 
