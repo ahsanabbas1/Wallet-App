@@ -15,6 +15,63 @@ import AppInput from '../../components/Common/AppInput';
 import { transactionService } from '../../services/transactionService';
 import { generateNotifications } from '../../services/notificationService';
 
+// ─── Safe math evaluator (no eval / Function() — Hermes-compatible) ─────────
+// Recursive descent parser: handles +, -, *, /, parentheses, decimals
+function safeMath(expr) {
+  let pos = 0;
+  const E = String(expr).replace(/\s/g, '');
+
+  const peek = () => E[pos];
+
+  function parseNumber() {
+    let s = '';
+    if (E[pos] === '-') s += E[pos++];
+    while (pos < E.length && (E[pos] >= '0' && E[pos] <= '9' || E[pos] === '.')) s += E[pos++];
+    if (s === '' || s === '-') throw new Error('Invalid');
+    return parseFloat(s);
+  }
+
+  function parseFactor() {
+    if (peek() === '(') {
+      pos++; // consume '('
+      const v = parseAddSub();
+      if (peek() !== ')') throw new Error('Mismatched parentheses');
+      pos++; // consume ')'
+      return v;
+    }
+    if (peek() === '-') { pos++; return -parseFactor(); }
+    return parseNumber();
+  }
+
+  function parseMulDiv() {
+    let left = parseFactor();
+    while (peek() === '*' || peek() === '/') {
+      const op = E[pos++];
+      const right = parseFactor();
+      if (op === '*') left *= right;
+      else {
+        if (right === 0) throw new Error('Division by zero');
+        left /= right;
+      }
+    }
+    return left;
+  }
+
+  function parseAddSub() {
+    let left = parseMulDiv();
+    while (peek() === '+' || (peek() === '-' && pos > 0)) {
+      const op = E[pos++];
+      left = op === '+' ? left + parseMulDiv() : left - parseMulDiv();
+    }
+    return left;
+  }
+
+  const result = parseAddSub();
+  if (pos < E.length) throw new Error('Invalid expression');
+  if (!isFinite(result)) throw new Error('Math error');
+  return result;
+}
+
 // ─── Inline Calculator ──────────────────────────────────────────────────────
 
 const CALC_BUTTONS = [
@@ -59,10 +116,7 @@ const Calculator = ({ onUseResult, onClose }) => {
     if (btn === '=') {
       try {
         const full = expression + display;
-        // Safe evaluation: only allow digits, operators, dots and parentheses
-        if (!/^[\d+\-*/().\s]+$/.test(full)) throw new Error('Invalid');
-        const result = Function('"use strict"; return (' + full + ')')();
-        if (!isFinite(result)) throw new Error('Invalid');
+        const result = safeMath(full); // Hermes-safe — no Function() or eval
         const formatted = parseFloat(result.toFixed(8)).toString();
         setDisplay(formatted);
         setExpression(full + '=');

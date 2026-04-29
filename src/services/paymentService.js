@@ -89,18 +89,30 @@ function toTransactionTimestamp(dateString) {
 let dueSyncPromise = null;
 let plannedPaymentsSupportsIsActive = true;
 
+function isMissingColumn(error, columnName) {
+  const message = String(error?.message || error || '').toLowerCase();
+  const col = columnName.toLowerCase();
+  return (
+    message.includes(col) &&
+    (message.includes('does not exist') ||
+      message.includes('column') ||
+      message.includes('could not find') ||
+      message.includes('schema cache'))
+  );
+}
+
 function isMissingIsActiveColumn(error) {
   const message = String(error?.message || error || '').toLowerCase();
-  // Check for various error message formats
   const isActiveMissing = message.includes('is_active') &&
     (message.includes('does not exist') ||
       message.includes('column') ||
       message.includes('could not find') ||
       message.includes('schema cache'));
-  const plannedPaymentsMissing = message.includes('planned_payments');
-
-  return plannedPaymentsMissing && isActiveMissing;
+  return message.includes('planned_payments') && isActiveMissing;
 }
+
+let plannedPaymentsSupportsCategoryId = true;
+let plannedPaymentsSupportsStartEndDate = true;
 
 async function listPlannedPayments(userId) {
   let query = supabase
@@ -126,11 +138,54 @@ async function updatePlannedPaymentRecord(id, updates) {
   if (error) throw error;
 }
 
+async function updatePlannedPayment(id, fields) {
+  const payload = { ...fields };
+
+  // Strip columns that may not exist in older schemas
+  if (!plannedPaymentsSupportsCategoryId) delete payload.category_id;
+  if (!plannedPaymentsSupportsStartEndDate) {
+    delete payload.start_date;
+    delete payload.end_date;
+  }
+
+  let { error } = await supabase.from('planned_payments').update(payload).eq('id', id);
+
+  if (error && isMissingColumn(error, 'category_id')) {
+    plannedPaymentsSupportsCategoryId = false;
+    const retry = { ...payload };
+    delete retry.category_id;
+    ({ error } = await supabase.from('planned_payments').update(retry).eq('id', id));
+  }
+
+  if (error && (isMissingColumn(error, 'start_date') || isMissingColumn(error, 'end_date'))) {
+    plannedPaymentsSupportsStartEndDate = false;
+    const retry = { ...payload };
+    delete retry.start_date;
+    delete retry.end_date;
+    delete retry.category_id;
+    ({ error } = await supabase.from('planned_payments').update(retry).eq('id', id));
+  }
+
+  if (error) throw error;
+}
+
 async function processSinglePlannedPayment(item) {
   const today = new Date();
   today.setHours(23, 59, 59, 999);
 
   if (!item.next_date) return false;
+
+  // Don't process if end_date has passed
+  if (item.end_date) {
+    const endDate = parseLocalDate(item.end_date);
+    if (endDate && today > endDate) return false;
+  }
+
+  // Don't process if start_date hasn't arrived yet
+  if (item.start_date) {
+    const startDate = parseLocalDate(item.start_date);
+    if (startDate && today < startDate) return false;
+  }
 
   const dueDate = parseLocalDate(item.next_date);
   if (!dueDate || dueDate > today) return false;
@@ -185,6 +240,7 @@ export const paymentService = {
   getFrequencyLabel,
   normalizeFrequency,
   syncDuePlannedPayments: processDuePlannedPayments,
+  updatePlannedPayment,
 
   async getPlannedPayments(userId) {
     await processDuePlannedPayments(userId);
@@ -193,24 +249,52 @@ export const paymentService = {
 
   async addPlannedPayment(paymentData) {
     const payload = {
-      ...paymentData,
-      frequency: normalizeFrequency(paymentData.frequency, paymentData.custom_days),
-      next_date: paymentData.next_date,
-      is_active: true,
+      user_id:    paymentData.user_id,
+      title:      paymentData.title,
+      amount:     paymentData.amount,
+      type:       paymentData.type,
+      frequency:  normalizeFrequency(paymentData.frequency, paymentData.custom_days),
+      next_date:  paymentData.next_date || paymentData.start_date,
+      start_date: paymentData.start_date || null,
+      end_date:   paymentData.end_date   || null,
+      is_active:  true,
     };
 
-    delete payload.custom_days;
-    delete payload.status;
+    if (plannedPaymentsSupportsCategoryId && paymentData.category_id) {
+      payload.category_id = paymentData.category_id;
+    }
+    if (!plannedPaymentsSupportsStartEndDate) {
+      delete payload.start_date;
+      delete payload.end_date;
+    }
 
-    let { error } = await supabase
-      .from('planned_payments')
-      .insert(payload);
+    let { error } = await supabase.from('planned_payments').insert(payload);
 
+    // Fallback: strip category_id if column doesn't exist yet
+    if (error && isMissingColumn(error, 'category_id')) {
+      plannedPaymentsSupportsCategoryId = false;
+      const retry = { ...payload };
+      delete retry.category_id;
+      ({ error } = await supabase.from('planned_payments').insert(retry));
+    }
+
+    // Fallback: strip start_date / end_date if columns don't exist yet
+    if (error && (isMissingColumn(error, 'start_date') || isMissingColumn(error, 'end_date'))) {
+      plannedPaymentsSupportsStartEndDate = false;
+      const retry = { ...payload };
+      delete retry.start_date;
+      delete retry.end_date;
+      delete retry.category_id;
+      ({ error } = await supabase.from('planned_payments').insert(retry));
+    }
+
+    // Fallback: strip is_active if column doesn't exist yet
     if (error && isMissingIsActiveColumn(error)) {
       plannedPaymentsSupportsIsActive = false;
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.is_active;
-      ({ error } = await supabase.from('planned_payments').insert(fallbackPayload));
+      const retry = { ...payload };
+      delete retry.is_active;
+      delete retry.category_id;
+      ({ error } = await supabase.from('planned_payments').insert(retry));
     }
 
     if (error) throw error;

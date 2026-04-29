@@ -30,7 +30,7 @@ export const ProfileProvider = ({ children }) => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Called from Settings after a successful DB save — updates context immediately
+  // Called from Settings after a successful currency save
   const updateCurrency = useCallback((code) => {
     setCurrency(code);
     if (userId) {
@@ -38,8 +38,16 @@ export const ProfileProvider = ({ children }) => {
     }
   }, [userId]);
 
+  // Called from Settings after a successful name save
+  const updateName = useCallback((newName) => {
+    setName(newName);
+    if (userId) {
+      offlineSync.saveUserProfile(userId, { name: newName }).catch(() => {});
+    }
+  }, [userId]);
+
   return (
-    <ProfileContext.Provider value={{ currency, name, loading, refresh, updateCurrency }}>
+    <ProfileContext.Provider value={{ currency, name, loading, refresh, updateCurrency, updateName }}>
       {children}
     </ProfileContext.Provider>
   );

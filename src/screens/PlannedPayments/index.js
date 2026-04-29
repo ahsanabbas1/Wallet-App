@@ -9,10 +9,12 @@ import {
   Modal,
   Platform,
   KeyboardAvoidingView,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   CalendarClock,
   Plus,
@@ -20,61 +22,79 @@ import {
   Clock,
   Calendar as CalendarIcon,
   Repeat,
+  X,
+  ChevronRight,
 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
 
-import MiniCalendar from '../../components/Calendar';
 import AppButton from '../../components/Common/AppButton';
 import AppInput from '../../components/Common/AppInput';
 import PaymentCard from '../../components/PaymentCard';
 import { paymentService } from '../../services/paymentService';
 import { transactionService } from '../../services/transactionService';
 import { makeStyles } from './styles';
+import * as Icons from 'lucide-react-native';
 
 const INITIAL_FREQUENCY = 'monthly';
 
-const buildDefaultForm = () => ({
-  title: '',
-  amount: '',
-  type: 'expense',
-  frequency: INITIAL_FREQUENCY,
-  customDays: '3',
-  nextDate: paymentService.formatLocalDate(new Date()),
-});
+const fmtDate = (d) => {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const buildDefaultForm = () => {
+  const now = new Date();
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  return {
+    title:      '',
+    amount:     '',
+    type:       'expense',
+    frequency:  INITIAL_FREQUENCY,
+    customDays: '3',
+    startDate:  paymentService.formatLocalDate(now),
+    startTime:  `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    endDate:    paymentService.formatLocalDate(nextYear),
+  };
+};
 
 const PlannedPayments = () => {
   const navigation = useNavigation();
-  const { userId } = useAuth();
+  const { userId }   = useAuth();
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [plannedPayments, setPlannedPayments] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [recordingId, setRecordingId] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [loading,          setLoading]          = useState(true);
+  const [submitting,       setSubmitting]        = useState(false);
+  const [plannedPayments,  setPlannedPayments]   = useState([]);
+  const [showAddModal,     setShowAddModal]      = useState(false);
+  const [recordingId,      setRecordingId]       = useState(null);
+  const [editingPayment,   setEditingPayment]    = useState(null);
+  const [categories,       setCategories]        = useState([]);
+  const [selectedCategory, setSelectedCategory]  = useState(null);
+  const [activeParent,     setActiveParent]      = useState(null); // hierarchical parent selection
   const [fetchingCategories, setFetchingCategories] = useState(false);
+  const [tableExists,      setTableExists]       = useState(true);
+  const [form,             setForm]              = useState(buildDefaultForm());
 
-  const [tableExists, setTableExists] = useState(true);
-  const [form, setForm] = useState(buildDefaultForm());
+  // Date/time picker state
+  const [datePickerField,  setDatePickerField]   = useState(null); // 'start' | 'end' | 'time'
+  const [showDatePicker,   setShowDatePicker]    = useState(false);
 
+  /* ── Fetch ─────────────────────────────────────────────────────── */
   const fetchPlannedPayments = async () => {
     try {
       setLoading(true);
       setTableExists(true);
       if (!userId) return;
-
       const data = await paymentService.getPlannedPayments(userId);
       setPlannedPayments(data);
     } catch (error) {
-      if (error.message.includes('relation "planned_payments" does not exist')) {
+      if (error.message?.includes('relation "planned_payments" does not exist')) {
         setTableExists(false);
       } else {
         console.error('Error fetching planned payments:', error.message);
@@ -89,10 +109,9 @@ const PlannedPayments = () => {
     try {
       setFetchingCategories(true);
       const data = await transactionService.getCategories(userId);
-      if (data && data.length > 0) {
-        const filtered = data.filter(c => c.type === form.type || c.type === 'both');
+      if (data?.length > 0) {
         setCategories(data);
-        setSelectedCategory(filtered[0] || null);
+        // Do NOT auto-select — user must explicitly choose a category
       }
     } catch (error) {
       console.error('Error fetching categories:', error.message);
@@ -101,81 +120,157 @@ const PlannedPayments = () => {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchPlannedPayments();
-    }, [userId])
-  );
+  useFocusEffect(useCallback(() => { fetchPlannedPayments(); }, [userId]));
+  useFocusEffect(useCallback(() => { if (showAddModal) fetchCategories(); }, [showAddModal, form.type, userId]));
 
-  useFocusEffect(
-    useCallback(() => {
-      if (showAddModal) {
-        fetchCategories();
-      }
-    }, [showAddModal, form.type, userId])
-  );
-
+  /* ── Form helpers ───────────────────────────────────────────────── */
   const resetForm = () => {
     setForm(buildDefaultForm());
-    setShowCalendar(false);
     setSelectedCategory(null);
+    setActiveParent(null);
+    setEditingPayment(null);
   };
 
   const updateFormField = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm(prev => ({ ...prev, [field]: value }));
     if (field === 'type') {
-      const filtered = categories.filter(c => c.type === value || c.type === 'both');
-      setSelectedCategory(filtered[0] || null);
+      setSelectedCategory(null);
+      setActiveParent(null);
     }
   };
 
-  const handleAddPlanned = async () => {
-    const { title, amount, type, frequency, customDays, nextDate } = form;
+  const openDatePicker = (field) => {
+    setDatePickerField(field);
+    setShowDatePicker(true);
+  };
 
-    if (!title.trim() || !amount) {
-      Alert.alert('Missing Fields', 'Please enter a title and amount.');
-      return;
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (!selectedDate) return;
+    if (datePickerField === 'start') {
+      updateFormField('startDate', paymentService.formatLocalDate(selectedDate));
+    } else if (datePickerField === 'end') {
+      updateFormField('endDate', paymentService.formatLocalDate(selectedDate));
+    } else if (datePickerField === 'time') {
+      const h = String(selectedDate.getHours()).padStart(2, '0');
+      const m = String(selectedDate.getMinutes()).padStart(2, '0');
+      updateFormField('startTime', `${h}:${m}`);
     }
+  };
 
-    if (!nextDate || !paymentService.parseLocalDate(nextDate)) {
-      Alert.alert('Invalid Date', 'Please choose a valid next due date.');
-      return;
-    }
+  /* ── Save (add or edit) ─────────────────────────────────────────── */
+  const handleSavePayment = async () => {
+    const { title, amount, type, frequency, customDays, startDate, endDate } = form;
 
-    if (frequency === 'custom' && (!customDays || Number(customDays) <= 0)) {
-      Alert.alert('Custom Interval', 'Enter how many days should pass before this payment repeats.');
-      return;
-    }
+    if (!title.trim())  return Alert.alert('Missing Title',  'Please enter a title.');
+    if (!amount)        return Alert.alert('Missing Amount', 'Please enter an amount.');
+    if (!startDate || !paymentService.parseLocalDate(startDate))
+      return Alert.alert('Invalid Start Date', 'Please pick a valid start date.');
+    if (!endDate || !paymentService.parseLocalDate(endDate))
+      return Alert.alert('Invalid End Date', 'Please pick a valid stop date.');
+    if (paymentService.parseLocalDate(endDate) <= paymentService.parseLocalDate(startDate))
+      return Alert.alert('Invalid Dates', 'Stop date must be after start date.');
+    if (frequency === 'custom' && (!customDays || Number(customDays) <= 0))
+      return Alert.alert('Custom Interval', 'Enter how many days between each payment.');
 
     try {
       setSubmitting(true);
-      await paymentService.addPlannedPayment({
-        user_id: userId,
-        title: title.trim(),
-        amount: parseFloat(amount),
+
+      const payload = {
+        user_id:     userId,
+        title:       title.trim(),
+        amount:      parseFloat(amount),
         type,
         frequency,
         custom_days: customDays,
-        next_date: nextDate,
+        start_date:  startDate,
+        end_date:    endDate,
+        next_date:   editingPayment ? editingPayment.next_date : startDate,
         category_id: selectedCategory?.id || null,
-      });
+      };
+
+      if (editingPayment) {
+        await paymentService.updatePlannedPayment(editingPayment.id, {
+          title:       payload.title,
+          amount:      payload.amount,
+          type:        payload.type,
+          frequency:   paymentService.normalizeFrequency(frequency, customDays),
+          start_date:  payload.start_date,
+          end_date:    payload.end_date,
+          category_id: payload.category_id,
+        });
+      } else {
+        await paymentService.addPlannedPayment(payload);
+      }
 
       setShowAddModal(false);
       resetForm();
       fetchPlannedPayments();
     } catch (error) {
-      Alert.alert('Error', `Could not add payment. ${error.message}`);
+      Alert.alert('Error', `Could not save payment. ${error.message}`);
     } finally {
       setSubmitting(false);
     }
   };
 
+  /* ── Open edit modal ────────────────────────────────────────────── */
+  const openEditModal = async (item) => {
+    let frequency = item.frequency || 'monthly';
+    let customDays = '3';
+    if (frequency.startsWith('custom:')) {
+      customDays = frequency.split(':')[1] || '3';
+      frequency = 'custom';
+    }
+
+    // Default start/end if columns didn't exist before
+    const today = paymentService.formatLocalDate(new Date());
+    const nextYear = new Date();
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
+
+    setEditingPayment(item);
+    // Restore time from next_date if available
+    const existingDate = item.next_date ? paymentService.parseLocalDate(item.next_date) : null;
+    const existingTime = existingDate
+      ? `${String(existingDate.getHours()).padStart(2,'0')}:${String(existingDate.getMinutes()).padStart(2,'0')}`
+      : '09:00';
+
+    setForm({
+      title:      item.title || '',
+      amount:     String(item.amount || ''),
+      type:       item.type || 'expense',
+      frequency,
+      customDays,
+      startDate:  item.start_date || item.next_date || today,
+      startTime:  existingTime,
+      endDate:    item.end_date   || paymentService.formatLocalDate(nextYear),
+    });
+
+    let cats = categories;
+    if (cats.length === 0) {
+      try {
+        const data = await transactionService.getCategories(userId);
+        cats = data || [];
+        setCategories(cats);
+      } catch {}
+    }
+    const foundCat = item.category_id ? cats.find(c => c.id === item.category_id) || null : null;
+    setSelectedCategory(foundCat);
+    // Pre-open the parent if a sub-category is already selected
+    if (foundCat?.parent_id) {
+      setActiveParent(cats.find(c => c.id === foundCat.parent_id) || null);
+    } else {
+      setActiveParent(null);
+    }
+    setShowAddModal(true);
+  };
+
+  /* ── Record now / Delete ────────────────────────────────────────── */
   const handleRecordNow = async (item) => {
     try {
       setRecordingId(item.id);
       await paymentService.recordPlannedPaymentNow(item);
       await fetchPlannedPayments();
-      Alert.alert('Payment Recorded', 'This planned payment was added to your ledger and the next due date was advanced.');
+      Alert.alert('Payment Recorded', 'Added to your ledger and next due date advanced.');
     } catch (error) {
       Alert.alert('Error', `Could not record payment. ${error.message}`);
     } finally {
@@ -192,18 +287,20 @@ const PlannedPayments = () => {
     }
   };
 
+  /* ── Frequency helpers ──────────────────────────────────────────── */
   const frequencyOptions = [
-    { value: 'daily', label: 'Daily' },
-    { value: 'weekly', label: 'Weekly' },
+    { value: 'daily',   label: 'Daily'   },
+    { value: 'weekly',  label: 'Weekly'  },
     { value: 'monthly', label: 'Monthly' },
-    { value: 'yearly', label: 'Yearly' },
-    { value: 'custom', label: 'Custom' },
+    { value: 'yearly',  label: 'Yearly'  },
+    { value: 'custom',  label: 'Custom'  },
   ];
 
-  const customFrequencyPreview = form.frequency === 'custom'
+  const frequencyPreview = form.frequency === 'custom'
     ? paymentService.getFrequencyLabel(paymentService.normalizeFrequency('custom', form.customDays))
     : paymentService.getFrequencyLabel(form.frequency);
 
+  /* ── Render ─────────────────────────────────────────────────────── */
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -217,20 +314,20 @@ const PlannedPayments = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.infoCard}>
-          <Clock color={COLORS.primary} size={20} />
+        <View style={[styles.infoCard, { backgroundColor: COLORS.surface, borderRadius: 14 }]}>
+          <Clock color={COLORS.primary} size={18} />
           <Text style={styles.infoText}>
-            Set bills, subscriptions, and repeating income here. Due payments record into the ledger and move their next due date forward.
+            Recurring bills, subscriptions, and salaries. Due payments auto-record into the ledger.
           </Text>
         </View>
 
         {loading ? (
           <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: 40 }} />
         ) : !tableExists ? (
-          <View style={[styles.emptyState, { backgroundColor: 'rgba(239, 68, 68, 0.05)', borderRadius: 24, padding: 32 }]}>
+          <View style={[styles.emptyState, { padding: 32 }]}>
             <Clock color={COLORS.error} size={48} style={{ marginBottom: 16 }} />
             <Text style={[styles.emptyTitle, { color: COLORS.error }]}>Table Not Found</Text>
-            <Text style={styles.emptySub}>The `planned_payments` table has not been created in Supabase yet.</Text>
+            <Text style={styles.emptySub}>Run the Supabase migration to create the planned_payments table.</Text>
             <AppButton title="Check Again" onPress={fetchPlannedPayments} style={{ backgroundColor: COLORS.error, marginTop: 16 }} />
           </View>
         ) : plannedPayments.length > 0 ? (
@@ -240,164 +337,291 @@ const PlannedPayments = () => {
               item={item}
               onDelete={deletePlanned}
               onRecord={recordingId ? undefined : handleRecordNow}
+              onEdit={openEditModal}
             />
           ))
         ) : (
           <View style={styles.emptyState}>
-            <CalendarClock color={COLORS.textSecondary} size={64} style={{ opacity: 0.3, marginBottom: 16 }} />
+            <CalendarClock color={COLORS.textSecondary} size={56} style={{ opacity: 0.4, marginBottom: 16 }} />
             <Text style={styles.emptyTitle}>No Planned Payments</Text>
             <Text style={styles.emptySub}>Add your first repeating bill or salary.</Text>
-            <AppButton title="Add Planned Payment" onPress={() => setShowAddModal(true)} style={{ paddingHorizontal: 30 }} />
+            <AppButton title="Add Planned Payment" onPress={() => setShowAddModal(true)} style={{ marginTop: 16 }} />
           </View>
         )}
       </ScrollView>
 
-      <Modal visible={showAddModal} animationType="slide" transparent onRequestClose={() => setShowAddModal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>New Planned Payment</Text>
-                <Pressable
-                  onPress={() => {
-                    setShowAddModal(false);
-                    resetForm();
-                  }}
-                >
-                  <Text style={{ color: COLORS.textSecondary }}>Cancel</Text>
-                </Pressable>
+      {/* ── Add / Edit Modal ───────────────────────────────────────── */}
+      <Modal
+        visible={showAddModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setShowAddModal(false); resetForm(); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, backgroundColor: COLORS.overlay, justifyContent: 'flex-end' }}
+        >
+          <View style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '94%' }}>
+            {/* Handle */}
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginTop: 10 }} />
+
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+              <Text style={{ color: COLORS.text, fontSize: 20, fontWeight: '800' }}>
+                {editingPayment ? 'Edit Payment' : 'New Planned Payment'}
+              </Text>
+              <TouchableOpacity onPress={() => { setShowAddModal(false); resetForm(); }} style={{ padding: 4 }}>
+                <X color={COLORS.text} size={22} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+              {/* Title */}
+              <AppInput
+                label="Title *"
+                placeholder="e.g. House Rent, Netflix, Salary"
+                value={form.title}
+                onChangeText={(v) => updateFormField('title', v)}
+              />
+
+              {/* Amount */}
+              <AppInput
+                label={`Amount (${currency}) *`}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                value={form.amount}
+                onChangeText={(v) => updateFormField('amount', v)}
+              />
+
+              {/* Type */}
+              <Text style={[styles.label, { marginBottom: 10 }]}>Type *</Text>
+              <View style={[styles.row, { marginBottom: 20 }]}>
+                {['expense', 'income'].map(t => (
+                  <Pressable
+                    key={t}
+                    onPress={() => updateFormField('type', t)}
+                    style={[
+                      styles.chip,
+                      form.type === t && [styles.activeChip, { backgroundColor: t === 'expense' ? COLORS.error + '22' : COLORS.success + '22', borderColor: t === 'expense' ? COLORS.error : COLORS.success }]
+                    ]}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      form.type === t && { color: t === 'expense' ? COLORS.error : COLORS.success, fontWeight: '700' }
+                    ]}>
+                      {t === 'expense' ? '↑ Expense' : '↓ Income'}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
 
-              <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-                <AppInput
-                  label="Title"
-                  placeholder="e.g. House Rent or Salary"
-                  value={form.title}
-                  onChangeText={(val) => updateFormField('title', val)}
-                />
+              {/* Start Date & End Date in a row */}
+              <Text style={[styles.label, { marginBottom: 10 }]}>Period *</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                <TouchableOpacity
+                  style={[styles.calendarTrigger, { flex: 1, flexDirection: 'column', alignItems: 'flex-start', padding: 12, borderRadius: 12, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border }]}
+                  onPress={() => openDatePicker('start')}
+                >
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>START DATE</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <CalendarIcon color={COLORS.primary} size={15} />
+                    <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{fmtDate(form.startDate)}</Text>
+                  </View>
+                </TouchableOpacity>
 
-                <AppInput
-                  label={`Amount (${currency})`}
-                  keyboardType="numeric"
-                  placeholder="0.00"
-                  value={form.amount}
-                  onChangeText={(val) => updateFormField('amount', val)}
-                />
+                <TouchableOpacity
+                  style={[styles.calendarTrigger, { flex: 1, flexDirection: 'column', alignItems: 'flex-start', padding: 12, borderRadius: 12, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border }]}
+                  onPress={() => openDatePicker('end')}
+                >
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>STOP DATE</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <CalendarIcon color={COLORS.error} size={15} />
+                    <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{fmtDate(form.endDate)}</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
 
-                <Text style={styles.label}>Type</Text>
-                <View style={styles.row}>
-                  <Pressable
-                    onPress={() => updateFormField('type', 'expense')}
-                    style={[styles.chip, form.type === 'expense' && styles.activeChip]}
-                  >
-                    <Text style={[styles.chipText, form.type === 'expense' && styles.activeChipText]}>Expense</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => updateFormField('type', 'income')}
-                    style={[styles.chip, form.type === 'income' && styles.activeChip]}
-                  >
-                    <Text style={[styles.chipText, form.type === 'income' && styles.activeChipText]}>Income</Text>
-                  </Pressable>
+              {/* Time picker for start time */}
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.inputBg, borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border }}
+                onPress={() => openDatePicker('time')}
+              >
+                <Icons.Clock color={COLORS.primary} size={16} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 2 }}>PAYMENT TIME</Text>
+                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{form.startTime || '09:00'}</Text>
+                </View>
+                <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Tap to change</Text>
+              </TouchableOpacity>
+
+              {showDatePicker && (
+                <DateTimePicker
+                  value={(() => {
+                    if (datePickerField === 'time') {
+                      const d = new Date();
+                      const [h, m] = (form.startTime || '09:00').split(':');
+                      d.setHours(parseInt(h, 10), parseInt(m, 10));
+                      return d;
+                    }
+                    return datePickerField === 'start'
+                      ? (paymentService.parseLocalDate(form.startDate) || new Date())
+                      : (paymentService.parseLocalDate(form.endDate)   || new Date());
+                  })()}
+                  mode={datePickerField === 'time' ? 'time' : 'date'}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  is24Hour={false}
+                  textColor={COLORS.text}
+                  minimumDate={datePickerField === 'end' ? paymentService.parseLocalDate(form.startDate) || new Date() : undefined}
+                  onChange={onDateChange}
+                />
+              )}
+
+              {/* Repeat */}
+              <View style={[styles.sectionBlock, { marginBottom: 16 }]}>
+                <View style={[styles.sectionHeaderRow, { marginBottom: 10 }]}>
+                  <Repeat color={COLORS.primary} size={15} />
+                  <Text style={styles.label}>Repeat *</Text>
+                </View>
+                <View style={[styles.row, { flexWrap: 'wrap', gap: 8 }]}>
+                  {frequencyOptions.map((opt) => (
+                    <Pressable
+                      key={opt.value}
+                      onPress={() => updateFormField('frequency', opt.value)}
+                      style={[
+                        styles.smallChip,
+                        form.frequency === opt.value && [styles.activeChip, { backgroundColor: COLORS.primary + '22', borderColor: COLORS.primary }]
+                      ]}
+                    >
+                      <Text style={[
+                        styles.smallChipText,
+                        form.frequency === opt.value && [styles.activeChipText, { color: COLORS.primary }]
+                      ]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  ))}
                 </View>
 
-                {/* Category Selector */}
-                <View style={{ marginBottom: 20, marginTop: 10 }}>
-                  <Text style={styles.label}>Category (Optional)</Text>
-                  {fetchingCategories ? (
-                    <ActivityIndicator color={COLORS.primary} size="small" style={{ marginVertical: 12 }} />
-                  ) : (
-                    <View style={styles.categoryList}>
-                      {categories
-                        .filter(c => c.type === form.type || c.type === 'both')
-                        .map((cat) => (
-                          <Pressable
-                            key={cat.id}
-                            style={[
-                              styles.categoryChip,
-                              selectedCategory?.id === cat.id && styles.activeChip,
-                            ]}
-                            onPress={() => setSelectedCategory(cat)}
-                          >
-                            <Text
-                              style={[
-                                styles.chipText,
-                                selectedCategory?.id === cat.id && styles.activeChipText,
-                              ]}
-                            >
-                              {cat.name}
-                            </Text>
-                          </Pressable>
-                        ))}
-                    </View>
+                {form.frequency === 'custom' && (
+                  <AppInput
+                    label="Repeat Every (Days)"
+                    keyboardType="number-pad"
+                    placeholder="e.g. 14"
+                    value={form.customDays}
+                    onChangeText={(v) => updateFormField('customDays', v.replace(/[^0-9]/g, ''))}
+                    containerStyle={{ marginTop: 12, marginBottom: 0 }}
+                  />
+                )}
+                <Text style={[styles.helperText, { marginTop: 8 }]}>Schedule: {frequencyPreview}</Text>
+              </View>
+
+              {/* Category (Optional) — hierarchical picker */}
+              <View style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={styles.label}>
+                    {activeParent ? `Category: ${activeParent.name}` : 'Category (optional)'}
+                  </Text>
+                  {activeParent && (
+                    <Pressable onPress={() => { setActiveParent(null); setSelectedCategory(null); }}>
+                      <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '700' }}>Change Group</Text>
+                    </Pressable>
                   )}
                 </View>
 
-                <View style={styles.sectionBlock}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Repeat color={COLORS.primary} size={16} />
-                    <Text style={styles.label}>Repeat</Text>
+                {fetchingCategories ? (
+                  <ActivityIndicator color={COLORS.primary} size="small" />
+                ) : !activeParent ? (
+                  /* STEP 1: Parent category grid */
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                    {categories
+                      .filter(c => !c.parent_id && (c.type === form.type || c.type === 'both'))
+                      .map(parent => {
+                        const IC = Icons[parent.icon] || Icons.Circle;
+                        return (
+                          <Pressable
+                            key={parent.id}
+                            style={{
+                              width: '30%',
+                              backgroundColor: COLORS.card,
+                              borderRadius: 14,
+                              padding: 12,
+                              alignItems: 'center',
+                              borderWidth: 1.5,
+                              borderBottomWidth: 3,
+                              borderColor: COLORS.border,
+                              borderBottomColor: parent.color || COLORS.primary,
+                            }}
+                            onPress={() => setActiveParent(parent)}
+                          >
+                            <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: (parent.color || COLORS.primary) + '18', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+                              <IC size={20} color={parent.color || COLORS.primary} />
+                            </View>
+                            <Text style={{ color: COLORS.text, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>{parent.name}</Text>
+                          </Pressable>
+                        );
+                      })
+                    }
                   </View>
-                  <View style={[styles.row, { flexWrap: 'wrap' }]}>
-                    {frequencyOptions.map((option) => (
-                      <Pressable
-                        key={option.value}
-                        onPress={() => updateFormField('frequency', option.value)}
-                        style={[styles.smallChip, form.frequency === option.value && styles.activeChip]}
-                      >
-                        <Text style={[styles.smallChipText, form.frequency === option.value && styles.activeChipText]}>
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    ))}
+                ) : (
+                  /* STEP 2: Sub-category chips */
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {categories
+                      .filter(c => c.parent_id === activeParent.id)
+                      .map(sub => {
+                        const isSelected = selectedCategory?.id === sub.id;
+                        return (
+                          <Pressable
+                            key={sub.id}
+                            style={{
+                              paddingHorizontal: 14,
+                              paddingVertical: 8,
+                              borderRadius: 20,
+                              borderWidth: 1.5,
+                              borderColor: isSelected ? (activeParent.color || COLORS.primary) : COLORS.border,
+                              backgroundColor: isSelected ? (activeParent.color || COLORS.primary) + '22' : COLORS.inputBg,
+                            }}
+                            onPress={() => setSelectedCategory(isSelected ? null : sub)}
+                          >
+                            <Text style={{
+                              color: isSelected ? (activeParent.color || COLORS.primary) : COLORS.textSecondary,
+                              fontWeight: isSelected ? '700' : '500',
+                              fontSize: 13,
+                            }}>
+                              {sub.name}
+                            </Text>
+                          </Pressable>
+                        );
+                      })
+                    }
+                    {categories.filter(c => c.parent_id === activeParent.id).length === 0 && (
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>No sub-categories found.</Text>
+                    )}
                   </View>
+                )}
 
-                  {form.frequency === 'custom' ? (
-                    <AppInput
-                      label="Repeat Every (Days)"
-                      keyboardType="number-pad"
-                      placeholder="e.g. 3"
-                      value={form.customDays}
-                      onChangeText={(val) => updateFormField('customDays', val.replace(/[^0-9]/g, ''))}
-                    />
-                  ) : null}
-
-                  <Text style={styles.helperText}>Schedule: {customFrequencyPreview}</Text>
-                </View>
-
-                <View style={styles.sectionBlock}>
-                  <Text style={styles.label}>Next Due Date</Text>
-                  <View style={styles.dateInputWrapper}>
-                    <AppInput
-                      placeholder="2026-04-28"
-                      value={form.nextDate}
-                      onChangeText={(val) => updateFormField('nextDate', val)}
-                      containerStyle={{ flex: 1, marginBottom: 0 }}
-                      style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-                    />
-                    <Pressable onPress={() => setShowCalendar(!showCalendar)} style={styles.calendarTrigger}>
-                      <CalendarIcon color={COLORS.primary} size={20} />
+                {/* Show selected category badge */}
+                {selectedCategory && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: activeParent?.color || COLORS.primary }} />
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+                      Selected: <Text style={{ color: COLORS.text, fontWeight: '700' }}>{selectedCategory.name}</Text>
+                    </Text>
+                    <Pressable onPress={() => { setSelectedCategory(null); }}>
+                      <X color={COLORS.textSecondary} size={14} />
                     </Pressable>
                   </View>
+                )}
+              </View>
 
-                  <Text style={styles.helperText}>
-                    Selected: {paymentService.parseLocalDate(form.nextDate)?.toLocaleDateString() || 'No date'}
-                  </Text>
-
-                  {showCalendar ? (
-                    <MiniCalendar
-                      selectedDate={form.nextDate}
-                      onSelectDate={(date) => {
-                        updateFormField('nextDate', date);
-                        setShowCalendar(false);
-                      }}
-                    />
-                  ) : null}
-                </View>
-
-                <AppButton title="Add Planned Payment" onPress={handleAddPlanned} loading={submitting} style={{ marginTop: 24 }} />
-              </ScrollView>
-            </View>
-          </TouchableWithoutFeedback>
+              <AppButton
+                title={editingPayment ? 'Update Payment' : 'Save Planned Payment'}
+                onPress={handleSavePayment}
+                loading={submitting}
+                style={{ marginTop: 8 }}
+              />
+            </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>

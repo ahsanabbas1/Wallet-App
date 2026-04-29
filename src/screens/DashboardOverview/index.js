@@ -40,11 +40,10 @@ const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
-  const { currency, name } = useProfile();
+  const { currency, name, loading: profileLoading } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
-  const [userName, setUserName] = useState('User');
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
@@ -67,7 +66,6 @@ const DashboardOverview = () => {
 
       const dashData = await dashboardService.getDashboardData(userId);
 
-      if (name) setUserName(name);
 
       setRecentTransactions(dashData.recentTransactions);
       setRecentPlanned(dashData.recentPlanned);
@@ -85,7 +83,7 @@ const DashboardOverview = () => {
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
-    }, [userId, name])
+    }, [userId])
   );
 
   // Realtime subscriptions — one channel, three tables.
@@ -111,7 +109,7 @@ const DashboardOverview = () => {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
-  const handleDeleteTransaction = (transaction) => {
+  const handleDeleteTransaction = useCallback((transaction) => {
     Alert.alert(
       'Delete Transaction',
       `Are you sure you want to delete "${transaction.title}"?`,
@@ -131,9 +129,9 @@ const DashboardOverview = () => {
         },
       ]
     );
-  };
+  }, [userId]);
 
-  const handleDeletePlanned = (id) => {
+  const handleDeletePlanned = useCallback((id) => {
     Alert.alert(
       'Delete Planned Payment',
       'Are you sure you want to stop this planned payment?',
@@ -157,7 +155,7 @@ const DashboardOverview = () => {
         }
       ]
     );
-  };
+  }, [userId]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -178,7 +176,9 @@ const DashboardOverview = () => {
             </Pressable>
             <View>
               <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.userName}>
+                {profileLoading ? '...' : (name || 'User')}
+              </Text>
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -284,10 +284,10 @@ const DashboardOverview = () => {
                 key={item.id}
                 icon={ReceiptText} 
                 title={item.title} 
-                category={item.categories?.name || 'Uncategorized'} 
-                time={new Date(item.date).toLocaleDateString() + ' ' + new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
-                amount={`${item.type === 'expense' ? '-' : '+'}${currency} ${parseFloat(item.amount).toFixed(2)}`} 
-                method={item.description || 'No note'}
+                category={item.categories?.name || (item.type === 'income' ? 'Income' : 'Expense')}
+                time={new Date(item.date).toLocaleDateString() + ' ' + new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                amount={parseFloat(item.amount)}
+                method={item.description || ''}
                 color={item.categories?.color || COLORS.primary}
                 isPositive={item.type === 'income'}
                 onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}

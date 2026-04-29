@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Tag, Pencil, Trash2 } from 'lucide-react-native';
 import { formatAmount } from '../utils/formatters';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
 
-const TransactionItem = ({
+const TransactionItem = memo(({
   icon: Icon,
   title,
   category,
@@ -20,13 +20,17 @@ const TransactionItem = ({
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
-  // Normalize amount — may arrive as a pre-formatted string or raw number
-  let displayAmount = amount;
-  if (typeof amount === 'string') {
-    const rawNum = parseFloat(amount.replace(/[^0-9.-]/g, ''));
-    if (!isNaN(rawNum)) {
-      displayAmount = (isPositive ? '+' : '-') + currency + ' ' + formatAmount(rawNum);
-    }
+
+  // Normalize amount to a clean display string — always use absolute value,
+  // sign comes from isPositive prop to avoid double-negation bugs.
+  let displayAmount;
+  if (typeof amount === 'number') {
+    displayAmount = (isPositive ? '+' : '-') + currency + ' ' + formatAmount(amount);
+  } else if (typeof amount === 'string') {
+    const rawNum = Math.abs(parseFloat(amount.replace(/[^0-9.]/g, '')) || 0);
+    displayAmount = (isPositive ? '+' : '-') + currency + ' ' + formatAmount(rawNum);
+  } else {
+    displayAmount = '–';
   }
 
   return (
@@ -61,7 +65,7 @@ const TransactionItem = ({
       </View>
     </View>
   );
-};
+});
 
 const makeStyles = (COLORS) => StyleSheet.create({
   transactionItem: {

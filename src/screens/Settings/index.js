@@ -54,7 +54,7 @@ export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId, user } = useAuth();
-  const { updateCurrency } = useProfile();
+  const { updateCurrency, updateName: updateProfileName } = useProfile();
   const { colors: COLORS, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +118,9 @@ export default function Settings() {
         .update({ name: nameEdit.trim() })
         .eq('id', userId);
       if (error) throw error;
-      setName(nameEdit.trim());
+      const saved = nameEdit.trim();
+      setName(saved);
+      updateProfileName(saved); // propagate to ProfileContext → Dashboard updates instantly
       setEditingName(false);
       Alert.alert('Saved', 'Your name has been updated.');
     } catch (e) {

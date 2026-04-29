@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { CalendarClock, CheckCircle2, Trash2 } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, Trash2, Pencil } from 'lucide-react-native';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
 import { paymentService } from '../services/paymentService';
 
-const PaymentCard = ({ item, onDelete, onRecord }) => {
+const PaymentCard = memo(({ item, onDelete, onRecord, onEdit }) => {
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -19,9 +19,17 @@ const PaymentCard = ({ item, onDelete, onRecord }) => {
         </View>
         <View style={styles.cardInfo}>
           <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardSub}>
-            {paymentService.getFrequencyLabel(item.frequency)} • Next: {item.next_date ? paymentService.parseLocalDate(item.next_date).toLocaleDateString() : 'No date'}
+          <Text style={styles.cardSub} numberOfLines={1}>
+            {paymentService.getFrequencyLabel(item.frequency)}
+            {item.next_date ? ` · Next: ${paymentService.parseLocalDate(item.next_date)?.toLocaleDateString()}` : ''}
           </Text>
+          {(item.start_date || item.end_date) && (
+            <Text style={[styles.cardSub, { marginTop: 2, fontSize: 11 }]} numberOfLines={1}>
+              {item.start_date ? `From ${paymentService.parseLocalDate(item.start_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+              {item.start_date && item.end_date ? '  →  ' : ''}
+              {item.end_date ? `Until ${paymentService.parseLocalDate(item.end_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+            </Text>
+          )}
         </View>
         <Text style={[styles.cardAmount, { color: isIncome ? COLORS.success || '#4caf50' : COLORS.text }]}>
           {isIncome ? '+' : '-'}{currency} {parseFloat(item.amount || 0).toLocaleString()}
@@ -30,17 +38,27 @@ const PaymentCard = ({ item, onDelete, onRecord }) => {
       <View style={styles.cardActions}>
         {onRecord ? (
           <Pressable onPress={() => onRecord(item)} style={styles.recordButton}>
-            <CheckCircle2 color={COLORS.success || '#4caf50'} size={18} />
-            <Text style={[styles.recordButtonText, { color: COLORS.success || '#4caf50' }]}>Record Now</Text>
+            <CheckCircle2 color={COLORS.success} size={18} />
+            <Text style={[styles.recordButtonText, { color: COLORS.success }]}>Record Now</Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
-          <Trash2 color={COLORS.error} size={18} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {onEdit && (
+            <Pressable
+              onPress={() => onEdit(item)}
+              style={[styles.deleteButton, { backgroundColor: COLORS.surface }]}
+            >
+              <Pencil color={COLORS.textSecondary} size={16} />
+            </Pressable>
+          )}
+          <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
+            <Trash2 color={COLORS.error} size={18} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
-};
+});
 
 const makeStyles = (COLORS) => StyleSheet.create({
   paymentCard: {
@@ -49,7 +67,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.border,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -82,9 +100,10 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   cardActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
+    borderTopColor: COLORS.divider,
     marginTop: 12,
     paddingTop: 12,
   },

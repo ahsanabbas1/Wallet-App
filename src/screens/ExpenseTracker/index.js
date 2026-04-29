@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowUpRight, ArrowDownLeft, Calendar, Filter, Plus, ReceiptText, Pencil, Trash2, Menu, Search, X } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
@@ -132,6 +132,27 @@ const ExpenseTracker = ({ navigation }) => {
     }, {});
   }, [transactions, searchText]);
 
+  // Flatten grouped data into a single array for FlatList virtualization
+  const flatListData = useMemo(() => {
+    const rows = [];
+    if (loading && transactions.length === 0) {
+      rows.push({ type: 'loading', key: 'loading' });
+      return rows;
+    }
+    const dates = Object.keys(groupedTransactions);
+    if (dates.length === 0) {
+      rows.push({ type: 'empty', key: 'empty' });
+      return rows;
+    }
+    dates.forEach(date => {
+      rows.push({ type: 'dateHeader', date, key: `h_${date}` });
+      groupedTransactions[date].forEach(item => {
+        rows.push({ type: 'item', item, key: item.id });
+      });
+    });
+    return rows;
+  }, [groupedTransactions, loading, transactions.length]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -186,70 +207,79 @@ const ExpenseTracker = ({ navigation }) => {
         </View>
       )}
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Summary Cards */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryItem}>
-              <View style={[styles.summaryIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
-                <ArrowDownLeft color={COLORS.accent} size={20} />
+      <FlatList
+        data={flatListData}
+        keyExtractor={(row) => row.key}
+        contentContainerStyle={styles.scrollContent}
+        removeClippedSubviews
+        maxToRenderPerBatch={12}
+        windowSize={7}
+        initialNumToRender={20}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryItem}>
+                <View style={[styles.summaryIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
+                  <ArrowDownLeft color={COLORS.accent} size={20} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.summaryLabel}>Income</Text>
+                  <Text style={styles.summaryValue} numberOfLines={1}>{currency} {formatAmount(totals.income)}</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.summaryLabel}>Income</Text>
-                <Text style={styles.summaryValue} numberOfLines={1}>{currency} {formatAmount(totals.income)}</Text>
-              </View>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.summaryItem}>
-              <View style={[styles.summaryIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                <ArrowUpRight color={COLORS.error} size={20} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.summaryLabel}>Expenses</Text>
-                <Text style={styles.summaryValue} numberOfLines={1}>{currency} {formatAmount(totals.expense)}</Text>
+              <View style={styles.divider} />
+              <View style={styles.summaryItem}>
+                <View style={[styles.summaryIcon, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                  <ArrowUpRight color={COLORS.error} size={20} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.summaryLabel}>Expenses</Text>
+                  <Text style={styles.summaryValue} numberOfLines={1}>{currency} {formatAmount(totals.expense)}</Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
-
-        {loading && transactions.length === 0 ? (
-          <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
-        ) : Object.keys(groupedTransactions).length > 0 ? (
-          Object.keys(groupedTransactions).map((date) => (
-            <View key={date} style={styles.section}>
+        }
+        renderItem={({ item: row }) => {
+          if (row.type === 'loading') {
+            return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
+          }
+          if (row.type === 'empty') {
+            return (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No transactions found.</Text>
+              </View>
+            );
+          }
+          if (row.type === 'dateHeader') {
+            return (
               <View style={styles.dateHeader}>
                 <Calendar color={COLORS.textSecondary} size={16} />
-                <Text style={styles.dateText}>{date}</Text>
+                <Text style={styles.dateText}>{row.date}</Text>
               </View>
-
-              {groupedTransactions[date].map((item) => (
-                <LedgerItem
-                  key={item.id}
-                  icon={ReceiptText}
-                  title={item.title}
-                  sub={
-                    item.categories?.name
-                      ? item.categories.name + (item.description ? `  ·  ${item.description}` : '')
-                      : (item.description || (item.type === 'income' ? 'Income' : 'Expense'))
-                  }
-                  amount={item.amount}
-                  currency={currency}
-                  color={item.categories?.color || COLORS.primary || '#4f5ff7'}
-                  isPositive={item.type === 'income'}
-                  onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
-                  onDelete={() => handleDeleteTransaction(item)}
-                />
-              ))}
-            </View>
-          ))
-        ) : (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>
-              {loading ? 'Loading...' : 'No transactions found.'}
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+            );
+          }
+          const item = row.item;
+          return (
+            <LedgerItem
+              icon={ReceiptText}
+              title={item.title}
+              sub={
+                item.categories?.name
+                  ? item.categories.name + (item.description ? `  ·  ${item.description}` : '')
+                  : (item.description || (item.type === 'income' ? 'Income' : 'Expense'))
+              }
+              amount={item.amount}
+              currency={currency}
+              color={item.categories?.color || COLORS.primary || '#4f5ff7'}
+              isPositive={item.type === 'income'}
+              onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
+              onDelete={() => handleDeleteTransaction(item)}
+            />
+          );
+        }}
+      />
 
       {/* Filter Modal */}
       <Modal
@@ -318,7 +348,7 @@ const ExpenseTracker = ({ navigation }) => {
   );
 };
 
-const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, isPositive, onEdit, onDelete }) => {
+const LedgerItem = memo(({ icon: Icon, title, sub, amount, currency = 'PKR', color, isPositive, onEdit, onDelete }) => {
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   return (
@@ -350,6 +380,6 @@ const LedgerItem = ({ icon: Icon, title, sub, amount, currency = 'PKR', color, i
     </View>
   </View>
   );
-};
+});
 
 export default ExpenseTracker;
