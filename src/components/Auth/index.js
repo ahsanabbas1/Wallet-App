@@ -23,9 +23,9 @@ import { makeStyles } from './styles'
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
-const GoogleIcon = () => (
-    <View style={styles.googleIconContainer}>
-        <Text style={styles.googleG}>G</Text>
+const GoogleIcon = ({ iconContainerStyle, gStyle }) => (
+    <View style={iconContainerStyle}>
+        <Text style={gStyle}>G</Text>
     </View>
 )
 
@@ -487,7 +487,7 @@ export default function Auth() {
                             <ActivityIndicator color={COLORS.text} size="small" />
                         ) : (
                             <>
-                                <GoogleIcon />
+                                <GoogleIcon iconContainerStyle={styles.googleIconContainer} gStyle={styles.googleG} />
                                 <Text style={styles.googleButtonText}>
                                     {activeTab === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
                                 </Text>

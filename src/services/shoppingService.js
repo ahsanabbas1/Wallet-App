@@ -229,14 +229,16 @@ export const shoppingService = {
       if (allDone) {
         await supabase.from('shopping_lists').update({ is_archived: true }).eq('id', listId);
         // Update local list archive status
-        const lists = await localDatabase.getShoppingLists(item?.user_id || '');
-        const list = lists.find(l => l.id === listId);
+        const list = await localDatabase.getShoppingListById(listId);
         if (list) await localDatabase.saveShoppingList({ ...list, is_archived: true }, 'synced');
       }
     } catch (error) {
       if (!isNetworkError(error)) throw error;
       // Items already pending_update, archive list locally if needed
-      if (allDone) await this.archiveList(item?.user_id || '', listId, true);
+      if (allDone) {
+        const list = await localDatabase.getShoppingListById(listId);
+        if (list) await localDatabase.saveShoppingList({ ...list, is_archived: true }, 'pending_update');
+      }
     }
 
     return { allDone };
@@ -311,23 +313,16 @@ export const shoppingService = {
   },
 
   async updateWarrantyNotified(id) {
-    await localDatabase.initialize();
-
-    // Update local immediately
-    const allWarranties = await localDatabase.getWarranties('');
-    // We don't have userId here, so read all and find by id
-    const { KEYS: _k, ...db } = localDatabase;
-    // Directly patch via save — read all warranties
-    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    // Patch local without needing userId — read all rows, update by id
     try {
-      const raw = await AsyncStorage.getItem('web_local_warranties');
+      const raw = await AsyncStorage.getItem(WARRANTY_KEY);
       const rows = raw ? JSON.parse(raw) : [];
       const updated = rows.map(r => r.id === id ? { ...r, is_notified: true } : r);
-      await AsyncStorage.setItem('web_local_warranties', JSON.stringify(updated));
+      await AsyncStorage.setItem(WARRANTY_KEY, JSON.stringify(updated));
     } catch {}
 
-    // Background sync
-    supabase.from('warranties').update({ is_notified: true }).eq('id', id).then().catch(() => {});
+    // Fire-and-forget to Supabase
+    supabase.from('warranties').update({ is_notified: true }).eq('id', id).catch(() => {});
   },
 };
 

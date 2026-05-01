@@ -67,15 +67,12 @@ async function readLocalTransactions(userId, options = {}) {
 }
 
 export const transactionService = {
-  async initialize(userId = null) {
+  async initialize() {
     await transactionSyncService.initialize();
-    if (userId) {
-      await transactionSyncService.refreshCategories(userId);
-    }
   },
 
   async getCategories(userId) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     const local = await localDatabase.getCategories(userId);
     if (local.length > 0) {
       // Return local immediately — refresh categories in background
@@ -84,7 +81,7 @@ export const transactionService = {
     }
     // First-ever launch: must wait for network to populate local cache
     await transactionSyncService.refreshCategories(userId);
-    return await localDatabase.getCategories(userId);
+    return localDatabase.getCategories(userId);
   },
 
   async getTransactions(userId, options = {}) {

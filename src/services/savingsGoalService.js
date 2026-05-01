@@ -21,21 +21,16 @@ function isNetworkError(error) {
 }
 
 export const savingsGoalService = {
-  async initialize(userId = null) {
-    await financeSyncService.initialize();
-    if (userId) {
-      await financeSyncService.refreshSavingsGoals(userId);
-    }
-  },
-
   async getSavingsGoals(userId) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     const rows = await localDatabase.getSavingsGoals(userId);
+    // Background sync — does not block the response
+    financeSyncService.refreshSavingsGoals(userId).catch(() => {});
     return { data: rows.map((row) => localDatabase.mapSavingsGoalRow(row)), fromLocal: true };
   },
 
   async saveSavingsGoal(userId, goalData, existingId = null) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     const payload = {
       saved_amount: 0,
       ...goalData,
@@ -78,7 +73,7 @@ export const savingsGoalService = {
   },
 
   async updateSavingsGoal(userId, id, updates) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     const currentRows = await localDatabase.getSavingsGoals(userId);
     const existing = currentRows.find((row) => row.id === id);
     const payload = {
@@ -120,7 +115,7 @@ export const savingsGoalService = {
   },
 
   async deleteSavingsGoal(userId, id) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     try {
       const { error } = await supabase.from('savings_goals').delete().eq('id', id);
       if (error) throw error;

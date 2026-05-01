@@ -105,8 +105,7 @@ export const transactionSyncService = {
     try {
       await pullCategories(userId);
       return { refreshed: true };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
+    } catch {
       return { refreshed: false };
     }
   },
@@ -118,8 +117,7 @@ export const transactionSyncService = {
       await pullCategories(userId);
       await pullTransactions(userId);
       return { refreshed: true };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
+    } catch {
       return { refreshed: false };
     }
   },

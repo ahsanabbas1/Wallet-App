@@ -12,8 +12,8 @@ import { StatusBar } from 'expo-status-bar'
 import { supabase } from './src/lib/supabase'
 import Auth from './src/components/Auth/index'
 import AppNavigator from './src/navigation/AppNavigator'
-import { View, ActivityIndicator, AppState } from 'react-native'
-import offlineSync from './src/services/offlineSync'
+import { View, Text, ActivityIndicator, AppState } from 'react-native'
+import localDatabase from './src/services/localDatabase'
 import transactionSyncService from './src/services/transactionSyncService'
 import financeSyncService from './src/services/financeSyncService'
 
@@ -37,7 +37,6 @@ const ensureUserProfile = async (user) => {
   }
 };
 
-// Innermost shell — has access to ThemeContext for StatusBar style
 const ThemedShell = ({ children }) => {
   const { isDark } = useTheme();
   return (
@@ -48,39 +47,83 @@ const ThemedShell = ({ children }) => {
   );
 };
 
+const SyncingScreen = () => (
+  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f1117', gap: 16 }}>
+    <ActivityIndicator size="large" color="#4f5ff7" />
+    <Text style={{ color: '#8b8fa8', fontSize: 14, fontWeight: '500' }}>Loading your data…</Text>
+  </View>
+);
+
 const AppContent = () => {
   const { session, loading } = useAuth();
   const [profileReady, setProfileReady] = useState(false);
+  const [initialSyncDone, setInitialSyncDone] = useState(false);
 
+  // Ensure user profile exists in Supabase on login
   useEffect(() => {
     if (session?.user) {
       setProfileReady(false);
+      setInitialSyncDone(false);
       ensureUserProfile(session.user).finally(() => setProfileReady(true));
     } else {
       setProfileReady(false);
+      setInitialSyncDone(false);
     }
   }, [session?.user?.id]);
 
+  // Initial sync — blocking if local DB is empty (new install / APK reinstall)
+  useEffect(() => {
+    if (!session?.user || !profileReady) return;
+
+    const userId = session.user.id;
+
+    const doInitialSync = async () => {
+      try {
+        await localDatabase.initialize();
+
+        const [localTx, localCats] = await Promise.all([
+          localDatabase.getTransactions(userId),
+          localDatabase.getCategories(userId),
+        ]);
+
+        const isEmpty = localTx.length === 0 && localCats.length === 0;
+
+        if (isEmpty) {
+          // New install or cleared storage — pull from Supabase with a 12s safety timeout
+          const syncAll = Promise.allSettled([
+            transactionSyncService.refreshTransactions(userId),
+            financeSyncService.refreshAll(userId),
+          ]);
+          const timeout = new Promise(resolve => setTimeout(resolve, 12000));
+          await Promise.race([syncAll, timeout]);
+        } else {
+          // Data exists — sync in background, show app immediately
+          transactionSyncService.refreshTransactions(userId).catch(() => {});
+          financeSyncService.refreshAll(userId).catch(() => {});
+        }
+      } catch {
+        // Any unexpected error — proceed to app rather than staying stuck
+      } finally {
+        setInitialSyncDone(true);
+      }
+    };
+
+    doInitialSync().catch(() => { setInitialSyncDone(true); });
+  }, [session?.user?.id, profileReady]);
+
+  // Sync on app resume (foreground)
   useEffect(() => {
     if (!session?.user) return;
 
-    offlineSync.syncIfPossible().catch(() => {});
-    transactionSyncService.initialize().catch(() => {});
-    transactionSyncService.refreshTransactions(session.user.id).catch(() => {});
-    financeSyncService.initialize().catch(() => {});
-    financeSyncService.refreshAll(session.user.id).catch(() => {});
-
+    const userId = session.user.id;
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        offlineSync.syncIfPossible().catch(() => {});
-        transactionSyncService.refreshTransactions(session.user.id).catch(() => {});
-        financeSyncService.refreshAll(session.user.id).catch(() => {});
+        transactionSyncService.refreshTransactions(userId).catch(() => {});
+        financeSyncService.refreshAll(userId).catch(() => {});
       }
     });
 
-    return () => {
-      subscription.remove();
-    };
+    return () => { subscription.remove(); };
   }, [session?.user?.id]);
 
   if (loading) {
@@ -101,12 +144,8 @@ const AppContent = () => {
     );
   }
 
-  if (!profileReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f1117' }}>
-        <ActivityIndicator size="large" color="#4f5ff7" />
-      </View>
-    );
+  if (!profileReady || !initialSyncDone) {
+    return <SyncingScreen />;
   }
 
   return (

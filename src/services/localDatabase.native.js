@@ -91,7 +91,95 @@ CREATE INDEX IF NOT EXISTS idx_local_goals_user_created
 
 CREATE INDEX IF NOT EXISTS idx_local_goals_sync
   ON local_savings_goals(sync_status, user_id);
+
+CREATE TABLE IF NOT EXISTS local_shopping_lists (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  is_archived INTEGER DEFAULT 0,
+  created_at TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'synced',
+  deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS local_shopping_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  list_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  quantity INTEGER DEFAULT 1,
+  price REAL,
+  is_completed INTEGER DEFAULT 0,
+  created_at TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'synced',
+  deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS local_warranties (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  purchase_date TEXT,
+  expiry_date TEXT,
+  color TEXT,
+  is_notified INTEGER DEFAULT 0,
+  created_at TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'synced',
+  deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS local_loans (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  person_name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  total_amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  notes TEXT,
+  is_settled INTEGER DEFAULT 0,
+  created_at TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'synced',
+  deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS local_loan_payments (
+  id TEXT PRIMARY KEY NOT NULL,
+  loan_id TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  notes TEXT,
+  created_at TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'synced',
+  deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS local_planned_payments (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  category_id TEXT,
+  title TEXT NOT NULL,
+  amount REAL NOT NULL,
+  type TEXT NOT NULL,
+  frequency TEXT NOT NULL,
+  next_date TEXT NOT NULL,
+  start_date TEXT,
+  end_date TEXT,
+  description TEXT,
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'synced',
+  deleted_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_local_planned_user
+  ON local_planned_payments(user_id, next_date ASC);
+
+CREATE TABLE IF NOT EXISTS local_profiles (
+  user_id TEXT PRIMARY KEY NOT NULL,
+  data TEXT NOT NULL
+);
 `;
+
 
 function nowIso() {
   return new Date().toISOString();
@@ -139,7 +227,545 @@ export const localDatabase = {
     return await initialize();
   },
 
+  // ── User Profile ──────────────────────────────────────────────────────────
+  async getProfile(userId) {
+    const db = await initialize();
+    const row = await db.getFirstAsync(
+      'SELECT data FROM local_profiles WHERE user_id = ?',
+      userId
+    );
+    return row ? JSON.parse(row.data) : null;
+  },
+
+  async saveProfile(userId, profile) {
+    const db = await initialize();
+    const existing = await this.getProfile(userId);
+    const data = JSON.stringify({ ...existing, ...profile });
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_profiles (user_id, data) VALUES (?, ?)`,
+      userId,
+      data
+    );
+  },
+
+  // ── Shopping Lists ────────────────────────────────────────────────────────
+  async getShoppingLists(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_shopping_lists WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC`,
+      userId
+    );
+  },
+
+  async getShoppingListById(listId) {
+    const db = await initialize();
+    return await db.getFirstAsync(
+      `SELECT * FROM local_shopping_lists WHERE id = ? AND deleted_at IS NULL`,
+      listId
+    );
+  },
+
+  async saveShoppingList(list, syncStatus = 'synced') {
+    const db = await initialize();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_shopping_lists (id, user_id, title, is_archived, created_at, sync_status, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, NULL)`,
+      list.id,
+      list.user_id,
+      list.title,
+      list.is_archived ? 1 : 0,
+      list.created_at || nowIso(),
+      syncStatus
+    );
+  },
+
+  async upsertRemoteShoppingLists(lists) {
+    const db = await initialize();
+    for (const list of lists) {
+      // Check if we have a pending change
+      const local = await db.getFirstAsync(
+        'SELECT sync_status FROM local_shopping_lists WHERE id = ?',
+        list.id
+      );
+      if (local?.sync_status?.startsWith('pending_')) continue;
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO local_shopping_lists (id, user_id, title, is_archived, created_at, sync_status, deleted_at)
+         VALUES (?, ?, ?, ?, ?, 'synced', NULL)`,
+        list.id,
+        list.user_id,
+        list.title,
+        list.is_archived ? 1 : 0,
+        list.created_at
+      );
+    }
+  },
+
+  async deleteShoppingList(id, userId) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_shopping_lists SET deleted_at = ?, sync_status = 'pending_delete' WHERE id = ? AND user_id = ?`,
+      nowIso(),
+      id,
+      userId
+    );
+  },
+
+  async removeShoppingList(id) {
+    const db = await initialize();
+    await db.runAsync('DELETE FROM local_shopping_lists WHERE id = ?', id);
+    await db.runAsync('DELETE FROM local_shopping_items WHERE list_id = ?', id);
+  },
+
+  async getPendingShoppingLists(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_shopping_lists WHERE user_id = ? AND sync_status LIKE 'pending_%'`,
+      userId
+    );
+  },
+
+  async markShoppingListSynced(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_shopping_lists SET sync_status = 'synced', deleted_at = NULL WHERE id = ?`,
+      id
+    );
+  },
+
+  // ── Shopping Items ────────────────────────────────────────────────────────
+  async getShoppingItems(listId) {
+    const db = await initialize();
+    const rows = await db.getAllAsync(
+      `SELECT * FROM local_shopping_items WHERE list_id = ? AND deleted_at IS NULL ORDER BY created_at ASC`,
+      listId
+    );
+    return rows.map(r => ({ ...r, is_completed: !!r.is_completed }));
+  },
+
+  async saveShoppingItem(item, syncStatus = 'synced') {
+    const db = await initialize();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_shopping_items (id, list_id, name, description, quantity, price, is_completed, created_at, sync_status, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      item.id,
+      item.list_id,
+      item.name,
+      item.description || null,
+      item.quantity || 1,
+      item.price || null,
+      item.is_completed ? 1 : 0,
+      item.created_at || nowIso(),
+      syncStatus
+    );
+  },
+
+  async upsertRemoteShoppingItems(items) {
+    const db = await initialize();
+    for (const item of items) {
+      const local = await db.getFirstAsync(
+        'SELECT sync_status FROM local_shopping_items WHERE id = ?',
+        item.id
+      );
+      if (local?.sync_status?.startsWith('pending_')) continue;
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO local_shopping_items (id, list_id, name, description, quantity, price, is_completed, created_at, sync_status, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'synced', NULL)`,
+        item.id,
+        item.list_id,
+        item.name,
+        item.description,
+        item.quantity,
+        item.price,
+        item.is_completed ? 1 : 0,
+        item.created_at
+      );
+    }
+  },
+
+  async deleteShoppingItem(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_shopping_items SET deleted_at = ?, sync_status = 'pending_delete' WHERE id = ?`,
+      nowIso(),
+      id
+    );
+  },
+
+  async removeShoppingItem(id) {
+    const db = await initialize();
+    await db.runAsync('DELETE FROM local_shopping_items WHERE id = ?', id);
+  },
+
+  async getPendingShoppingItems() {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_shopping_items WHERE sync_status LIKE 'pending_%'`
+    );
+  },
+
+  async markShoppingItemSynced(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_shopping_items SET sync_status = 'synced', deleted_at = NULL WHERE id = ?`,
+      id
+    );
+  },
+
+  // ── Warranties ────────────────────────────────────────────────────────────
+  async getWarranties(userId) {
+    const db = await initialize();
+    const rows = await db.getAllAsync(
+      `SELECT * FROM local_warranties WHERE user_id = ? AND deleted_at IS NULL ORDER BY expiry_date ASC`,
+      userId
+    );
+    return rows.map(r => ({ ...r, is_notified: !!r.is_notified }));
+  },
+
+  async saveWarranty(warranty, syncStatus = 'synced') {
+    const db = await initialize();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_warranties (id, user_id, name, purchase_date, expiry_date, color, is_notified, created_at, sync_status, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      warranty.id,
+      warranty.user_id,
+      warranty.name,
+      warranty.purchase_date || null,
+      warranty.expiry_date || null,
+      warranty.color || null,
+      warranty.is_notified ? 1 : 0,
+      warranty.created_at || nowIso(),
+      syncStatus
+    );
+  },
+
+  async upsertRemoteWarranties(warranties) {
+    const db = await initialize();
+    for (const w of warranties) {
+      const local = await db.getFirstAsync(
+        'SELECT sync_status FROM local_warranties WHERE id = ?',
+        w.id
+      );
+      if (local?.sync_status?.startsWith('pending_')) continue;
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO local_warranties (id, user_id, name, purchase_date, expiry_date, color, is_notified, created_at, sync_status, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'synced', NULL)`,
+        w.id,
+        w.user_id,
+        w.name,
+        w.purchase_date,
+        w.expiry_date,
+        w.color,
+        w.is_notified ? 1 : 0,
+        w.created_at
+      );
+    }
+  },
+
+  async deleteWarranty(id, userId) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_warranties SET deleted_at = ?, sync_status = 'pending_delete' WHERE id = ? AND user_id = ?`,
+      nowIso(),
+      id,
+      userId
+    );
+  },
+
+  async removeWarranty(id) {
+    const db = await initialize();
+    await db.runAsync('DELETE FROM local_warranties WHERE id = ?', id);
+  },
+
+  async getPendingWarranties(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_warranties WHERE user_id = ? AND sync_status LIKE 'pending_%'`,
+      userId
+    );
+  },
+
+  async markWarrantySynced(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_warranties SET sync_status = 'synced', deleted_at = NULL WHERE id = ?`,
+      id
+    );
+  },
+
+  // ── Loans ─────────────────────────────────────────────────────────────────
+  async getLoans(userId) {
+    const db = await initialize();
+    const rows = await db.getAllAsync(
+      `SELECT * FROM local_loans WHERE user_id = ? AND deleted_at IS NULL ORDER BY date DESC`,
+      userId
+    );
+    return rows.map(r => ({ ...r, is_settled: !!r.is_settled }));
+  },
+
+  async saveLoan(loan, syncStatus = 'synced') {
+    const db = await initialize();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_loans (id, user_id, person_name, type, total_amount, date, notes, is_settled, created_at, sync_status, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      loan.id,
+      loan.user_id,
+      loan.person_name,
+      loan.type,
+      loan.total_amount,
+      loan.date,
+      loan.notes || null,
+      loan.is_settled ? 1 : 0,
+      loan.created_at || nowIso(),
+      syncStatus
+    );
+  },
+
+  async upsertRemoteLoans(loans) {
+    const db = await initialize();
+    for (const loan of loans) {
+      const local = await db.getFirstAsync(
+        'SELECT sync_status FROM local_loans WHERE id = ?',
+        loan.id
+      );
+      if (local?.sync_status?.startsWith('pending_')) continue;
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO local_loans (id, user_id, person_name, type, total_amount, date, notes, is_settled, created_at, sync_status, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', NULL)`,
+        loan.id,
+        loan.user_id,
+        loan.person_name,
+        loan.type,
+        loan.total_amount,
+        loan.date,
+        loan.notes,
+        loan.is_settled ? 1 : 0,
+        loan.created_at
+      );
+    }
+  },
+
+  async deleteLoan(id, userId) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_loans SET deleted_at = ?, sync_status = 'pending_delete' WHERE id = ? AND user_id = ?`,
+      nowIso(),
+      id,
+      userId
+    );
+  },
+
+  async removeLoan(id) {
+    const db = await initialize();
+    await db.runAsync('DELETE FROM local_loans WHERE id = ?', id);
+    await db.runAsync('DELETE FROM local_loan_payments WHERE loan_id = ?', id);
+  },
+
+  async getPendingLoans(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_loans WHERE user_id = ? AND sync_status LIKE 'pending_%'`,
+      userId
+    );
+  },
+
+  async markLoanSynced(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_loans SET sync_status = 'synced', deleted_at = NULL WHERE id = ?`,
+      id
+    );
+  },
+
+  // ── Loan Payments ─────────────────────────────────────────────────────────
+  async getLoanPayments(loanId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_loan_payments WHERE loan_id = ? AND deleted_at IS NULL ORDER BY date DESC`,
+      loanId
+    );
+  },
+
+  async getAllLoanPayments(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT p.*
+       FROM local_loan_payments p
+       INNER JOIN local_loans l ON p.loan_id = l.id
+       WHERE l.user_id = ? AND p.deleted_at IS NULL`,
+      userId
+    );
+  },
+
+  async saveLoanPayment(payment, syncStatus = 'synced') {
+    const db = await initialize();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_loan_payments (id, loan_id, amount, date, notes, created_at, sync_status, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
+      payment.id,
+      payment.loan_id,
+      payment.amount,
+      payment.date,
+      payment.notes || null,
+      payment.created_at || nowIso(),
+      syncStatus
+    );
+  },
+
+  async upsertRemoteLoanPayments(payments) {
+    const db = await initialize();
+    for (const p of payments) {
+      const local = await db.getFirstAsync(
+        'SELECT sync_status FROM local_loan_payments WHERE id = ?',
+        p.id
+      );
+      if (local?.sync_status?.startsWith('pending_')) continue;
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO local_loan_payments (id, loan_id, amount, date, notes, created_at, sync_status, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'synced', NULL)`,
+        p.id,
+        p.loan_id,
+        p.amount,
+        p.date,
+        p.notes,
+        p.created_at
+      );
+    }
+  },
+
+  async deleteLoanPayment(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_loan_payments SET deleted_at = ?, sync_status = 'pending_delete' WHERE id = ?`,
+      nowIso(),
+      id
+    );
+  },
+
+  async removeLoanPayment(id) {
+    const db = await initialize();
+    await db.runAsync('DELETE FROM local_loan_payments WHERE id = ?', id);
+  },
+
+  async getPendingLoanPayments(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT p.*
+       FROM local_loan_payments p
+       INNER JOIN local_loans l ON p.loan_id = l.id
+       WHERE l.user_id = ? AND p.sync_status LIKE 'pending_%'`,
+      userId
+    );
+  },
+
+  async markLoanPaymentSynced(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_loan_payments SET sync_status = 'synced', deleted_at = NULL WHERE id = ?`,
+      id
+    );
+  },
+
+  // ── Planned Payments ─────────────────────────────────────────────────────
+  async getPlannedPayments(userId) {
+    const db = await initialize();
+    const rows = await db.getAllAsync(
+      `SELECT * FROM local_planned_payments WHERE user_id = ? AND deleted_at IS NULL ORDER BY next_date ASC`,
+      userId
+    );
+    return rows.map(r => ({ ...r, is_active: !!r.is_active }));
+  },
+
+  async savePlannedPayment(item, syncStatus = 'synced') {
+    const db = await initialize();
+    await db.runAsync(
+      `INSERT OR REPLACE INTO local_planned_payments (id, user_id, category_id, title, amount, type, frequency, next_date, start_date, end_date, description, is_active, created_at, sync_status, deleted_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      item.id,
+      item.user_id,
+      item.category_id || null,
+      item.title,
+      item.amount,
+      item.type,
+      item.frequency,
+      item.next_date,
+      item.start_date || null,
+      item.end_date || null,
+      item.description || null,
+      item.is_active ? 1 : 0,
+      item.created_at || nowIso(),
+      syncStatus
+    );
+  },
+
+  async upsertRemotePlannedPayments(items) {
+    const db = await initialize();
+    for (const item of items) {
+      const local = await db.getFirstAsync(
+        'SELECT sync_status FROM local_planned_payments WHERE id = ?',
+        item.id
+      );
+      if (local?.sync_status?.startsWith('pending_')) continue;
+
+      await db.runAsync(
+        `INSERT OR REPLACE INTO local_planned_payments (id, user_id, category_id, title, amount, type, frequency, next_date, start_date, end_date, description, is_active, created_at, sync_status, deleted_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', NULL)`,
+        item.id,
+        item.user_id,
+        item.category_id,
+        item.title,
+        item.amount,
+        item.type,
+        item.frequency,
+        item.next_date,
+        item.start_date,
+        item.end_date,
+        item.description,
+        item.is_active ? 1 : 0,
+        item.created_at
+      );
+    }
+  },
+
+  async deletePlannedPayment(id, userId) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_planned_payments SET deleted_at = ?, sync_status = 'pending_delete' WHERE id = ? AND user_id = ?`,
+      nowIso(),
+      id,
+      userId
+    );
+  },
+
+  async removePlannedPayment(id) {
+    const db = await initialize();
+    await db.runAsync('DELETE FROM local_planned_payments WHERE id = ?', id);
+  },
+
+  async getPendingPlannedPayments(userId) {
+    const db = await initialize();
+    return await db.getAllAsync(
+      `SELECT * FROM local_planned_payments WHERE user_id = ? AND sync_status LIKE 'pending_%'`,
+      userId
+    );
+  },
+
+  async markPlannedPaymentSynced(id) {
+    const db = await initialize();
+    await db.runAsync(
+      `UPDATE local_planned_payments SET sync_status = 'synced', deleted_at = NULL WHERE id = ?`,
+      id
+    );
+  },
+
   async replaceCategories(categories) {
+
+
+
     const db = await initialize();
     const rows = Array.isArray(categories) ? categories : [];
 
@@ -741,11 +1367,11 @@ export const localDatabase = {
       sync_error: row.sync_error,
       categories: row.category_id
         ? {
-            id: row.category_id,
-            name: row.category_name,
-            color: row.category_color,
-            icon: row.category_icon,
-          }
+          id: row.category_id,
+          name: row.category_name,
+          color: row.category_color,
+          icon: row.category_icon,
+        }
         : null,
     };
   },
@@ -762,12 +1388,12 @@ export const localDatabase = {
       sync_error: row.sync_error,
       categories: row.category_id
         ? {
-            id: row.category_id,
-            name: row.category_name,
-            color: row.category_color,
-            icon: row.category_icon,
-            type: row.category_type,
-          }
+          id: row.category_id,
+          name: row.category_name,
+          color: row.category_color,
+          icon: row.category_icon,
+          type: row.category_type,
+        }
         : null,
     };
   },

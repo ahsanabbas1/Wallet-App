@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, TextInput, Modal, Platform,
@@ -16,8 +16,8 @@ import { useDrawer } from '../../context/DrawerContext';
 import { useAuth }   from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme }  from '../../context/ThemeContext';
-import { supabase }  from '../../lib/supabase';
 import { makeStyles } from './styles';
+import { loanService } from '../../services/loanService';
 
 /* ─── helpers ────────────────────────────────────────────────────────── */
 
@@ -60,8 +60,8 @@ const LoanManagement = () => {
   /* ── Data ───────────────────────────────────────────────────────── */
   const [loans,   setLoans]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab,     setTab]     = useState('all'); // all | given | received
-  const [expanded, setExpanded] = useState(null); // expanded loan id
+  const [tab,     setTab]     = useState('all');
+  const [expanded, setExpanded] = useState(null);
 
   /* ── Add-loan modal ─────────────────────────────────────────────── */
   const [showAddLoan,    setShowAddLoan]    = useState(false);
@@ -84,50 +84,20 @@ const LoanManagement = () => {
   const [savingPayment,   setSavingPayment]   = useState(false);
 
   /* ── Fetch ──────────────────────────────────────────────────────── */
-  const fetchLoans = async () => {
+  const fetchLoans = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('loans')
-        .select('*, loan_payments(*)')
-        .eq('user_id', userId)
-        .order('date', { ascending: false });
-      if (error) throw error;
-
-      // attach computed fields
-      const enriched = (data || []).map(loan => {
-        const paid = (loan.loan_payments || [])
-          .reduce((s, p) => s + parseFloat(p.amount), 0);
-        const remaining = parseFloat(loan.total_amount) - paid;
-        return {
-          ...loan,
-          paid_amount: paid,
-          remaining: Math.max(remaining, 0),
-          pct: loan.total_amount > 0 ? Math.min((paid / parseFloat(loan.total_amount)) * 100, 100) : 0,
-          loan_payments: (loan.loan_payments || [])
-            .sort((a, b) => new Date(b.date) - new Date(a.date)),
-        };
-      });
+      const enriched = await loanService.getLoans(userId);
       setLoans(enriched);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
       setLoading(false);
     }
-  };
-
-  useFocusEffect(useCallback(() => { fetchLoans(); }, [userId]));
-
-  useEffect(() => {
-    if (!userId) return;
-    const ch = supabase
-      .channel(`loans_rt_${userId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans',         filter: `user_id=eq.${userId}` }, () => fetchLoans())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'loan_payments'                                 }, () => fetchLoans())
-      .subscribe();
-    return () => supabase.removeChannel(ch);
   }, [userId]);
+
+  useFocusEffect(useCallback(() => { fetchLoans(); }, [fetchLoans]));
 
   /* ── Summary figures ────────────────────────────────────────────── */
   const summary = useMemo(() => {
@@ -167,33 +137,18 @@ const LoanManagement = () => {
     setSavingLoan(true);
     try {
       const payload = {
+        id:           editingLoan?.id,
         user_id:      userId,
         type:         loanType,
         person_name:  personName.trim(),
         total_amount: amt,
         date:         loanDate.toISOString(),
         notes:        loanNotes.trim() || null,
+        is_settled:   editingLoan?.is_settled ?? false,
+        created_at:   editingLoan?.created_at,
       };
 
-      if (editingLoan) {
-        const { error } = await supabase.from('loans').update(payload).eq('id', editingLoan.id);
-        if (error) throw error;
-      } else {
-        const { data: inserted, error } = await supabase.from('loans').insert(payload).select().single();
-        if (error) throw error;
-
-        // Auto-create ledger transaction
-        const isGiven = loanType === GIVEN;
-        await supabase.from('transactions').insert({
-          user_id:     userId,
-          amount:      amt,
-          type:        isGiven ? 'expense' : 'income',
-          title:       isGiven ? `Loan to ${personName.trim()}` : `Loan from ${personName.trim()}`,
-          description: loanNotes.trim() || 'Loan',
-          date:        loanDate.toISOString(),
-        });
-      }
-
+      await loanService.saveLoan(payload, !editingLoan);
       setShowAddLoan(false);
       fetchLoans();
     } catch (e) {
@@ -210,21 +165,24 @@ const LoanManagement = () => {
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: async () => {
-          const { error } = await supabase.from('loans').delete().eq('id', loan.id);
-          if (error) Alert.alert('Error', error.message);
-          else fetchLoans();
+          try {
+            await loanService.deleteLoan(userId, loan.id);
+            fetchLoans();
+          } catch (e) {
+            Alert.alert('Error', e.message);
+          }
         }},
       ]
     );
   };
 
   const handleMarkSettled = async (loan) => {
-    const { error } = await supabase
-      .from('loans')
-      .update({ is_settled: !loan.is_settled })
-      .eq('id', loan.id);
-    if (error) Alert.alert('Error', error.message);
-    else fetchLoans();
+    try {
+      await loanService.markSettled(userId, loan.id, !loan.is_settled);
+      fetchLoans();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
   };
 
   /* ══ PAYMENT CRUD ═══════════════════════════════════════════════════ */
@@ -245,33 +203,18 @@ const LoanManagement = () => {
 
     setSavingPayment(true);
     try {
-      const { error } = await supabase.from('loan_payments').insert({
-        loan_id: paymentLoan.id,
-        amount:  amt,
-        date:    paymentDate.toISOString(),
-        notes:   paymentNotes.trim() || null,
-      });
-      if (error) throw error;
+      const { isSettling } = await loanService.savePayment(
+        {
+          date:  paymentDate.toISOString(),
+          notes: paymentNotes.trim() || null,
+          amount: amt,
+        },
+        paymentLoan
+      );
 
-      // Auto-settle if fully paid
-      const newPaid = paymentLoan.paid_amount + amt;
-      if (newPaid >= parseFloat(paymentLoan.total_amount)) {
-        await supabase.from('loans').update({ is_settled: true }).eq('id', paymentLoan.id);
+      if (isSettling) {
         Alert.alert('🎉 Fully Settled!', `The loan with ${paymentLoan.person_name} is now fully settled.`);
       }
-
-      // Ledger entry for payment
-      const isGiven = paymentLoan.type === GIVEN;
-      await supabase.from('transactions').insert({
-        user_id:     userId,
-        amount:      amt,
-        type:        isGiven ? 'income' : 'expense',
-        title:       isGiven
-          ? `Loan repaid by ${paymentLoan.person_name}`
-          : `Loan repaid to ${paymentLoan.person_name}`,
-        description: paymentNotes.trim() || 'Loan repayment',
-        date:        paymentDate.toISOString(),
-      });
 
       setShowAddPayment(false);
       fetchLoans();
@@ -286,9 +229,12 @@ const LoanManagement = () => {
     Alert.alert('Delete Payment', 'Remove this payment record?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        const { error } = await supabase.from('loan_payments').delete().eq('id', paymentId);
-        if (error) Alert.alert('Error', error.message);
-        else fetchLoans();
+        try {
+          await loanService.deletePayment(paymentId);
+          fetchLoans();
+        } catch (e) {
+          Alert.alert('Error', e.message);
+        }
       }},
     ]);
   };

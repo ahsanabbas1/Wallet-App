@@ -21,21 +21,16 @@ function isNetworkError(error) {
 }
 
 export const budgetService = {
-  async initialize(userId = null) {
-    await financeSyncService.initialize();
-    if (userId) {
-      await financeSyncService.refreshBudgets(userId);
-    }
-  },
-
   async getBudgets(userId) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     const rows = await localDatabase.getBudgets(userId);
+    // Background sync — does not block the response
+    financeSyncService.refreshBudgets(userId).catch(() => {});
     return { data: rows.map((row) => localDatabase.mapBudgetRow(row)), fromLocal: true };
   },
 
   async saveBudget(userId, budgetData, existingId = null) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     const payload = {
       ...budgetData,
       id: existingId || budgetData.id || createLocalId(),
@@ -69,7 +64,7 @@ export const budgetService = {
   },
 
   async deleteBudget(userId, id) {
-    await this.initialize(userId);
+    await localDatabase.initialize();
     try {
       const { error } = await supabase.from('budgets').delete().eq('id', id);
       if (error) throw error;

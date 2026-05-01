@@ -10,9 +10,9 @@ import {
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
-import { supabase } from '../../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { shoppingService } from '../../services/shoppingService';
 
 const ShoppingList = () => {
   const { openDrawer } = useDrawer();
@@ -78,26 +78,26 @@ const ShoppingList = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState('purchase');
 
+  // ── Load data ────────────────────────────────────────────────────────────────
+
   const loadData = async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const [resLists, resWar] = await Promise.all([
-        supabase.from('shopping_lists').select('*, shopping_items(*)').eq('user_id', userId).order('created_at', { ascending: false }),
-        supabase.from('warranties').select('*').eq('user_id', userId).order('expiry_date', { ascending: true }),
+      const [allLists, allWarranties] = await Promise.all([
+        shoppingService.getLists(userId),
+        shoppingService.getWarranties(userId),
       ]);
 
-      if (resLists.error) throw resLists.error;
-
-      const processed = (resLists.data || []).map(l => ({
+      const processed = allLists.map(l => ({
         ...l,
-        shopping_items: (l.shopping_items || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+        shopping_items: (l.shopping_items || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)),
       }));
 
       setLists(processed.filter(l => !l.is_archived));
       setArchivedLists(processed.filter(l => l.is_archived));
-      setWarranties(resWar.data || []);
-      checkWarrantyNotifications(resWar.data || []);
+      setWarranties(allWarranties);
+      checkWarrantyNotifications(allWarranties);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -106,6 +106,8 @@ const ShoppingList = () => {
   };
 
   useFocusEffect(useCallback(() => { loadData(); }, [userId]));
+
+  // ── Warranty notifications ────────────────────────────────────────────────────
 
   const checkWarrantyNotifications = async (wars) => {
     const today = new Date();
@@ -116,109 +118,137 @@ const ShoppingList = () => {
         const exp = new Date(w.expiry_date);
         if (exp < today) {
           Alert.alert('Warranty Expired', `"${w.name}" warranty has expired.`);
-          await supabase.from('warranties').update({ is_notified: true }).eq('id', w.id);
+          shoppingService.updateWarrantyNotified(w.id).catch(() => {});
         } else if (exp <= thirtyDays) {
           Alert.alert('Warranty Expiring Soon', `"${w.name}" expires on ${exp.toLocaleDateString()}.`);
-          await supabase.from('warranties').update({ is_notified: true }).eq('id', w.id);
+          shoppingService.updateWarrantyNotified(w.id).catch(() => {});
         }
       }
     }
   };
 
-  // List actions
+  // ── List actions ──────────────────────────────────────────────────────────────
+
   const saveList = async () => {
     if (!listTitle.trim()) return;
-    if (editingId) {
-      await supabase.from('shopping_lists').update({ title: listTitle }).eq('id', editingId);
-    } else {
-      await supabase.from('shopping_lists').insert({ user_id: userId, title: listTitle });
+    try {
+      await shoppingService.saveList(userId, {
+        id: editingId || undefined,
+        title: listTitle.trim(),
+      });
+      setShowListModal(false);
+      setListTitle(''); setEditingId(null);
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
     }
-    setShowListModal(false);
-    setListTitle(''); setEditingId(null);
-    loadData();
   };
 
   const deleteList = async (id) => {
     Alert.alert('Delete List', 'Permanently delete this list and all its items?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await supabase.from('shopping_lists').delete().eq('id', id);
-        loadData();
-      }}
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await shoppingService.deleteList(userId, id);
+            loadData();
+          } catch (e) {
+            Alert.alert('Error', e.message);
+          }
+        }
+      }
     ]);
   };
 
-  // Item actions
+  const unarchiveList = async (id) => {
+    try {
+      await shoppingService.archiveList(userId, id, false);
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  // ── Item actions ──────────────────────────────────────────────────────────────
+
   const saveItem = async () => {
     if (!itemName.trim() || !selectedListId) return;
-    const itemData = {
-      name: itemName,
-      description: itemDesc,
-      quantity: parseInt(itemQty) || 1,
-      price: itemPrice ? parseFloat(itemPrice) : null,
-    };
-    if (editingId) {
-      await supabase.from('shopping_items').update(itemData).eq('id', editingId);
-    } else {
-      await supabase.from('shopping_items').insert({ list_id: selectedListId, ...itemData });
+    try {
+      await shoppingService.saveItem(selectedListId, {
+        id: editingId || undefined,
+        name: itemName.trim(),
+        description: itemDesc.trim() || null,
+        quantity: parseInt(itemQty) || 1,
+        price: itemPrice ? parseFloat(itemPrice) : null,
+      });
+      setShowItemModal(false);
+      setItemName(''); setItemDesc(''); setItemQty('1'); setItemPrice('');
+      setEditingId(null);
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
     }
-    setShowItemModal(false);
-    setItemName(''); setItemDesc(''); setItemQty('1'); setItemPrice('');
-    setEditingId(null);
-    loadData();
   };
 
   const deleteItem = async (id) => {
-    await supabase.from('shopping_items').delete().eq('id', id);
-    loadData();
+    try {
+      await shoppingService.deleteItem(id);
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
   };
 
   const toggleItem = async (listId, itemId, currentStatus) => {
-    await supabase.from('shopping_items').update({ is_completed: !currentStatus }).eq('id', itemId);
-    const targetList = lists.find(l => l.id === listId);
-    if (!targetList) return;
-    const allDone = targetList.shopping_items.every(i => i.id === itemId ? !currentStatus : i.is_completed);
-    if (allDone && targetList.shopping_items.length > 0) {
-      Alert.alert('List Completed!', `"${targetList.title}" is done! Moving to archive.`);
-      await supabase.from('shopping_lists').update({ is_archived: true }).eq('id', listId);
+    try {
+      const { allDone } = await shoppingService.toggleItem(listId, itemId, currentStatus);
+      if (allDone) {
+        const targetList = lists.find(l => l.id === listId);
+        if (targetList) Alert.alert('List Completed!', `"${targetList.title}" is done! Moving to archive.`);
+      }
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
     }
-    loadData();
   };
 
-  const unarchiveList = async (id) => {
-    await supabase.from('shopping_lists').update({ is_archived: false }).eq('id', id);
-    loadData();
-  };
+  // ── Warranty actions ──────────────────────────────────────────────────────────
 
-  // Warranty actions
   const saveWarranty = async () => {
     if (!warName.trim()) return;
-    const data = {
-      user_id: userId,
-      name: warName,
-      purchase_date: warPurchase.toISOString().split('T')[0],
-      expiry_date: warExpiry.toISOString().split('T')[0],
-      color: COLORS.primary
-    };
-    if (editingId) {
-      await supabase.from('warranties').update(data).eq('id', editingId);
-    } else {
-      await supabase.from('warranties').insert(data);
+    try {
+      await shoppingService.saveWarranty(userId, {
+        id: editingId || undefined,
+        name: warName.trim(),
+        purchase_date: warPurchase.toISOString().split('T')[0],
+        expiry_date: warExpiry.toISOString().split('T')[0],
+        color: COLORS.primary,
+      });
+      setShowWarrantyModal(false);
+      setWarName(''); setEditingId(null);
+      loadData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
     }
-    setShowWarrantyModal(false);
-    setWarName(''); setEditingId(null);
-    loadData();
   };
 
   const deleteWarranty = async (id) => {
     Alert.alert('Delete', 'Delete this warranty?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await supabase.from('warranties').delete().eq('id', id);
-        loadData();
-      }}
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await shoppingService.deleteWarranty(userId, id);
+            loadData();
+          } catch (e) {
+            Alert.alert('Error', e.message);
+          }
+        }
+      }
     ]);
   };
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
 
   const openItemModal = (listId, item = null) => {
     setSelectedListId(listId);
@@ -244,6 +274,8 @@ const ShoppingList = () => {
       <Text style={[styles.tabText, activeTab === key && styles.activeTabText]}>{label}</Text>
     </TouchableOpacity>
   );
+
+  // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.container}>
@@ -392,7 +424,13 @@ const ShoppingList = () => {
                     <View style={S.warHeader}>
                       <Text style={S.warName}>{war.name}</Text>
                       <View style={{ flexDirection: 'row', gap: 12 }}>
-                        <TouchableOpacity onPress={() => { setEditingId(war.id); setWarName(war.name); setWarPurchase(new Date(war.purchase_date)); setWarExpiry(new Date(war.expiry_date)); setShowWarrantyModal(true); }}>
+                        <TouchableOpacity onPress={() => {
+                          setEditingId(war.id);
+                          setWarName(war.name);
+                          setWarPurchase(new Date(war.purchase_date));
+                          setWarExpiry(new Date(war.expiry_date));
+                          setShowWarrantyModal(true);
+                        }}>
                           <Edit2 color={COLORS.textSecondary} size={18} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => deleteWarranty(war.id)}>
@@ -425,10 +463,13 @@ const ShoppingList = () => {
         onPress={() => {
           setEditingId(null);
           if (activeTab === 'warranty') {
-            setWarName(''); setWarPurchase(new Date()); setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
+            setWarName('');
+            setWarPurchase(new Date());
+            setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
             setShowWarrantyModal(true);
           } else {
-            setListTitle(''); setShowListModal(true);
+            setListTitle('');
+            setShowListModal(true);
           }
         }}
       >
@@ -523,6 +564,5 @@ const ShoppingList = () => {
     </SafeAreaView>
   );
 };
-
 
 export default ShoppingList;

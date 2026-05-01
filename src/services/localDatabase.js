@@ -387,6 +387,11 @@ export const localDatabase = {
 
   // ── Shopping Items ────────────────────────────────────────────────────────
 
+  async getShoppingListById(listId) {
+    const rows = await readJson(KEYS.SHOPPING_LISTS, []);
+    return rows.find(r => r.id === listId && !r.deleted_at) || null;
+  },
+
   async getShoppingItems(listId) {
     const rows = await readJson(KEYS.SHOPPING_ITEMS, []);
     return rows
