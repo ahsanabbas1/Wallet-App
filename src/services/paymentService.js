@@ -1,16 +1,4 @@
 import { supabase } from '../lib/supabase';
-import localDatabase from './localDatabase';
-import financeSyncService from './financeSyncService';
-
-function isNetworkError(error) {
-  const message = String(error?.message || error || '').toLowerCase();
-  return (
-    message.includes('network request failed') ||
-    message.includes('failed to fetch') ||
-    message.includes('network error') ||
-    message.includes('fetch failed')
-  );
-}
 
 function parseLocalDate(dateString) {
   if (!dateString) return null;
@@ -27,27 +15,17 @@ function formatLocalDate(date) {
 }
 
 function addDays(date, days) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+  const next = new Date(date); next.setDate(next.getDate() + days); return next;
 }
-
 function addMonths(date, months) {
-  const next = new Date(date);
-  next.setMonth(next.getMonth() + months);
-  return next;
+  const next = new Date(date); next.setMonth(next.getMonth() + months); return next;
 }
-
 function addYears(date, years) {
-  const next = new Date(date);
-  next.setFullYear(next.getFullYear() + years);
-  return next;
+  const next = new Date(date); next.setFullYear(next.getFullYear() + years); return next;
 }
 
 function normalizeFrequency(frequency, customDays) {
-  if (frequency === 'custom') {
-    return `custom:${Math.max(1, Number(customDays) || 1)}`;
-  }
+  if (frequency === 'custom') return `custom:${Math.max(1, Number(customDays) || 1)}`;
   return frequency;
 }
 
@@ -63,7 +41,6 @@ function getFrequencyLabel(frequency) {
 function getNextOccurrence(dateString, frequency) {
   const baseDate = parseLocalDate(dateString);
   if (!baseDate) return dateString;
-
   if (frequency === 'daily') return formatLocalDate(addDays(baseDate, 1));
   if (frequency === 'weekly') return formatLocalDate(addDays(baseDate, 7));
   if (frequency === 'monthly') return formatLocalDate(addMonths(baseDate, 1));
@@ -72,30 +49,27 @@ function getNextOccurrence(dateString, frequency) {
     const days = Math.max(1, Number(frequency.split(':')[1] || 1));
     return formatLocalDate(addDays(baseDate, days));
   }
-
   return formatLocalDate(addMonths(baseDate, 1));
 }
 
 function getDueDates(nextDateString, frequency, untilDate = new Date()) {
   const dueDates = [];
   let cursor = nextDateString;
-  const limit = 120;
-
-  for (let i = 0; i < limit; i += 1) {
+  for (let i = 0; i < 120; i++) {
     const dueDate = parseLocalDate(cursor);
     if (!dueDate || dueDate > untilDate) break;
     dueDates.push(cursor);
     cursor = getNextOccurrence(cursor, frequency);
   }
-
-  return {
-    dueDates,
-    nextDate: cursor,
-  };
+  return { dueDates, nextDate: cursor };
 }
 
 function toTransactionTimestamp(dateString) {
   return `${dateString}T12:00:00.000`;
+}
+
+function createId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => ((Math.random() * 16) | 0).toString(16));
 }
 
 async function processSinglePlannedPayment(item) {
@@ -103,12 +77,10 @@ async function processSinglePlannedPayment(item) {
   today.setHours(23, 59, 59, 999);
 
   if (!item.next_date || !item.is_active) return false;
-
   if (item.end_date) {
     const endDate = parseLocalDate(item.end_date);
     if (endDate && today > endDate) return false;
   }
-
   if (item.start_date) {
     const startDate = parseLocalDate(item.start_date);
     if (startDate && today < startDate) return false;
@@ -120,8 +92,8 @@ async function processSinglePlannedPayment(item) {
   const { dueDates, nextDate } = getDueDates(item.next_date, item.frequency, today);
   if (!dueDates.length) return false;
 
-  const transactions = dueDates.map((dateString) => ({
-    id: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>((Math.random()*16)|0).toString(16)),
+  const transactions = dueDates.map(dateString => ({
+    id: createId(),
     user_id: item.user_id,
     category_id: item.category_id ?? null,
     amount: Number(item.amount),
@@ -131,32 +103,10 @@ async function processSinglePlannedPayment(item) {
     date: toTransactionTimestamp(dateString),
   }));
 
-  try {
-    const { error: insertError } = await supabase.from('transactions').insert(transactions);
-    if (insertError) throw insertError;
+  const { error: insertError } = await supabase.from('transactions').insert(transactions);
+  if (insertError) throw insertError;
 
-    // Local save as synced
-    for (const tx of transactions) {
-      await localDatabase.saveTransaction(tx, 'synced');
-    }
-  } catch (error) {
-    if (!isNetworkError(error)) throw error;
-    // Queue transactions locally
-    for (const tx of transactions) {
-      await localDatabase.saveTransaction(tx, 'pending_create');
-    }
-  }
-
-  const updatedItem = { ...item, next_date: nextDate };
-  try {
-    const { error } = await supabase.from('planned_payments').update({ next_date: nextDate }).eq('id', item.id);
-    if (error) throw error;
-    await localDatabase.savePlannedPayment(updatedItem, 'synced');
-  } catch (error) {
-    if (!isNetworkError(error)) throw error;
-    await localDatabase.savePlannedPayment(updatedItem, 'pending_update');
-  }
-  
+  await supabase.from('planned_payments').update({ next_date: nextDate }).eq('id', item.id);
   return true;
 }
 
@@ -164,11 +114,11 @@ let dueSyncPromise = null;
 async function processDuePlannedPayments(userId) {
   if (dueSyncPromise) return await dueSyncPromise;
   dueSyncPromise = (async () => {
-    const data = await localDatabase.getPlannedPayments(userId);
+    const { data } = await supabase.from('planned_payments').select('*').eq('user_id', userId);
     let changed = false;
     for (const item of data || []) {
       if (item.is_active) {
-        const processed = await processSinglePlannedPayment(item);
+        const processed = await processSinglePlannedPayment(item).catch(() => false);
         if (processed) changed = true;
       }
     }
@@ -185,58 +135,36 @@ export const paymentService = {
   syncDuePlannedPayments: processDuePlannedPayments,
 
   async getPlannedPayments(userId) {
-    await localDatabase.initialize();
     await processDuePlannedPayments(userId).catch(() => {});
-    const data = await localDatabase.getPlannedPayments(userId);
-    financeSyncService.refreshPlannedPayments(userId).catch(() => {});
-    return data;
+    const { data, error } = await supabase.from('planned_payments').select('*').eq('user_id', userId);
+    if (error) throw error;
+    return data || [];
   },
 
   async addPlannedPayment(paymentData) {
-    await localDatabase.initialize();
     const payload = {
       ...paymentData,
-      id: paymentData.id || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>((Math.random()*16)|0).toString(16)),
+      id: paymentData.id || createId(),
       frequency: normalizeFrequency(paymentData.frequency, paymentData.custom_days),
       is_active: true,
       created_at: new Date().toISOString(),
       amount: Number(paymentData.amount),
     };
-
-    try {
-      const { error } = await supabase.from('planned_payments').insert(payload);
-      if (error) throw error;
-      await localDatabase.savePlannedPayment(payload, 'synced');
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.savePlannedPayment(payload, 'pending_create');
-    }
+    const { error } = await supabase.from('planned_payments').insert(payload);
+    if (error) throw error;
     return true;
   },
 
   async updatePlannedPayment(id, fields) {
-    await localDatabase.initialize();
-    const current = await localDatabase.getPlannedPayments(fields.user_id);
-    const existing = current.find(p => p.id === id);
-    const payload = { ...existing, ...fields };
-
-    try {
-      const { error } = await supabase.from('planned_payments').update(fields).eq('id', id);
-      if (error) throw error;
-      await localDatabase.savePlannedPayment(payload, 'synced');
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.savePlannedPayment(payload, 'pending_update');
-    }
+    const { error } = await supabase.from('planned_payments').update(fields).eq('id', id);
+    if (error) throw error;
     return true;
   },
 
   async recordPlannedPaymentNow(item) {
     const dueDate = item.next_date || formatLocalDate(new Date());
-    const txId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>((Math.random()*16)|0).toString(16));
-    
     const tx = {
-      id: txId,
+      id: createId(),
       user_id: item.user_id,
       category_id: item.category_id ?? null,
       amount: Number(item.amount),
@@ -246,41 +174,19 @@ export const paymentService = {
       date: toTransactionTimestamp(dueDate),
     };
 
-    try {
-      const { error: insertError } = await supabase.from('transactions').insert(tx);
-      if (insertError) throw insertError;
-      await localDatabase.saveTransaction(tx, 'synced');
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.saveTransaction(tx, 'pending_create');
-    }
+    const { error: insertError } = await supabase.from('transactions').insert(tx);
+    if (insertError) throw insertError;
 
     const nextDate = getNextOccurrence(dueDate, item.frequency);
-    const updatedItem = { ...item, next_date: nextDate };
-    
-    try {
-      const { error } = await supabase.from('planned_payments').update({ next_date: nextDate }).eq('id', item.id);
-      if (error) throw error;
-      await localDatabase.savePlannedPayment(updatedItem, 'synced');
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.savePlannedPayment(updatedItem, 'pending_update');
-    }
+    await supabase.from('planned_payments').update({ next_date: nextDate }).eq('id', item.id);
     return true;
   },
 
   async deletePlannedPayment(userId, id) {
-    await localDatabase.initialize();
-    try {
-      const { error } = await supabase.from('planned_payments').delete().eq('id', id);
-      if (error) throw error;
-      await localDatabase.removePlannedPayment(id);
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.deletePlannedPayment(id, userId);
-    }
+    const { error } = await supabase.from('planned_payments').delete().eq('id', id);
+    if (error) throw error;
     return true;
-  }
+  },
 };
 
 export default paymentService;

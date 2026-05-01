@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import offlineSync from '../services/offlineSync';
+import { supabase } from '../lib/supabase';
 
 const ProfileContext = createContext({
   currency: 'PKR',
@@ -8,6 +8,7 @@ const ProfileContext = createContext({
   loading: true,
   refresh: () => {},
   updateCurrency: () => {},
+  updateName: () => {},
 });
 
 export const ProfileProvider = ({ children }) => {
@@ -19,7 +20,11 @@ export const ProfileProvider = ({ children }) => {
   const refresh = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     try {
-      const { data } = await offlineSync.getUserProfile(userId);
+      const { data } = await supabase
+        .from('users')
+        .select('name, currency')
+        .eq('id', userId)
+        .single();
       if (data) {
         setCurrency(data.currency || 'PKR');
         setName(data.name || '');
@@ -30,21 +35,13 @@ export const ProfileProvider = ({ children }) => {
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Called from Settings after a successful currency save
   const updateCurrency = useCallback((code) => {
     setCurrency(code);
-    if (userId) {
-      offlineSync.saveUserProfile(userId, { currency: code }).catch(() => {});
-    }
-  }, [userId]);
+  }, []);
 
-  // Called from Settings after a successful name save
   const updateName = useCallback((newName) => {
     setName(newName);
-    if (userId) {
-      offlineSync.saveUserProfile(userId, { name: newName }).catch(() => {});
-    }
-  }, [userId]);
+  }, []);
 
   return (
     <ProfileContext.Provider value={{ currency, name, loading, refresh, updateCurrency, updateName }}>

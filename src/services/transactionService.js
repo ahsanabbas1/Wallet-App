@@ -1,172 +1,103 @@
-import localDatabase from './localDatabase';
-import transactionSyncService from './transactionSyncService';
 import { supabase } from '../lib/supabase';
 
-function createLocalId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const rand = Math.floor(Math.random() * 16);
-    const value = char === 'x' ? rand : ((rand & 0x3) | 0x8);
-    return value.toString(16);
+function createId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
 
-function isNetworkError(error) {
-  const message = String(error?.message || error || '').toLowerCase();
-  return (
-    message.includes('network request failed') ||
-    message.includes('failed to fetch') ||
-    message.includes('network error') ||
-    message.includes('fetch failed')
-  );
-}
-
-function applyTransactionFilters(transactions, options = {}) {
+function buildDateFilter(query, options = {}) {
   const { period = 'ALL', customStartDate, customEndDate } = options;
-  if (period === 'ALL') return transactions;
+  if (period === 'ALL') return query;
 
   const now = new Date();
-  let startDate = null;
+  let start = null;
 
   if (period === 'TODAY') {
-    startDate = new Date();
-    startDate.setHours(0, 0, 0, 0);
+    start = new Date(); start.setHours(0, 0, 0, 0);
   } else if (period === '1W') {
-    startDate = new Date();
-    startDate.setDate(now.getDate() - 7);
+    start = new Date(); start.setDate(now.getDate() - 7);
   } else if (period === '1M') {
-    startDate = new Date();
-    startDate.setMonth(now.getMonth() - 1);
+    start = new Date(); start.setMonth(now.getMonth() - 1);
   } else if (period === '6M') {
-    startDate = new Date();
-    startDate.setMonth(now.getMonth() - 6);
+    start = new Date(); start.setMonth(now.getMonth() - 6);
   } else if (period === '1Y') {
-    startDate = new Date();
-    startDate.setFullYear(now.getFullYear() - 1);
+    start = new Date(); start.setFullYear(now.getFullYear() - 1);
   } else if (period === 'CUSTOM' && customStartDate) {
-    startDate = new Date(customStartDate);
+    start = new Date(customStartDate);
   }
 
-  let endDate = null;
+  if (start) query = query.gte('date', start.toISOString());
+
   if (period === 'CUSTOM' && customEndDate) {
-    endDate = new Date(customEndDate);
-    endDate.setHours(23, 59, 59, 999);
+    const end = new Date(customEndDate);
+    end.setHours(23, 59, 59, 999);
+    query = query.lte('date', end.toISOString());
   }
 
-  return transactions.filter((transaction) => {
-    const txDate = new Date(transaction.date);
-    if (startDate && txDate < startDate) return false;
-    if (endDate && txDate > endDate) return false;
-    return true;
-  });
-}
-
-async function readLocalTransactions(userId, options = {}) {
-  const rows = await localDatabase.getTransactions(userId);
-  const mapped = rows.map((row) => localDatabase.mapTransactionRow(row));
-  return applyTransactionFilters(mapped, options);
+  return query;
 }
 
 export const transactionService = {
-  async initialize() {
-    await transactionSyncService.initialize();
-  },
+  async initialize() {},
 
   async getCategories(userId) {
-    await localDatabase.initialize();
-    const local = await localDatabase.getCategories(userId);
-    if (local.length > 0) {
-      // Return local immediately — refresh categories in background
-      transactionSyncService.refreshCategories(userId).catch(() => {});
-      return local;
-    }
-    // First-ever launch: must wait for network to populate local cache
-    await transactionSyncService.refreshCategories(userId);
-    return localDatabase.getCategories(userId);
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id, user_id, parent_id, name, icon, color, type, created_at')
+      .or(`user_id.eq.${userId},user_id.is.null`)
+      .order('name', { ascending: true });
+    if (error) throw error;
+    return data || [];
   },
 
   async getTransactions(userId, options = {}) {
-    await this.initialize(userId);
-    // ── INSTANT: return local data without waiting for network ──
-    const data = await readLocalTransactions(userId, options);
-    // Background sync — does not block the response
-    transactionSyncService.refreshTransactions(userId).catch(() => {});
-    return { data, fromLocal: true };
+    let query = supabase
+      .from('transactions')
+      .select('*, categories(id, name, icon, color, type, parent_id)')
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
+
+    query = buildDateFilter(query, options);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return { data: data || [] };
   },
 
   async addTransaction(transactionData) {
-    await this.initialize(transactionData.user_id);
-
     const payload = {
       ...transactionData,
-      id: transactionData.id || createLocalId(),
+      id: transactionData.id || createId(),
       amount: Number(transactionData.amount),
       created_at: transactionData.created_at || transactionData.date || new Date().toISOString(),
     };
-
-    try {
-      const { error } = await supabase.from('transactions').insert(payload);
-      if (error) throw error;
-
-      await localDatabase.saveTransaction(payload, 'synced');
-      return { queued: false, id: payload.id };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-
-      await localDatabase.saveTransaction(payload, 'pending_create');
-      return { queued: true, id: payload.id };
-    }
+    const { error } = await supabase.from('transactions').insert(payload);
+    if (error) throw error;
+    return { queued: false, id: payload.id };
   },
 
   async updateTransaction(id, transactionData) {
-    await this.initialize(transactionData.user_id);
-
-    const payload = {
-      ...transactionData,
-      id,
-      amount: Number(transactionData.amount),
-      created_at: transactionData.created_at || transactionData.date || new Date().toISOString(),
-    };
-
-    try {
-      const { error } = await supabase
-        .from('transactions')
-        .update({
-          category_id: payload.category_id,
-          amount: payload.amount,
-          type: payload.type,
-          title: payload.title,
-          description: payload.description,
-          date: payload.date,
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      await localDatabase.saveTransaction(payload, 'synced');
-      return { queued: false, id };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-
-      await localDatabase.saveTransaction(payload, 'pending_update');
-      return { queued: true, id };
-    }
+    const { error } = await supabase
+      .from('transactions')
+      .update({
+        category_id: transactionData.category_id ?? null,
+        amount: Number(transactionData.amount),
+        type: transactionData.type,
+        title: transactionData.title,
+        description: transactionData.description ?? null,
+        date: transactionData.date,
+      })
+      .eq('id', id);
+    if (error) throw error;
+    return { queued: false, id };
   },
 
   async deleteTransaction(userId, id) {
-    await this.initialize(userId);
-
-    try {
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
-      if (error) throw error;
-
-      await localDatabase.removeTransaction(id);
-      return { queued: false, id };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-
-      await localDatabase.markTransactionDeleted(id, userId, 'pending_delete');
-      return { queued: true, id };
-    }
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (error) throw error;
+    return { queued: false, id };
   },
 };
 

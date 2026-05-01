@@ -1,338 +1,152 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
-import localDatabase from './localDatabase';
 
-const WARRANTY_KEY = 'web_local_warranties';
-
-function createLocalId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
-    const rand = Math.floor(Math.random() * 16);
-    const value = char === 'x' ? rand : ((rand & 0x3) | 0x8);
-    return value.toString(16);
+function createId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
 }
 
-function isNetworkError(error) {
-  const message = String(error?.message || error || '').toLowerCase();
-  return (
-    message.includes('network request failed') ||
-    message.includes('failed to fetch') ||
-    message.includes('network error') ||
-    message.includes('fetch failed')
-  );
-}
-
-// ─── Background sync helpers ──────────────────────────────────────────────────
-
-async function pullShoppingData(userId) {
-  try {
-    const [resLists, resItems, resWarranties] = await Promise.all([
-      supabase.from('shopping_lists').select('*').eq('user_id', userId),
-      // Use simpler query if join fails
-      supabase.from('shopping_items').select('*'),
-      supabase.from('warranties').select('*').eq('user_id', userId),
-    ]);
-
-    if (resLists.data) await localDatabase.upsertRemoteShoppingLists(resLists.data);
-    
-    if (resItems.data && resLists.data) {
-      const listIds = new Set(resLists.data.map(l => l.id));
-      const filteredItems = resItems.data.filter(item => listIds.has(item.list_id));
-      await localDatabase.upsertRemoteShoppingItems(filteredItems);
-    }
-    
-    if (resWarranties.data) await localDatabase.upsertRemoteWarranties(resWarranties.data);
-  } catch (err) {
-    console.warn('pullShoppingData failed:', err);
-  }
-}
-
-// ─── Service ──────────────────────────────────────────────────────────────────
-
 export const shoppingService = {
-
-  // ── Lists ──────────────────────────────────────────────────────────────────
-
   async getLists(userId) {
-    await localDatabase.initialize();
+    const { data: lists, error: listsError } = await supabase
+      .from('shopping_lists')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (listsError) throw listsError;
 
-    // Read local immediately
-    const localLists = await localDatabase.getShoppingLists(userId);
+    if (!lists || lists.length === 0) return [];
 
-    // Attach items from local store to each list
-    const listsWithItems = await Promise.all(
-      localLists.map(async (list) => {
-        const items = await localDatabase.getShoppingItems(list.id);
-        return { ...list, shopping_items: items };
-      })
-    );
+    const listIds = lists.map(l => l.id);
+    const { data: items } = await supabase
+      .from('shopping_items')
+      .select('*')
+      .in('list_id', listIds);
 
-    // Background sync — does not block
-    pullShoppingData(userId).catch(() => {});
-
-    return listsWithItems;
+    return lists.map(list => ({
+      ...list,
+      shopping_items: (items || []).filter(i => i.list_id === list.id),
+    }));
   },
 
   async saveList(userId, listData) {
-    await localDatabase.initialize();
-
-    const payload = {
-      ...listData,
-      id: listData.id || createLocalId(),
-      user_id: userId,
-      created_at: listData.created_at || new Date().toISOString(),
-    };
+    const id = listData.id || createId();
     const isNew = !listData.id;
+    const payload = { id, user_id: userId, title: listData.title, created_at: listData.created_at || new Date().toISOString() };
 
-    try {
-      if (isNew) {
-        const { error } = await supabase.from('shopping_lists').insert({
-          id: payload.id,
-          user_id: payload.user_id,
-          title: payload.title,
-          created_at: payload.created_at,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('shopping_lists')
-          .update({ title: payload.title })
-          .eq('id', payload.id);
-        if (error) throw error;
-      }
-      await localDatabase.saveShoppingList(payload, 'synced');
-      return { queued: false, id: payload.id };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.saveShoppingList(payload, isNew ? 'pending_create' : 'pending_update');
-      return { queued: true, id: payload.id };
+    if (isNew) {
+      const { error } = await supabase.from('shopping_lists').insert(payload);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from('shopping_lists').update({ title: listData.title }).eq('id', id);
+      if (error) throw error;
     }
+    return { queued: false, id };
   },
 
   async deleteList(userId, id) {
-    await localDatabase.initialize();
-
-    try {
-      const { error } = await supabase.from('shopping_lists').delete().eq('id', id);
-      if (error) throw error;
-      await localDatabase.removeShoppingList(id);
-      return { queued: false };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.deleteShoppingList(id, userId);
-      return { queued: true };
-    }
+    await supabase.from('shopping_items').delete().eq('list_id', id);
+    const { error } = await supabase.from('shopping_lists').delete().eq('id', id);
+    if (error) throw error;
+    return { queued: false };
   },
 
   async archiveList(userId, id, isArchived) {
-    await localDatabase.initialize();
-
-    // Update local immediately
-    const localLists = await localDatabase.getShoppingLists(userId);
-    const list = localLists.find(l => l.id === id);
-    if (list) {
-      await localDatabase.saveShoppingList({ ...list, is_archived: isArchived }, 'pending_update');
-    }
-
-    // Try to sync
-    try {
-      const { error } = await supabase
-        .from('shopping_lists')
-        .update({ is_archived: isArchived })
-        .eq('id', id);
-      if (error) throw error;
-      if (list) await localDatabase.saveShoppingList({ ...list, is_archived: isArchived }, 'synced');
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      // Already saved as pending_update above
-    }
+    const { error } = await supabase.from('shopping_lists').update({ is_archived: isArchived }).eq('id', id);
+    if (error) throw error;
   },
 
-  // ── Items ──────────────────────────────────────────────────────────────────
-
   async saveItem(listId, itemData) {
-    await localDatabase.initialize();
-
-    const payload = {
-      ...itemData,
-      id: itemData.id || createLocalId(),
-      list_id: listId,
-      created_at: itemData.created_at || new Date().toISOString(),
-      is_completed: itemData.is_completed ?? false,
-    };
+    const id = itemData.id || createId();
     const isNew = !itemData.id;
+    const payload = {
+      id,
+      list_id: listId,
+      name: itemData.name,
+      description: itemData.description ?? null,
+      quantity: itemData.quantity ?? 1,
+      price: itemData.price ?? null,
+      is_completed: itemData.is_completed ?? false,
+      created_at: itemData.created_at || new Date().toISOString(),
+    };
 
-    try {
-      if (isNew) {
-        const { error } = await supabase.from('shopping_items').insert({
-          id: payload.id,
-          list_id: payload.list_id,
-          name: payload.name,
-          description: payload.description ?? null,
-          quantity: payload.quantity ?? 1,
-          price: payload.price ?? null,
-          created_at: payload.created_at,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('shopping_items')
-          .update({
-            name: payload.name,
-            description: payload.description ?? null,
-            quantity: payload.quantity ?? 1,
-            price: payload.price ?? null,
-          })
-          .eq('id', payload.id);
-        if (error) throw error;
-      }
-      await localDatabase.saveShoppingItem(payload, 'synced');
-      return { queued: false, id: payload.id };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.saveShoppingItem(payload, isNew ? 'pending_create' : 'pending_update');
-      return { queued: true, id: payload.id };
+    if (isNew) {
+      const { error } = await supabase.from('shopping_items').insert(payload);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('shopping_items')
+        .update({ name: payload.name, description: payload.description, quantity: payload.quantity, price: payload.price })
+        .eq('id', id);
+      if (error) throw error;
     }
+    return { queued: false, id };
   },
 
   async deleteItem(id) {
-    await localDatabase.initialize();
-
-    try {
-      const { error } = await supabase.from('shopping_items').delete().eq('id', id);
-      if (error) throw error;
-      await localDatabase.removeShoppingItem(id);
-      return { queued: false };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.deleteShoppingItem(id);
-      return { queued: true };
-    }
+    const { error } = await supabase.from('shopping_items').delete().eq('id', id);
+    if (error) throw error;
+    return { queued: false };
   },
 
   async toggleItem(listId, itemId, currentStatus) {
-    await localDatabase.initialize();
-
     const newStatus = !currentStatus;
 
-    // Update local immediately
-    const items = await localDatabase.getShoppingItems(listId);
-    const item = items.find(i => i.id === itemId);
-    if (item) {
-      await localDatabase.saveShoppingItem({ ...item, is_completed: newStatus }, 'pending_update');
-    }
+    const { error } = await supabase.from('shopping_items').update({ is_completed: newStatus }).eq('id', itemId);
+    if (error) throw error;
 
-    // Check if all items done → archive list
-    const allItems = await localDatabase.getShoppingItems(listId);
-    const allDone = allItems.length > 0 && allItems.every(i =>
+    const { data: allItems } = await supabase.from('shopping_items').select('id, is_completed').eq('list_id', listId);
+    const allDone = (allItems || []).length > 0 && (allItems || []).every(i =>
       i.id === itemId ? newStatus : i.is_completed
     );
 
-    // Try to sync to Supabase
-    try {
-      const { error } = await supabase
-        .from('shopping_items')
-        .update({ is_completed: newStatus })
-        .eq('id', itemId);
-      if (error) throw error;
-      if (item) await localDatabase.saveShoppingItem({ ...item, is_completed: newStatus }, 'synced');
-
-      if (allDone) {
-        await supabase.from('shopping_lists').update({ is_archived: true }).eq('id', listId);
-        // Update local list archive status
-        const list = await localDatabase.getShoppingListById(listId);
-        if (list) await localDatabase.saveShoppingList({ ...list, is_archived: true }, 'synced');
-      }
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      // Items already pending_update, archive list locally if needed
-      if (allDone) {
-        const list = await localDatabase.getShoppingListById(listId);
-        if (list) await localDatabase.saveShoppingList({ ...list, is_archived: true }, 'pending_update');
-      }
+    if (allDone) {
+      await supabase.from('shopping_lists').update({ is_archived: true }).eq('id', listId);
     }
 
     return { allDone };
   },
 
-  // ── Warranties ─────────────────────────────────────────────────────────────
-
   async getWarranties(userId) {
-    await localDatabase.initialize();
-    const warranties = await localDatabase.getWarranties(userId);
-    // Background sync already triggered by getLists; no need to duplicate
-    return warranties;
+    const { data, error } = await supabase.from('warranties').select('*').eq('user_id', userId);
+    if (error) throw error;
+    return data || [];
   },
 
   async saveWarranty(userId, warrantyData) {
-    await localDatabase.initialize();
-
+    const id = warrantyData.id || createId();
+    const isNew = !warrantyData.id;
     const payload = {
-      ...warrantyData,
-      id: warrantyData.id || createLocalId(),
+      id,
       user_id: userId,
+      name: warrantyData.name,
+      purchase_date: warrantyData.purchase_date ?? null,
+      expiry_date: warrantyData.expiry_date ?? null,
+      color: warrantyData.color ?? null,
       created_at: warrantyData.created_at || new Date().toISOString(),
     };
-    const isNew = !warrantyData.id;
 
-    try {
-      if (isNew) {
-        const { error } = await supabase.from('warranties').insert({
-          id: payload.id,
-          user_id: payload.user_id,
-          name: payload.name,
-          purchase_date: payload.purchase_date ?? null,
-          expiry_date: payload.expiry_date ?? null,
-          color: payload.color ?? null,
-          created_at: payload.created_at,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('warranties')
-          .update({
-            name: payload.name,
-            purchase_date: payload.purchase_date ?? null,
-            expiry_date: payload.expiry_date ?? null,
-            color: payload.color ?? null,
-          })
-          .eq('id', payload.id);
-        if (error) throw error;
-      }
-      await localDatabase.saveWarranty(payload, 'synced');
-      return { queued: false, id: payload.id };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.saveWarranty(payload, isNew ? 'pending_create' : 'pending_update');
-      return { queued: true, id: payload.id };
+    if (isNew) {
+      const { error } = await supabase.from('warranties').insert(payload);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('warranties')
+        .update({ name: payload.name, purchase_date: payload.purchase_date, expiry_date: payload.expiry_date, color: payload.color })
+        .eq('id', id);
+      if (error) throw error;
     }
+    return { queued: false, id };
   },
 
   async deleteWarranty(userId, id) {
-    await localDatabase.initialize();
-
-    try {
-      const { error } = await supabase.from('warranties').delete().eq('id', id);
-      if (error) throw error;
-      await localDatabase.removeWarranty(id);
-      return { queued: false };
-    } catch (error) {
-      if (!isNetworkError(error)) throw error;
-      await localDatabase.deleteWarranty(id, userId);
-      return { queued: true };
-    }
+    const { error } = await supabase.from('warranties').delete().eq('id', id);
+    if (error) throw error;
+    return { queued: false };
   },
 
   async updateWarrantyNotified(id) {
-    // Patch local without needing userId — read all rows, update by id
-    try {
-      const raw = await AsyncStorage.getItem(WARRANTY_KEY);
-      const rows = raw ? JSON.parse(raw) : [];
-      const updated = rows.map(r => r.id === id ? { ...r, is_notified: true } : r);
-      await AsyncStorage.setItem(WARRANTY_KEY, JSON.stringify(updated));
-    } catch {}
-
-    // Fire-and-forget to Supabase
     supabase.from('warranties').update({ is_notified: true }).eq('id', id).catch(() => {});
   },
 };

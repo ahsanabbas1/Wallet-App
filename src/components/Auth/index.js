@@ -171,58 +171,59 @@ export default function Auth() {
     async function signInWithGoogle() {
         setGoogleLoading(true)
         try {
-            // Create the redirect URL to return to the app
+            if (Platform.OS === 'web') {
+                // On web, use a full-page redirect — popups are blocked by COOP headers
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.origin,
+                    },
+                })
+                if (error) Alert.alert('Google Sign-In Failed', error.message)
+                // Page will redirect; no further action needed
+                return
+            }
+
+            // Native: open OAuth in an in-app browser session
             const redirectUrl = Linking.createURL('home')
-            
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
                     redirectTo: redirectUrl,
-                    skipBrowserRedirect: true, // Do not auto-redirect; handle it manually with WebBrowser
+                    skipBrowserRedirect: true,
                 },
             })
 
             if (error) {
                 Alert.alert('Google Sign-In Failed', error.message)
             } else if (data?.url) {
-                // Open auth session and wait for result
                 const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
-                
+
                 if (res.type === 'success' && res.url) {
-                    // Extract the session info from the return URL
                     try {
-                        const urlParts = res.url.split('#');
+                        const urlParts = res.url.split('#')
                         if (urlParts.length > 1) {
-                            const params = new URLSearchParams(urlParts[1]);
-                            const access_token = params.get('access_token');
-                            const refresh_token = params.get('refresh_token');
+                            const params = new URLSearchParams(urlParts[1])
+                            const access_token = params.get('access_token')
+                            const refresh_token = params.get('refresh_token')
 
                             if (access_token && refresh_token) {
-                                const { error: sessionError } = await supabase.auth.setSession({
-                                    access_token,
-                                    refresh_token
-                                });
-                                if (sessionError) {
-                                    Alert.alert('Sign-in Error', sessionError.message);
-                                }
+                                const { error: sessionError } = await supabase.auth.setSession({ access_token, refresh_token })
+                                if (sessionError) Alert.alert('Sign-in Error', sessionError.message)
                             } else {
-                                // Fallback
-                                await supabase.auth.getSessionFromUrl(res.url);
+                                await supabase.auth.getSessionFromUrl(res.url)
                             }
                         } else {
-                            // URL might have query params instead of hash in some error cases
-                            const queryParts = res.url.split('?');
+                            const queryParts = res.url.split('?')
                             if (queryParts.length > 1) {
-                                const params = new URLSearchParams(queryParts[1]);
-                                const errorDesc = params.get('error_description') || params.get('error');
-                                if (errorDesc) {
-                                    Alert.alert('Sign-in Error', decodeURIComponent(errorDesc).replace(/\+/g, ' '));
-                                }
+                                const params = new URLSearchParams(queryParts[1])
+                                const errorDesc = params.get('error_description') || params.get('error')
+                                if (errorDesc) Alert.alert('Sign-in Error', decodeURIComponent(errorDesc).replace(/\+/g, ' '))
                             }
-                            await supabase.auth.getSessionFromUrl(res.url);
+                            await supabase.auth.getSessionFromUrl(res.url)
                         }
                     } catch (e) {
-                        console.error('Session parsing error:', e);
+                        console.error('Session parsing error:', e)
                     }
                 }
             }
