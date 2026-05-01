@@ -212,6 +212,9 @@ async function initialize() {
 
   try {
     return await initializationPromise;
+  } catch (error) {
+    console.error('SQLite Initialization Error:', error);
+    throw error;
   } finally {
     initializationPromise = null;
   }
@@ -225,6 +228,24 @@ function normalizeNumber(value) {
 export const localDatabase = {
   async initialize() {
     return await initialize();
+  },
+
+  async getDiagnostics() {
+    const db = await initialize();
+    try {
+      const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
+      const result = { tables: tables.map(t => t.name), counts: {} };
+      
+      for (const table of result.tables) {
+        if (table.startsWith('local_')) {
+          const count = await db.getFirstAsync(`SELECT COUNT(*) as count FROM ${table}`);
+          result.counts[table] = count.count;
+        }
+      }
+      return result;
+    } catch (e) {
+      return { error: e.message };
+    }
   },
 
   // ── User Profile ──────────────────────────────────────────────────────────

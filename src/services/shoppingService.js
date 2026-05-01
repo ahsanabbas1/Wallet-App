@@ -25,15 +25,26 @@ function isNetworkError(error) {
 // ─── Background sync helpers ──────────────────────────────────────────────────
 
 async function pullShoppingData(userId) {
-  const [resLists, resItems, resWarranties] = await Promise.all([
-    supabase.from('shopping_lists').select('*').eq('user_id', userId),
-    supabase.from('shopping_items').select('*, shopping_lists!inner(user_id)').eq('shopping_lists.user_id', userId),
-    supabase.from('warranties').select('*').eq('user_id', userId),
-  ]);
+  try {
+    const [resLists, resItems, resWarranties] = await Promise.all([
+      supabase.from('shopping_lists').select('*').eq('user_id', userId),
+      // Use simpler query if join fails
+      supabase.from('shopping_items').select('*'),
+      supabase.from('warranties').select('*').eq('user_id', userId),
+    ]);
 
-  if (!resLists.error)      await localDatabase.upsertRemoteShoppingLists(resLists.data || []);
-  if (!resItems.error)      await localDatabase.upsertRemoteShoppingItems(resItems.data || []);
-  if (!resWarranties.error) await localDatabase.upsertRemoteWarranties(resWarranties.data || []);
+    if (resLists.data) await localDatabase.upsertRemoteShoppingLists(resLists.data);
+    
+    if (resItems.data && resLists.data) {
+      const listIds = new Set(resLists.data.map(l => l.id));
+      const filteredItems = resItems.data.filter(item => listIds.has(item.list_id));
+      await localDatabase.upsertRemoteShoppingItems(filteredItems);
+    }
+    
+    if (resWarranties.data) await localDatabase.upsertRemoteWarranties(resWarranties.data);
+  } catch (err) {
+    console.warn('pullShoppingData failed:', err);
+  }
 }
 
 // ─── Service ──────────────────────────────────────────────────────────────────

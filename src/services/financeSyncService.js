@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import localDatabase from './localDatabase';
 
@@ -131,8 +132,9 @@ export const financeSyncService = {
       await this.syncPendingBudgets(userId);
       await pullBudgets(userId);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshBudgets error:', error);
+      return { refreshed: false, error };
     }
   },
 
@@ -142,8 +144,9 @@ export const financeSyncService = {
       await this.syncPendingSavingsGoals(userId);
       await pullSavingsGoals(userId);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshSavingsGoals error:', error);
+      return { refreshed: false, error };
     }
   },
 
@@ -420,8 +423,9 @@ Object.assign(financeSyncService, {
       await this.syncPendingPlannedPayments(userId);
       await pullPlannedPayments(userId);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshPlannedPayments error:', error);
+      return { refreshed: false, error };
     }
   },
 
@@ -446,8 +450,9 @@ Object.assign(financeSyncService, {
         pullWarranties(userId),
       ]);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshShopping error:', error);
+      return { refreshed: false, error };
     }
   },
 
@@ -460,8 +465,9 @@ Object.assign(financeSyncService, {
         pullLoanPayments(userId),
       ]);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshLoans error:', error);
+      return { refreshed: false, error };
     }
   },
 

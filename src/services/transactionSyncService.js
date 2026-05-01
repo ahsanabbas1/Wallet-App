@@ -1,3 +1,4 @@
+import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import localDatabase from './localDatabase';
 
@@ -27,15 +28,31 @@ function normalizeRemoteTransaction(row) {
 }
 
 async function pullCategories(userId) {
-  const { data, error } = await supabase
-    .from('categories')
-    .select('id, user_id, parent_id, name, icon, color, type, created_at')
-    .or(`user_id.eq.${userId},user_id.is.null`)
-    .order('name', { ascending: true });
+  try {
+    let res = await supabase
+      .from('categories')
+      .select('id, user_id, parent_id, name, icon, color, type, created_at')
+      .or(`user_id.eq.${userId},user_id.is.null`)
+      .order('name', { ascending: true });
 
-  if (error) throw error;
-  await localDatabase.replaceCategories(data || []);
-  return data || [];
+    if (res.error) {
+      // If parent_id doesn't exist in Supabase yet, retry without it
+      if (res.error.code === 'PGRST204' || (res.error.message && res.error.message.includes('parent_id'))) {
+        res = await supabase
+          .from('categories')
+          .select('id, user_id, name, icon, color, type, created_at')
+          .or(`user_id.eq.${userId},user_id.is.null`)
+          .order('name', { ascending: true });
+      }
+    }
+
+    if (res.error) throw res.error;
+    await localDatabase.replaceCategories(res.data || []);
+    return res.data || [];
+  } catch (err) {
+    console.error('pullCategories fatal error:', err);
+    throw err;
+  }
 }
 
 async function pullTransactions(userId) {
@@ -105,8 +122,11 @@ export const transactionSyncService = {
     try {
       await pullCategories(userId);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshCategories error:', error);
+      // Temporary alert for debugging APK build
+      // Alert.alert('Category Sync Error', error.message || String(error));
+      return { refreshed: false, error };
     }
   },
 
@@ -117,8 +137,10 @@ export const transactionSyncService = {
       await pullCategories(userId);
       await pullTransactions(userId);
       return { refreshed: true };
-    } catch {
-      return { refreshed: false };
+    } catch (error) {
+      console.error('refreshTransactions error:', error);
+      // Alert.alert('Transaction Sync Error', error.message || String(error));
+      return { refreshed: false, error };
     }
   },
 
