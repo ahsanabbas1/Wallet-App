@@ -16,11 +16,10 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
   const circumference = 2 * Math.PI * radius;
   let currentOffset = 0;
 
-  if (!data || !data.length) return (
-    <View style={{ height: 200, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ color: COLORS.textSecondary }}>No data for this period</Text>
-    </View>
-  );
+  const isEmpty = !data || !data.length;
+  const chartData = isEmpty 
+    ? [{ name: 'No Expenses', amount: 0, percent: 100, color: COLORS.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }] 
+    : data;
 
   return (
     <View style={{ marginVertical: 20 }}>
@@ -61,7 +60,7 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
         <Svg height="240" width="240" viewBox="0 0 220 220">
           <G rotation="-90" origin="110, 110">
-            {data.map((item, index) => {
+            {chartData.map((item, index) => {
               const dashLength = (item.percent / 100) * circumference;
               const dashOffset = currentOffset;
               currentOffset -= dashLength;
@@ -90,15 +89,16 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
       </View>
 
       {/* Legend at the bottom */}
-      <View style={{ 
-        flexDirection: 'row', 
-        flexWrap: 'wrap', 
-        justifyContent: 'center', 
-        gap: 16, 
-        marginTop: 24,
-        paddingHorizontal: 20 
-      }}>
-        {data.slice(0, 6).map((item, idx) => (
+      {!isEmpty && (
+        <View style={{ 
+          flexDirection: 'row', 
+          flexWrap: 'wrap', 
+          justifyContent: 'center', 
+          gap: 16, 
+          marginTop: 24,
+          paddingHorizontal: 20 
+        }}>
+          {chartData.slice(0, 6).map((item, idx) => (
           <Pressable 
             key={idx} 
             style={{ flexDirection: 'row', alignItems: 'center', minWidth: '30%' }}
@@ -109,6 +109,7 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
           </Pressable>
         ))}
       </View>
+      )}
 
       {selectedCategory && (
         <View style={{ 

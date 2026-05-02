@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
-  Alert, Modal, TextInput, Platform, KeyboardAvoidingView
+  Alert, Modal, TextInput, Platform, KeyboardAvoidingView, Pressable
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Wallet, Target, Plus, Menu, X, Pencil, Trash2,
-  AlertTriangle, CheckCircle, TrendingUp, RefreshCw
+  AlertTriangle, CheckCircle, TrendingUp, RefreshCw, CalendarClock
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,22 +17,20 @@ import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import * as Icons from 'lucide-react-native';
-import budgetService from '../../services/budgetService';
+import budgetService, { 
+  decodeBudget, getActivePeriod, formatLocalDate, parseLocalDate, getRelatedCategoryIds
+} from '../../services/budgetService';
 import savingsGoalService from '../../services/savingsGoalService';
 import { transactionService } from '../../services/transactionService';
+
+// (Removed redundant local helpers)
 
 const currentPeriod = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
-// Returns categoryId + all its direct child IDs
-const getRelatedCategoryIds = (categoryId, allCategories) => {
-  const children = allCategories
-    .filter(c => c.parent_id === categoryId)
-    .map(c => c.id);
-  return [categoryId, ...children];
-};
+// (Removed redundant local helpers)
 
 const Budgeting = ({ navigation }) => {
   const { openDrawer } = useDrawer();
@@ -55,6 +54,13 @@ const Budgeting = ({ navigation }) => {
   const [selCategoryId, setSelCategoryId] = useState('');
   const [budgetAmount, setBudgetAmount] = useState('');
   const [savingBudget, setSavingBudget] = useState(false);
+
+  // Date/Freq state
+  const [startDate, setStartDate] = useState(formatLocalDate(new Date()));
+  const [endDate, setEndDate] = useState('');
+  const [frequency, setFrequency] = useState('monthly');
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState('start');
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
@@ -86,12 +92,21 @@ const Budgeting = ({ navigation }) => {
       );
 
       // ── KEY FIX: match transactions against category + all its children ──
-      const processedBudgets = (budgetRes.data || []).map(b => {
+      const processedBudgets = (budgetRes.data || []).map(raw => {
+        const b = decodeBudget(raw);
+        // Determine the actual range to check for this budget
+        const { start: activeStart, end: activeEnd } = getActivePeriod(b.start_date, b.frequency);
+        
         const relatedIds = getRelatedCategoryIds(b.category_id, cats);
         const spent = txData
-          .filter(t => relatedIds.includes(t.category_id))
+          .filter(t => {
+            const txDate = t.date.split('T')[0];
+            const isInCategory = relatedIds.includes(t.category_id);
+            const isInRange = txDate >= activeStart && (!activeEnd || txDate <= activeEnd);
+            return isInCategory && isInRange;
+          })
           .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-        return { ...b, used: spent };
+        return { ...b, used: spent, activeStart, activeEnd };
       });
 
       setBudgets(processedBudgets);
@@ -144,12 +159,26 @@ const Budgeting = ({ navigation }) => {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
+  const onDateChange = (event, selectedDate) => {
+    setShowPicker(false);
+    if (selectedDate) {
+      if (pickerMode === 'start') {
+        setStartDate(formatLocalDate(selectedDate));
+      } else {
+        setEndDate(formatLocalDate(selectedDate));
+      }
+    }
+  };
+
   // ── Budget CRUD ────────────────────────────────────────────────────────────
 
   const openAddModal = (budget = null) => {
     setEditingBudget(budget);
     setSelCategoryId(budget?.category_id || expenseCategories[0]?.id || '');
     setBudgetAmount(budget ? budget.total_amount.toString() : '');
+    setStartDate(budget?.start_date || formatLocalDate(new Date()));
+    setEndDate(budget?.end_date || '');
+    setFrequency(budget?.frequency || 'monthly');
     setShowAddModal(true);
   };
 
@@ -161,7 +190,15 @@ const Budgeting = ({ navigation }) => {
     try {
       setSavingBudget(true);
       const period = currentPeriod();
-      const data = { user_id: userId, category_id: selCategoryId, total_amount: parseFloat(budgetAmount), period };
+      const data = { 
+        user_id: userId, 
+        category_id: selCategoryId, 
+        total_amount: parseFloat(budgetAmount), 
+        period,
+        start_date: startDate,
+        end_date: endDate || null,
+        frequency: frequency
+      };
 
       if (editingBudget) {
         await budgetService.saveBudget(userId, {
@@ -437,12 +474,74 @@ const Budgeting = ({ navigation }) => {
                 placeholder="e.g. 20000"
                 placeholderTextColor="rgba(255,255,255,0.25)"
                 keyboardType="decimal-pad"
-                value={budgetAmount}
                 onChangeText={setBudgetAmount}
               />
 
+              <Text style={labelStyle}>Frequency</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {['once', 'daily', 'weekly', 'monthly', 'yearly'].map(f => (
+                  <TouchableOpacity
+                    key={f}
+                    onPress={() => setFrequency(f)}
+                    style={{
+                      paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+                      backgroundColor: frequency === f ? COLORS.primary : COLORS.background,
+                      borderWidth: 1, borderColor: frequency === f ? COLORS.primary : COLORS.border
+                    }}
+                  >
+                    <Text style={{ 
+                      color: frequency === f ? '#fff' : COLORS.textSecondary, 
+                      fontSize: 12, fontWeight: '700', textTransform: 'uppercase' 
+                    }}>
+                      {f}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={labelStyle}>Start Date</Text>
+                  <TouchableOpacity
+                    onPress={() => { setPickerMode('start'); setShowPicker(true); }}
+                    style={[inputStyle, { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 }]}
+                  >
+                    <CalendarClock size={16} color={COLORS.primary} />
+                    <Text style={{ color: COLORS.text }}>{startDate}</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={labelStyle}>End Date (Optional)</Text>
+                    {endDate ? (
+                      <Pressable onPress={() => setEndDate('')}>
+                        <Text style={{ color: COLORS.error, fontSize: 11, fontWeight: '700', marginBottom: 8 }}>CLEAR</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => { setPickerMode('end'); setShowPicker(true); }}
+                    style={[inputStyle, { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 0 }]}
+                  >
+                    <CalendarClock size={16} color={COLORS.textSecondary} />
+                    <Text style={{ color: endDate ? COLORS.text : COLORS.textSecondary }}>
+                      {endDate || 'No end'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {showPicker && (
+                <DateTimePicker
+                  value={pickerMode === 'start' ? parseLocalDate(startDate) : (endDate ? parseLocalDate(endDate) : new Date())}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateChange}
+                />
+              )}
+
               <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 20 }}>
-                Applies to: {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+                Applies to: {getActivePeriod(startDate, frequency).start} to {getActivePeriod(startDate, frequency).end || 'No end'}
               </Text>
 
               {selCategoryId && (

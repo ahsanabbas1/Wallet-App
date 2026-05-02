@@ -83,12 +83,12 @@ const MiniCalendar = ({ selectedDate, onSelectDate }) => {
 
 const makeStyles = (COLORS) => StyleSheet.create({
   calendarContainer: {
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 15,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
   },
   calendarHeader: {
     flexDirection: 'row',

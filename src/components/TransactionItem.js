@@ -116,6 +116,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
   transactionMethod: {
     color: COLORS.textSecondary,
     fontSize: 10,
+    maxWidth: 60
   },
   actionButtons: {
     flexDirection: 'row',

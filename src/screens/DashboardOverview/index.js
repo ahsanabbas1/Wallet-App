@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Bell,
   Wallet,
+  RefreshCcw,
 } from 'lucide-react-native';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -58,7 +59,8 @@ const DashboardOverview = () => {
     monthlySpend: 0,
     totalSaved: 0,
     totalIncome: 0,
-    loan: { total: 0, paid: 0, remaining: 0, netRemaining: 0 }
+    loan: { total: 0, paid: 0, remaining: 0, netRemaining: 0 },
+    budget: { totalBudget: 0, totalUsed: 0, count: 0 }
   });
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [expenseChange, setExpenseChange] = useState(0);
@@ -123,6 +125,23 @@ const DashboardOverview = () => {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
+  // Idle refresh: reload when app comes back from background after > 5 mins
+  useEffect(() => {
+    let lastActive = Date.now();
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (nextAppState === 'active') {
+        const now = Date.now();
+        if (now - lastActive > 1000 * 60 * 5) { // 5 minutes
+          loadDashboardData();
+        }
+        lastActive = now;
+      } else if (nextAppState === 'background') {
+        lastActive = Date.now();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   const handleDeleteTransaction = useCallback((transaction) => {
     Alert.alert(
       'Delete Transaction',
@@ -171,6 +190,12 @@ const DashboardOverview = () => {
             </View>
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable
+              style={styles.iconButton}
+              onPress={loadDashboardData}
+            >
+              <RefreshCcw color={COLORS.text} size={20} />
+            </Pressable>
             <Pressable
               style={styles.iconButton}
               onPress={() => navigation.navigate('Notifications')}
@@ -233,24 +258,90 @@ const DashboardOverview = () => {
             </View>
           </View>
 
-          {/* 4. Total Loan: Loan Amount, Remaining, Paid */}
-          <View style={[styles.balanceCard, { padding: 18, backgroundColor: COLORS.accent, marginBottom: 0 }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 0 }]}>Total Loan Status</Text>
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>{currency} {formatAmount(totals.loan.remaining)} Left</Text>
-            </View>
-            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 10 }} />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>LOAN AMOUNT</Text>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.total)}</Text>
+          {/* 4. Budget Status Card */}
+          {totals.budget.count > 0 && (
+            <Pressable 
+              onPress={() => navigation.navigate('Budgeting')}
+              style={({ pressed }) => [
+                styles.balanceCard, 
+                { 
+                  padding: 18, 
+                  backgroundColor: COLORS.primary, 
+                  marginBottom: 12, 
+                  borderWidth: 1, 
+                  borderColor: 'rgba(255,255,255,0.1)',
+                  opacity: pressed ? 0.9 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }]
+                }
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 2 }]}>Budget Overview</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10 }}>{totals.budget.count} ACTIVE BUDGETS</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{currency} {formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))} Left</Text>
+                  <Text style={{ color: totals.budget.totalUsed > totals.budget.totalBudget ? '#ff5252' : '#00e676', fontSize: 10, fontWeight: '700' }}>
+                    {((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}% USED
+                  </Text>
+                </View>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL PAID</Text>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.paid)}</Text>
+              
+              <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, marginVertical: 12, overflow: 'hidden' }}>
+                <View style={{ 
+                  height: '100%', 
+                  width: `${Math.min(100, (totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100)}%`, 
+                  backgroundColor: totals.budget.totalUsed > totals.budget.totalBudget ? '#ff5252' : COLORS.accent,
+                  borderRadius: 3 
+                }} />
               </View>
-            </View>
-          </View>
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL BUDGET</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.budget.totalBudget)}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL SPENT</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.budget.totalUsed)}</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
+
+          {/* 5. Total Loan: Loan Amount, Remaining, Paid */}
+          {totals.loan.total > 0 && totals.loan.remaining > 0 && (
+            <Pressable 
+              onPress={() => navigation.navigate('Loans')}
+              style={({ pressed }) => [
+                styles.balanceCard, 
+                { 
+                  padding: 18, 
+                  backgroundColor: COLORS.accent, 
+                  marginBottom: 0,
+                  opacity: pressed ? 0.9 : 1,
+                  transform: [{ scale: pressed ? 0.98 : 1 }]
+                }
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 0 }]}>Total Loan Status</Text>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{currency} {formatAmount(totals.loan.remaining)} Left</Text>
+              </View>
+              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 10 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>LOAN AMOUNT</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.total)}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL PAID</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.paid)}</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
         </View>
 
         {/* Quick Actions */}

@@ -3,6 +3,7 @@ import { transactionService } from './transactionService';
 import savingsGoalService from './savingsGoalService';
 import { paymentService } from './paymentService';
 import { loanService } from './loanService';
+import budgetService, { decodeBudget, getActivePeriod, getRelatedCategoryIds } from './budgetService';
 
 export const dashboardService = {
   async getUserProfile(userId) {
@@ -118,9 +119,31 @@ export const dashboardService = {
     let plannedData = [];
     try { plannedData = (await paymentService.getPlannedPayments(userId)).slice(0, 3); } catch {}
 
+    const { data: rawBudgets } = await budgetService.getBudgets(userId);
+    const budgetSummary = { totalBudget: 0, totalUsed: 0, count: 0 };
+    
+    (rawBudgets || []).forEach(raw => {
+      const b = decodeBudget(raw);
+      const { start: activeStart, end: activeEnd } = getActivePeriod(b.start_date, b.frequency);
+      const relatedIds = getRelatedCategoryIds(b.category_id, allCategories);
+      
+      const spent = transactions
+        .filter(t => {
+          const txDate = t.date.split('T')[0];
+          const isInCategory = relatedIds.includes(t.category_id);
+          const isInRange = txDate >= activeStart && (!activeEnd || txDate <= activeEnd);
+          return t.type === 'expense' && isInCategory && isInRange;
+        })
+        .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+      budgetSummary.totalBudget += parseFloat(b.total_amount);
+      budgetSummary.totalUsed += spent;
+      budgetSummary.count++;
+    });
+
     return {
       recentTransactions: transactions.filter(t => !isLoan(t)).slice(0, 5),
-      recentLoans: allLoans.slice(0, 3),
+      recentLoans: allLoans.filter(l => l.remaining > 0).slice(0, 3),
       recentPlanned: plannedData || [],
       totals: { 
         totalAmount: cashInHand + loanSummary.netRemaining,
@@ -129,7 +152,8 @@ export const dashboardService = {
         monthlySpend: currentMonthlyExpense,
         cashInHand,
         loan: loanSummary,
-        totalIncome: totalIncome // Keep for insights
+        budget: budgetSummary,
+        totalIncome: totalIncome 
       },
       expenseChange,
       savingsProgress,
