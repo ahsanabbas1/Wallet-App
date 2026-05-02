@@ -13,6 +13,7 @@ import {
   CalendarClock,
   TrendingUp,
   Bell,
+  Wallet,
 } from 'lucide-react-native';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -48,6 +49,7 @@ const DashboardOverview = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [recentPlanned, setRecentPlanned] = useState([]);
+  const [recentLoans, setRecentLoans] = useState([]);
   const [totals, setTotals] = useState({ 
     totalAmount: 0, 
     incoming: 0, 
@@ -60,6 +62,7 @@ const DashboardOverview = () => {
   });
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [expenseChange, setExpenseChange] = useState(0);
+  const [savingsProgress, setSavingsProgress] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
 
   // Single load function — uses userId from context, no extra getSession() call
@@ -78,10 +81,12 @@ const DashboardOverview = () => {
 
       setRecentTransactions(dashData.recentTransactions);
       setRecentPlanned(dashData.recentPlanned);
+      setRecentLoans(dashData.recentLoans || []);
       setTotals(dashData.totals);
       setCategoryBreakdown(dashData.categoryBreakdown);
       setExpenseChange(dashData.expenseChange);
       setPerformanceMetrics(dashData.performanceMetrics);
+      setSavingsProgress(dashData.savingsProgress);
     } catch (error) {
       console.error('Dashboard load error:', error.message);
     } finally {
@@ -335,6 +340,37 @@ const DashboardOverview = () => {
                 item={item} 
               />
             ))}
+          </View>
+        )}
+
+        {/* Recent Loans Section */}
+        {recentLoans.length > 0 && (
+          <View style={{ marginTop: 24 }}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Loans</Text>
+              <Pressable onPress={() => navigation.navigate('Loans')}>
+                <Text style={styles.seeAllText}>See All</Text>
+              </Pressable>
+            </View>
+            <View style={styles.transactionsList}>
+              {recentLoans.map((loan) => (
+                <View key={loan.id} style={styles.transactionItem}>
+                   <View style={[styles.transactionIcon, { backgroundColor: loan.type === 'given' ? COLORS.error + '22' : COLORS.success + '22' }]}>
+                      <Wallet color={loan.type === 'given' ? COLORS.error : COLORS.success} size={20} />
+                   </View>
+                   <View style={styles.transactionDetails}>
+                      <Text style={styles.transactionTitle}>{loan.person_name}</Text>
+                      <Text style={styles.transactionSub}>{loan.type === 'given' ? 'Money Given' : 'Money Received'}</Text>
+                   </View>
+                   <View style={styles.transactionAmountContainer}>
+                      <Text style={[styles.transactionAmount, { color: loan.type === 'given' ? COLORS.error : COLORS.success }]}>
+                         {currency} {formatAmount(loan.total_amount)}
+                      </Text>
+                      <Text style={styles.transactionMethod}>{formatAmount(loan.remaining)} remaining</Text>
+                   </View>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 

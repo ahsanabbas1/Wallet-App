@@ -58,6 +58,13 @@ export const dashboardService = {
       savingsProgress = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
     }
 
+    const isLoan = (t) => {
+      const title = t.title?.toLowerCase() || '';
+      return title.startsWith('loan to') || 
+             title.startsWith('loan from') || 
+             title.startsWith('loan repaid');
+    };
+
     const allCategories = await transactionService.getCategories(userId);
     const categoryCache = {};
     if (allCategories) allCategories.forEach(c => { categoryCache[c.id] = c; });
@@ -68,7 +75,7 @@ export const dashboardService = {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    transactions.filter(t => t.type === 'expense').forEach(t => {
+    transactions.filter(t => t.type === 'expense' && !isLoan(t)).forEach(t => {
       const d = new Date(t.date);
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
         currentMonthlyExpense += parseFloat(t.amount);
@@ -83,17 +90,19 @@ export const dashboardService = {
       catTotals[catName].amount += amount;
     });
 
+    const categoryTotalExpense = Object.values(catTotals).reduce((s, c) => s + c.amount, 0);
+
     const breakdown = Object.keys(catTotals).map(name => ({
       name,
       amount: catTotals[name].amount,
-      percent: totalExpense > 0 ? (catTotals[name].amount / totalExpense) * 100 : 0,
+      percent: categoryTotalExpense > 0 ? (catTotals[name].amount / categoryTotalExpense) * 100 : 0,
       color: catTotals[name].color,
     })).sort((a, b) => b.amount - a.amount);
 
     const lastMonthDate = new Date();
     lastMonthDate.setMonth(now.getMonth() - 1);
     const lastMonthExpenses = transactions
-      .filter(t => t.type === 'expense')
+      .filter(t => t.type === 'expense' && !isLoan(t))
       .filter(t => { const d = new Date(t.date); return d.getMonth() === lastMonthDate.getMonth() && d.getFullYear() === lastMonthDate.getFullYear(); })
       .reduce((s, t) => s + parseFloat(t.amount), 0);
 
@@ -105,7 +114,8 @@ export const dashboardService = {
     try { plannedData = (await paymentService.getPlannedPayments(userId)).slice(0, 3); } catch {}
 
     return {
-      recentTransactions: transactions.slice(0, 5),
+      recentTransactions: transactions.filter(t => !isLoan(t)).slice(0, 5),
+      recentLoans: allLoans.slice(0, 3),
       recentPlanned: plannedData || [],
       totals: { 
         totalAmount: cashInHand + loanSummary.netRemaining,
