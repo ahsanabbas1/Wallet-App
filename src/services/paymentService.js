@@ -2,6 +2,9 @@ import { supabase } from '../lib/supabase';
 
 function parseLocalDate(dateString) {
   if (!dateString) return null;
+  // If it contains a time or T, parse as full ISO
+  if (dateString.includes('T') || dateString.includes(':')) return new Date(dateString);
+  
   const [year, month, day] = dateString.split('-').map(Number);
   if (!year || !month || !day) return null;
   return new Date(year, month - 1, day);
@@ -65,6 +68,8 @@ function getDueDates(nextDateString, frequency, untilDate = new Date()) {
 }
 
 function toTransactionTimestamp(dateString) {
+  // If it's already an ISO string with time, return it. Otherwise add default time.
+  if (dateString.includes('T')) return dateString;
   return `${dateString}T12:00:00.000`;
 }
 
@@ -73,40 +78,47 @@ function createId() {
 }
 
 async function processSinglePlannedPayment(item) {
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
+  const now = new Date();
 
   if (!item.next_date || !item.is_active) return false;
+  
+  // Check start/end bounds
   if (item.end_date) {
     const endDate = parseLocalDate(item.end_date);
-    if (endDate && today > endDate) return false;
+    if (endDate && now > endDate) return false;
   }
   if (item.start_date) {
     const startDate = parseLocalDate(item.start_date);
-    if (startDate && today < startDate) return false;
+    if (startDate && now < startDate) return false;
   }
 
-  const dueDate = parseLocalDate(item.next_date);
-  if (!dueDate || dueDate > today) return false;
+  // Compare full timestamp: next_date vs now
+  const nextDue = new Date(item.next_date);
+  if (isNaN(nextDue.getTime()) || nextDue > now) return false;
 
-  const { dueDates, nextDate } = getDueDates(item.next_date, item.frequency, today);
-  if (!dueDates.length) return false;
-
-  const transactions = dueDates.map(dateString => ({
+  // AUTO-SYNC: Only record exactly ONE (the current next_date)
+  // This prevents bulk "catch-up" of multiple missed periods
+  const transactions = [{
     id: createId(),
     user_id: item.user_id,
     category_id: item.category_id ?? null,
     amount: Number(item.amount),
     type: item.type || 'expense',
     title: item.title,
-    description: item.description || `Recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
-    date: toTransactionTimestamp(dateString),
-  }));
+    description: item.description || `Auto-recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
+    date: item.next_date, // Use the full timestamp from next_date
+  }];
 
   const { error: insertError } = await supabase.from('transactions').insert(transactions);
   if (insertError) throw insertError;
 
-  await supabase.from('planned_payments').update({ next_date: nextDate }).eq('id', item.id);
+  // Advance next_date to exactly one period later
+  const nextOccurrence = getNextOccurrence(item.next_date.split('T')[0], item.frequency);
+  // Re-attach the time if present
+  const timePart = item.next_date.includes('T') ? item.next_date.split('T')[1] : '12:00:00.000';
+  const newNextDate = `${nextOccurrence}T${timePart}`;
+
+  await supabase.from('planned_payments').update({ next_date: newNextDate }).eq('id', item.id);
   return true;
 }
 
@@ -142,8 +154,11 @@ export const paymentService = {
   },
 
   async addPlannedPayment(paymentData) {
+    // custom_days is a UI helper and shouldn't be sent to Supabase
+    const { custom_days, ...rest } = paymentData;
+
     const payload = {
-      ...paymentData,
+      ...rest,
       id: paymentData.id || createId(),
       frequency: normalizeFrequency(paymentData.frequency, paymentData.custom_days),
       is_active: true,
@@ -177,12 +192,17 @@ export const paymentService = {
     const { error: insertError } = await supabase.from('transactions').insert(tx);
     if (insertError) throw insertError;
 
-    const nextDate = getNextOccurrence(dueDate, item.frequency);
-    await supabase.from('planned_payments').update({ next_date: nextDate }).eq('id', item.id);
+    // Advance next_date to exactly one period later
+    const datePart = dueDate.split('T')[0];
+    const nextOccurrence = getNextOccurrence(datePart, item.frequency);
+    const timePart = dueDate.includes('T') ? dueDate.split('T')[1] : '12:00:00.000';
+    const newNextDate = `${nextOccurrence}T${timePart}`;
+
+    await supabase.from('planned_payments').update({ next_date: newNextDate }).eq('id', item.id);
     return true;
   },
 
-  async deletePlannedPayment(userId, id) {
+  async deletePlannedPayment(id) {
     const { error } = await supabase.from('planned_payments').delete().eq('id', id);
     if (error) throw error;
     return true;

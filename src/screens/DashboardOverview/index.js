@@ -131,31 +131,6 @@ const DashboardOverview = () => {
     );
   }, [userId]);
 
-  const handleDeletePlanned = useCallback((id) => {
-    Alert.alert(
-      'Delete Planned Payment',
-      'Are you sure you want to stop this planned payment?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-             try {
-               const { error } = await supabase
-                 .from('planned_payments')
-                 .delete()
-                 .eq('id', id);
-               if (error) throw error;
-               loadDashboardData();
-             } catch (error) {
-               Alert.alert('Error', error.message);
-             }
-          }
-        }
-      ]
-    );
-  }, [userId]);
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -314,7 +289,6 @@ const DashboardOverview = () => {
               <PaymentCard 
                 key={item.id} 
                 item={item} 
-                onDelete={handleDeletePlanned}
               />
             ))}
           </View>

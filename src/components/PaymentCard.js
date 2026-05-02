@@ -1,11 +1,11 @@
 import React, { useMemo, memo } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { CalendarClock, CheckCircle2, Trash2, Pencil } from 'lucide-react-native';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
 import { paymentService } from '../services/paymentService';
 
-const PaymentCard = memo(({ item, onDelete, onRecord, onEdit }) => {
+const PaymentCard = memo(({ item, onDelete, onRecord, onEdit, recording }) => {
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -21,13 +21,20 @@ const PaymentCard = memo(({ item, onDelete, onRecord, onEdit }) => {
           <Text style={styles.cardTitle}>{item.title}</Text>
           <Text style={styles.cardSub} numberOfLines={1}>
             {paymentService.getFrequencyLabel(item.frequency)}
-            {item.next_date ? ` · Next: ${paymentService.parseLocalDate(item.next_date)?.toLocaleDateString()}` : ''}
+            {item.next_date ? (() => {
+              const d = paymentService.parseLocalDate(item.next_date);
+              if (!d) return '';
+              const dateStr = d.toLocaleDateString();
+              const timeStr = d.getHours() !== 0 || d.getMinutes() !== 0 
+                ? ` @ ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
+                : '';
+              return ` · Next: ${dateStr}${timeStr}`;
+            })() : ''}
           </Text>
           {(item.start_date || item.end_date) && (
             <Text style={[styles.cardSub, { marginTop: 2, fontSize: 11 }]} numberOfLines={1}>
               {item.start_date ? `From ${paymentService.parseLocalDate(item.start_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
-              {item.start_date && item.end_date ? '  →  ' : ''}
-              {item.end_date ? `Until ${paymentService.parseLocalDate(item.end_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+              {item.end_date ? `  →  Until ${paymentService.parseLocalDate(item.end_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}` : '  →  Lifetime'}
             </Text>
           )}
         </View>
@@ -37,9 +44,19 @@ const PaymentCard = memo(({ item, onDelete, onRecord, onEdit }) => {
       </View>
       <View style={styles.cardActions}>
         {onRecord ? (
-          <Pressable onPress={() => onRecord(item)} style={styles.recordButton}>
-            <CheckCircle2 color={COLORS.success} size={18} />
-            <Text style={[styles.recordButtonText, { color: COLORS.success }]}>Record Now</Text>
+          <Pressable 
+            onPress={() => onRecord(item)} 
+            style={styles.recordButton}
+            disabled={recording}
+          >
+            {recording ? (
+              <ActivityIndicator size="small" color={COLORS.success} />
+            ) : (
+              <CheckCircle2 color={COLORS.success} size={18} />
+            )}
+            <Text style={[styles.recordButtonText, { color: COLORS.success }]}>
+              {recording ? 'Recording...' : 'Record Now'}
+            </Text>
           </Pressable>
         ) : null}
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -51,9 +68,11 @@ const PaymentCard = memo(({ item, onDelete, onRecord, onEdit }) => {
               <Pencil color={COLORS.textSecondary} size={16} />
             </Pressable>
           )}
-          <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
-            <Trash2 color={COLORS.error} size={18} />
-          </Pressable>
+          {onDelete && (
+            <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
+              <Trash2 color={COLORS.error} size={18} />
+            </Pressable>
+          )}
         </View>
       </View>
     </View>

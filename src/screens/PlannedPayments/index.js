@@ -42,7 +42,14 @@ const INITIAL_FREQUENCY = 'monthly';
 
 const fmtDate = (d) => {
   if (!d) return '—';
-  return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  const date = new Date(d);
+  const dateStr = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  // Show time if it's not exactly midnight (which usually means date-only)
+  if (date.getHours() !== 0 || date.getMinutes() !== 0) {
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${dateStr} @ ${timeStr}`;
+  }
+  return dateStr;
 };
 
 const buildDefaultForm = () => {
@@ -57,7 +64,7 @@ const buildDefaultForm = () => {
     customDays: '3',
     startDate:  paymentService.formatLocalDate(now),
     startTime:  `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
-    endDate:    paymentService.formatLocalDate(nextYear),
+    endDate:    null,
   };
 };
 
@@ -166,26 +173,29 @@ const PlannedPayments = () => {
     if (!amount)        return Alert.alert('Missing Amount', 'Please enter an amount.');
     if (!startDate || !paymentService.parseLocalDate(startDate))
       return Alert.alert('Invalid Start Date', 'Please pick a valid start date.');
-    if (!endDate || !paymentService.parseLocalDate(endDate))
-      return Alert.alert('Invalid End Date', 'Please pick a valid stop date.');
-    if (paymentService.parseLocalDate(endDate) <= paymentService.parseLocalDate(startDate))
-      return Alert.alert('Invalid Dates', 'Stop date must be after start date.');
+    
+    if (endDate && paymentService.parseLocalDate(endDate)) {
+      if (paymentService.parseLocalDate(endDate) <= paymentService.parseLocalDate(startDate)) {
+        return Alert.alert('Invalid Dates', 'Stop date must be after start date.');
+      }
+    }
     if (frequency === 'custom' && (!customDays || Number(customDays) <= 0))
       return Alert.alert('Custom Interval', 'Enter how many days between each payment.');
 
     try {
       setSubmitting(true);
 
+      const fullNextDate = `${startDate}T${form.startTime || '09:00'}:00`;
+      
       const payload = {
         user_id:     userId,
         title:       title.trim(),
         amount:      parseFloat(amount),
         type,
         frequency,
-        custom_days: customDays,
         start_date:  startDate,
         end_date:    endDate,
-        next_date:   editingPayment ? editingPayment.next_date : startDate,
+        next_date:   editingPayment ? editingPayment.next_date : fullNextDate,
         category_id: selectedCategory?.id || null,
       };
 
@@ -279,12 +289,25 @@ const PlannedPayments = () => {
   };
 
   const deletePlanned = async (id) => {
-    try {
-      await paymentService.deletePlannedPayment(id);
-      fetchPlannedPayments();
-    } catch (error) {
-      Alert.alert('Error', error.message);
-    }
+    Alert.alert(
+      'Delete Planned Payment',
+      'Are you sure you want to stop this planned payment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await paymentService.deletePlannedPayment(id);
+              fetchPlannedPayments();
+            } catch (error) {
+              Alert.alert('Error', error.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   /* ── Frequency helpers ──────────────────────────────────────────── */
@@ -335,9 +358,10 @@ const PlannedPayments = () => {
             <PaymentCard
               key={item.id}
               item={item}
-              onDelete={deletePlanned}
-              onRecord={recordingId ? undefined : handleRecordNow}
-              onEdit={openEditModal}
+              onDelete={recordingId ? undefined : deletePlanned}
+              onRecord={handleRecordNow}
+              recording={recordingId === item.id}
+              onEdit={recordingId ? undefined : openEditModal}
             />
           ))
         ) : (
@@ -430,16 +454,27 @@ const PlannedPayments = () => {
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.calendarTrigger, { flex: 1, flexDirection: 'column', alignItems: 'flex-start', padding: 12, borderRadius: 12, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border }]}
-                  onPress={() => openDatePicker('end')}
-                >
-                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', marginBottom: 4 }}>STOP DATE</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <CalendarIcon color={COLORS.error} size={15} />
-                    <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{fmtDate(form.endDate)}</Text>
-                  </View>
-                </TouchableOpacity>
+                <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.calendarTrigger, { flex: 1, flexDirection: 'column', alignItems: 'flex-start', padding: 12, borderRadius: 12, backgroundColor: COLORS.inputBg, borderWidth: 1, borderColor: COLORS.border }]}
+                    onPress={() => openDatePicker('end')}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>STOP DATE</Text>
+                      {form.endDate && (
+                        <Pressable onPress={() => updateFormField('endDate', null)} hitSlop={10}>
+                          <Text style={{ color: COLORS.primary, fontSize: 10, fontWeight: '700' }}>SET FOREVER</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CalendarIcon color={form.endDate ? COLORS.error : COLORS.success} size={15} />
+                      <Text style={{ color: form.endDate ? COLORS.text : COLORS.success, fontSize: 14, fontWeight: '600' }}>
+                        {form.endDate ? fmtDate(form.endDate) : 'Lifetime / Forever'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* Time picker for start time */}
