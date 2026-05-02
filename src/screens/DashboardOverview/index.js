@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
@@ -223,16 +224,50 @@ const DashboardOverview = () => {
 
         {/* Dashboard Cards Layout */}
         <View style={{ marginBottom: 24 }}>
-          {/* 1. Total Amount: Loan + Cash in Hand */}
-          <View style={[styles.balanceCard, { padding: 24, marginBottom: 12, backgroundColor: COLORS.primary }]}>
-            <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.8)' }]}>Total Amount</Text>
-            <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.08, color: '#fff', marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
-              {currency} {formatAmount(totals.totalAmount)}
-            </Text>
-            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 }}>
-              Cash: {formatAmount(totals.cashInHand)} | Net Loan: {formatAmount(totals.loan.netRemaining)}
-            </Text>
-          </View>
+          {/* 1. Total Amount: Comprehensive Executive Summary */}
+          <LinearGradient
+            colors={['#4f5ff7', '#7c4dff']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.balanceCard, { padding: 24, marginBottom: 16, borderHeight: 0 }]}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View>
+                <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.8)', marginBottom: 4 }]}>Total Net Worth</Text>
+                <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.085, color: '#fff', marginBottom: 0, fontWeight: '800' }]} numberOfLines={1} adjustsFontSizeToFit>
+                  {currency} {formatAmount(totals.totalAmount)}
+                </Text>
+              </View>
+              <TrendingUp color="rgba(255,255,255,0.4)" size={24} />
+            </View>
+
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 20 }} />
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
+              <View style={{ minWidth: '40%' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Available Cash</Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>{currency} {formatAmount(totals.cashInHand)}</Text>
+              </View>
+              <View style={{ minWidth: '40%' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Net Loan Pos.</Text>
+                <Text style={{ color: '#00e676', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
+                  {totals.loan.netRemaining >= 0 ? '+' : ''}{formatAmount(totals.loan.netRemaining)}
+                </Text>
+              </View>
+              <View style={{ minWidth: '40%' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Budget Usage</Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
+                  {((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}%
+                </Text>
+              </View>
+              <View style={{ minWidth: '40%' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Savings</Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
+                  {savingsProgress.toFixed(0)}%
+                </Text>
+              </View>
+            </View>
+          </LinearGradient>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
             {/* 2. Total Cash In Hand: Income - Expense */}
