@@ -43,13 +43,7 @@ const INITIAL_FREQUENCY = 'monthly';
 const fmtDate = (d) => {
   if (!d) return '—';
   const date = new Date(d);
-  const dateStr = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-  // Show time if it's not exactly midnight (which usually means date-only)
-  if (date.getHours() !== 0 || date.getMinutes() !== 0) {
-    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${dateStr} @ ${timeStr}`;
-  }
-  return dateStr;
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const buildDefaultForm = () => {
@@ -63,7 +57,7 @@ const buildDefaultForm = () => {
     frequency:  INITIAL_FREQUENCY,
     customDays: '3',
     startDate:  paymentService.formatLocalDate(now),
-    startTime:  `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+    startTime:  '09:00',
     endDate:    null,
   };
 };
@@ -152,8 +146,14 @@ const PlannedPayments = () => {
   };
 
   const onDateChange = (event, selectedDate) => {
+    if (event.type === 'dismissed') {
+      setShowDatePicker(false);
+      return;
+    }
+    
     setShowDatePicker(Platform.OS === 'ios');
     if (!selectedDate) return;
+
     if (datePickerField === 'start') {
       updateFormField('startDate', paymentService.formatLocalDate(selectedDate));
     } else if (datePickerField === 'end') {
@@ -185,7 +185,10 @@ const PlannedPayments = () => {
     try {
       setSubmitting(true);
 
-      const fullNextDate = `${startDate}T${form.startTime || '09:00'}:00`;
+      const [y, mon, d] = startDate.split('-').map(Number);
+      const [h, m] = (form.startTime || '09:00').split(':').map(Number);
+      const nextDateObj = new Date(y, mon - 1, d, h, m, 0);
+      const fullNextDate = nextDateObj.toISOString();
       
       const payload = {
         user_id:     userId,
@@ -195,7 +198,7 @@ const PlannedPayments = () => {
         frequency,
         start_date:  startDate,
         end_date:    endDate,
-        next_date:   editingPayment ? editingPayment.next_date : fullNextDate,
+        next_date:   fullNextDate,
         category_id: selectedCategory?.id || null,
       };
 
@@ -207,6 +210,7 @@ const PlannedPayments = () => {
           frequency:   paymentService.normalizeFrequency(frequency, customDays),
           start_date:  payload.start_date,
           end_date:    payload.end_date,
+          next_date:   payload.next_date,
           category_id: payload.category_id,
         });
       } else {
@@ -496,12 +500,14 @@ const PlannedPayments = () => {
                     if (datePickerField === 'time') {
                       const d = new Date();
                       const [h, m] = (form.startTime || '09:00').split(':');
-                      d.setHours(parseInt(h, 10), parseInt(m, 10));
+                      d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
                       return d;
                     }
-                    return datePickerField === 'start'
+                    const baseDate = datePickerField === 'start'
                       ? (paymentService.parseLocalDate(form.startDate) || new Date())
                       : (paymentService.parseLocalDate(form.endDate)   || new Date());
+                    baseDate.setHours(12, 0, 0, 0); // Use noon to avoid TZ shifts
+                    return baseDate;
                   })()}
                   mode={datePickerField === 'time' ? 'time' : 'date'}
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}

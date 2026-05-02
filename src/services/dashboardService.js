@@ -46,9 +46,20 @@ export const dashboardService = {
       return acc;
     }, { total: 0, paid: 0, remaining: 0, netRemaining: 0 });
 
-    const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
-    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
-    const cashInHand = totalIncome - totalExpense;
+    const isLoan = (t) => {
+      const title = (t.title || '').toLowerCase();
+      return title.includes('loan');
+    };
+
+    const totalIncome = transactions
+      .filter(t => t.type === 'income' && !isLoan(t))
+      .reduce((s, t) => s + parseFloat(t.amount), 0);
+      
+    const totalExpenseAll = transactions
+      .filter(t => t.type === 'expense' && !isLoan(t))
+      .reduce((s, t) => s + parseFloat(t.amount), 0);
+
+    const cashInHand = totalIncome - totalExpenseAll;
 
     let totalSaved = 0;
     let savingsProgress = 0;
@@ -57,13 +68,6 @@ export const dashboardService = {
       totalSaved = goalsData.reduce((s, g) => s + parseFloat(g.saved_amount || 0), 0);
       savingsProgress = totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0;
     }
-
-    const isLoan = (t) => {
-      const title = t.title?.toLowerCase() || '';
-      return title.startsWith('loan to') || 
-             title.startsWith('loan from') || 
-             title.startsWith('loan repaid');
-    };
 
     const allCategories = await transactionService.getCategories(userId);
     const categoryCache = {};
@@ -78,24 +82,25 @@ export const dashboardService = {
     transactions.filter(t => t.type === 'expense' && !isLoan(t)).forEach(t => {
       const d = new Date(t.date);
       if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
-        currentMonthlyExpense += parseFloat(t.amount);
+        const amount = parseFloat(t.amount);
+        currentMonthlyExpense += amount;
+        
+        const category = categoryCache[t.category_id];
+        let displayCategory = category;
+        if (category?.parent_id) displayCategory = categoryCache[category.parent_id] || category;
+        
+        const catName = displayCategory?.name || 'Other';
+        if (!catTotals[catName]) {
+          catTotals[catName] = { amount: 0, color: displayCategory?.color || '#4051b5' };
+        }
+        catTotals[catName].amount += amount;
       }
-      
-      const category = categoryCache[t.category_id];
-      let displayCategory = category;
-      if (category?.parent_id) displayCategory = categoryCache[category.parent_id] || category;
-      const catName = displayCategory?.name || 'Other';
-      const amount = parseFloat(t.amount);
-      if (!catTotals[catName]) catTotals[catName] = { amount: 0, color: displayCategory?.color || '#4051b5' };
-      catTotals[catName].amount += amount;
     });
-
-    const categoryTotalExpense = Object.values(catTotals).reduce((s, c) => s + c.amount, 0);
 
     const breakdown = Object.keys(catTotals).map(name => ({
       name,
       amount: catTotals[name].amount,
-      percent: categoryTotalExpense > 0 ? (catTotals[name].amount / categoryTotalExpense) * 100 : 0,
+      percent: currentMonthlyExpense > 0 ? (catTotals[name].amount / currentMonthlyExpense) * 100 : 0,
       color: catTotals[name].color,
     })).sort((a, b) => b.amount - a.amount);
 
@@ -130,7 +135,7 @@ export const dashboardService = {
       savingsProgress,
       categoryBreakdown: breakdown,
       performanceMetrics: {
-        balanceScore: Math.min(Math.max((totalIncome / (totalExpense || 1)) * 50, 0), 100),
+        balanceScore: Math.min(Math.max((totalIncome / (totalExpenseAll || 1)) * 50, 0), 100),
         cashFlowScore: Math.min(Math.max(cashInHand > 0 ? 80 : 20, 0), 100),
       },
     };

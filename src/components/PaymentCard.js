@@ -24,11 +24,9 @@ const PaymentCard = memo(({ item, onDelete, onRecord, onEdit, recording }) => {
             {item.next_date ? (() => {
               const d = paymentService.parseLocalDate(item.next_date);
               if (!d) return '';
-              const dateStr = d.toLocaleDateString();
-              const timeStr = d.getHours() !== 0 || d.getMinutes() !== 0 
-                ? ` @ ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` 
-                : '';
-              return ` · Next: ${dateStr}${timeStr}`;
+              const dateStr = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+              const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              return ` · Next: ${dateStr} @ ${timeStr}`;
             })() : ''}
           </Text>
           {(item.start_date || item.end_date) && (

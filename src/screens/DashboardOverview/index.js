@@ -50,13 +50,13 @@ const DashboardOverview = () => {
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [recentPlanned, setRecentPlanned] = useState([]);
   const [recentLoans, setRecentLoans] = useState([]);
-  const [totals, setTotals] = useState({ 
-    totalAmount: 0, 
-    incoming: 0, 
-    outgoing: 0, 
-    cashInHand: 0, 
-    monthlySpend: 0, 
-    totalSaved: 0, 
+  const [totals, setTotals] = useState({
+    totalAmount: 0,
+    incoming: 0,
+    outgoing: 0,
+    cashInHand: 0,
+    monthlySpend: 0,
+    totalSaved: 0,
     totalIncome: 0,
     loan: { total: 0, paid: 0, remaining: 0, netRemaining: 0 }
   });
@@ -74,7 +74,7 @@ const DashboardOverview = () => {
       // Fire-and-forget notification generation + unread count (non-blocking)
       generateNotifications(userId)
         .then(() => getUnreadCount(userId).then(setUnreadCount))
-        .catch(() => {});
+        .catch(() => { });
 
       const dashData = await dashboardService.getDashboardData(userId);
 
@@ -157,7 +157,7 @@ const DashboardOverview = () => {
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Pressable 
+            <Pressable
               style={[styles.iconButton, { marginRight: 16 }]}
               onPress={openDrawer}
             >
@@ -210,19 +210,25 @@ const DashboardOverview = () => {
           </View>
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-            {/* 2. Total Cash In Hand: Incoming */}
+            {/* 2. Total Cash In Hand: Income - Expense */}
             <View style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
-              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Incoming</Text>
+              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Cash In Hand</Text>
               <Text style={[styles.balanceAmount, { color: '#00e676', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
-                {currency} {formatAmount(totals.incoming)}
+                {currency} {formatAmount(totals.cashInHand)}
+              </Text>
+              <Text style={{ color: 'rgba(0, 230, 118, 0.7)', fontSize: 10, fontWeight: '600', marginTop: 4 }}>
+                {((totals.cashInHand / (totals.totalIncome || 1)) * 100).toFixed(1)}% liquidity
               </Text>
             </View>
-
+ 
             {/* 3. Total Expense of the Month: Outgoing */}
             <View style={[styles.balanceCard, { flex: 1, marginLeft: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(255, 82, 82, 0.2)' }]}>
-              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Outgoing</Text>
+              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Expenses</Text>
               <Text style={[styles.balanceAmount, { color: '#ff5252', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
                 {currency} {formatAmount(totals.outgoing)}
+              </Text>
+              <Text style={{ color: expenseChange > 0 ? COLORS.error : COLORS.success, fontSize: 10, fontWeight: '600', marginTop: 4 }}>
+                {expenseChange > 0 ? '↑' : '↓'} {Math.abs(expenseChange).toFixed(1)}% vs prev
               </Text>
             </View>
           </View>
@@ -250,7 +256,7 @@ const DashboardOverview = () => {
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActions}>
-          <Pressable 
+          <Pressable
             style={styles.actionItem}
             onPress={() => navigation.navigate('AddTransaction')}
           >
@@ -282,10 +288,10 @@ const DashboardOverview = () => {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Expense Structure</Text>
         </View>
-        <DonutChart 
-          data={categoryBreakdown} 
-          expenseChange={expenseChange} 
-          monthlySpend={totals.monthlySpend} 
+        <DonutChart
+          data={categoryBreakdown}
+          expenseChange={expenseChange}
+          monthlySpend={totals.monthlySpend}
         />
 
 
@@ -301,13 +307,13 @@ const DashboardOverview = () => {
 
         <View style={styles.transactionsList}>
           {loading ? (
-             <ActivityIndicator color={COLORS.primary} />
+            <ActivityIndicator color={COLORS.primary} />
           ) : recentTransactions.length > 0 ? (
             recentTransactions.map((item) => (
-              <TransactionItem 
+              <TransactionItem
                 key={item.id}
-                icon={ReceiptText} 
-                title={item.title} 
+                icon={ReceiptText}
+                title={item.title}
                 category={item.categories?.name || (item.type === 'income' ? 'Income' : 'Expense')}
                 time={new Date(item.date).toLocaleDateString() + ' ' + new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 amount={parseFloat(item.amount)}
@@ -335,9 +341,9 @@ const DashboardOverview = () => {
               </Pressable>
             </View>
             {recentPlanned.map((item) => (
-              <PaymentCard 
-                key={item.id} 
-                item={item} 
+              <PaymentCard
+                key={item.id}
+                item={item}
               />
             ))}
           </View>
@@ -355,19 +361,19 @@ const DashboardOverview = () => {
             <View style={styles.transactionsList}>
               {recentLoans.map((loan) => (
                 <View key={loan.id} style={styles.transactionItem}>
-                   <View style={[styles.transactionIcon, { backgroundColor: loan.type === 'given' ? COLORS.error + '22' : COLORS.success + '22' }]}>
-                      <Wallet color={loan.type === 'given' ? COLORS.error : COLORS.success} size={20} />
-                   </View>
-                   <View style={styles.transactionDetails}>
-                      <Text style={styles.transactionTitle}>{loan.person_name}</Text>
-                      <Text style={styles.transactionSub}>{loan.type === 'given' ? 'Money Given' : 'Money Received'}</Text>
-                   </View>
-                   <View style={styles.transactionAmountContainer}>
-                      <Text style={[styles.transactionAmount, { color: loan.type === 'given' ? COLORS.error : COLORS.success }]}>
-                         {currency} {formatAmount(loan.total_amount)}
-                      </Text>
-                      <Text style={styles.transactionMethod}>{formatAmount(loan.remaining)} remaining</Text>
-                   </View>
+                  <View style={[styles.transactionIcon, { backgroundColor: loan.type === 'given' ? COLORS.error + '22' : COLORS.success + '22' }]}>
+                    <Wallet color={loan.type === 'given' ? COLORS.error : COLORS.success} size={20} />
+                  </View>
+                  <View style={styles.transactionDetails}>
+                    <Text style={styles.transactionTitle}>{loan.person_name}</Text>
+                    <Text style={styles.transactionSub}>{loan.type === 'given' ? 'Money Given' : 'Money Received'}</Text>
+                  </View>
+                  <View style={styles.transactionAmountContainer}>
+                    <Text style={[styles.transactionAmount, { color: loan.type === 'given' ? COLORS.error : COLORS.success }]}>
+                      {currency} {formatAmount(loan.total_amount)}
+                    </Text>
+                    <Text style={styles.transactionMethod}>{formatAmount(loan.remaining)} remaining</Text>
+                  </View>
                 </View>
               ))}
             </View>
@@ -377,37 +383,37 @@ const DashboardOverview = () => {
         {/* Insights Section */}
         <View style={styles.insightsCard}>
           <View style={styles.insightsHeader}>
-             <View>
-               <Text style={styles.insightsTitle}>Wallet Insights</Text>
-               <Text style={styles.insightsSub}>
-                  30-day performance & future outlook
-               </Text>
-             </View>
-             <View style={styles.insightsPill}>
-                <TrendingUp color={COLORS.accent} size={14} style={{ marginRight: 6 }} />
-                <Text style={styles.insightsPillText}>Live Analysis</Text>
-             </View>
+            <View>
+              <Text style={styles.insightsTitle}>Wallet Insights</Text>
+              <Text style={styles.insightsSub}>
+                30-day performance & future outlook
+              </Text>
+            </View>
+            <View style={styles.insightsPill}>
+              <TrendingUp color={COLORS.accent} size={14} style={{ marginRight: 6 }} />
+              <Text style={styles.insightsPillText}>Live Analysis</Text>
+            </View>
           </View>
 
           <View style={styles.predictiveRow}>
-             <GaugeChart score={performanceMetrics.balanceScore} label="Balance Pred." />
-             <View style={styles.verticalDivider} />
-             <GaugeChart score={performanceMetrics.cashFlowScore} label="Cash-Flow Pred." />
+            <GaugeChart score={performanceMetrics.balanceScore} label="Balance Pred." />
+            <View style={styles.verticalDivider} />
+            <GaugeChart score={performanceMetrics.cashFlowScore} label="Cash-Flow Pred." />
           </View>
 
           <View style={styles.performanceGrid}>
-             <View style={styles.gridItem}>
-               <GaugeChart score={totals.totalAmount > 0 ? 85 : 15} label="Outlook" />
-             </View>
-             <View style={styles.gridItem}>
-               <GaugeChart score={Math.min((totals.monthlySpend / (totals.totalIncome || 1)) * 100, 100)} label="Spendings" />
-             </View>
-             <View style={styles.gridItem}>
-               <GaugeChart score={Math.min((totals.totalIncome / 100000) * 100, 100)} label="Credit" />
-             </View>
-             <View style={styles.gridItem}>
-               <GaugeChart score={Math.min((totals.monthlySpend / 100000) * 100, 100)} label="Debit" />
-             </View>
+            <View style={styles.gridItem}>
+              <GaugeChart score={totals.totalAmount > 0 ? 85 : 15} label="Outlook" />
+            </View>
+            <View style={styles.gridItem}>
+              <GaugeChart score={Math.min((totals.monthlySpend / (totals.totalIncome || 1)) * 100, 100)} label="Spendings" />
+            </View>
+            <View style={styles.gridItem}>
+              <GaugeChart score={Math.min((totals.totalIncome / 100000) * 100, 100)} label="Credit" />
+            </View>
+            <View style={styles.gridItem}>
+              <GaugeChart score={Math.min((totals.monthlySpend / 100000) * 100, 100)} label="Debit" />
+            </View>
           </View>
         </View>
       </ScrollView>
