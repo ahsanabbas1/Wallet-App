@@ -48,7 +48,16 @@ const DashboardOverview = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [recentPlanned, setRecentPlanned] = useState([]);
-  const [totals, setTotals] = useState({ balance: 0, monthlySpend: 0, totalSaved: 0, totalIncome: 0 });
+  const [totals, setTotals] = useState({ 
+    totalAmount: 0, 
+    incoming: 0, 
+    outgoing: 0, 
+    cashInHand: 0, 
+    monthlySpend: 0, 
+    totalSaved: 0, 
+    totalIncome: 0,
+    loan: { total: 0, paid: 0, remaining: 0, netRemaining: 0 }
+  });
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [expenseChange, setExpenseChange] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
@@ -182,19 +191,54 @@ const DashboardOverview = () => {
           </View>
         </View>
 
-        {/* Cash & Spend Cards */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
-          <View style={[styles.balanceCard, { flex: 1, marginRight: 8, marginBottom: 0, padding: 20 }]}>
-            <Text style={styles.balanceLabel}>Cash in PKR</Text>
-            <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.06 }]} numberOfLines={1} adjustsFontSizeToFit>
-              {currency} {formatAmount(totals.balance)}
+        {/* Dashboard Cards Layout */}
+        <View style={{ marginBottom: 24 }}>
+          {/* 1. Total Amount: Loan + Cash in Hand */}
+          <View style={[styles.balanceCard, { padding: 24, marginBottom: 12, backgroundColor: COLORS.primary }]}>
+            <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.8)' }]}>Total Amount</Text>
+            <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.08, color: '#fff', marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
+              {currency} {formatAmount(totals.totalAmount)}
+            </Text>
+            <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 4 }}>
+              Cash: {formatAmount(totals.cashInHand)} | Net Loan: {formatAmount(totals.loan.netRemaining)}
             </Text>
           </View>
-          <View style={[styles.balanceCard, { flex: 1, marginLeft: 8, marginBottom: 0, padding: 20, backgroundColor: COLORS.accent }]}>
-            <Text style={styles.balanceLabel}>Monthly Spend</Text>
-            <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.06 }]} numberOfLines={1} adjustsFontSizeToFit>
-              {currency} {formatAmount(totals.monthlySpend)}
-            </Text>
+
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+            {/* 2. Total Cash In Hand: Incoming */}
+            <View style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
+              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Incoming</Text>
+              <Text style={[styles.balanceAmount, { color: '#00e676', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
+                {currency} {formatAmount(totals.incoming)}
+              </Text>
+            </View>
+
+            {/* 3. Total Expense of the Month: Outgoing */}
+            <View style={[styles.balanceCard, { flex: 1, marginLeft: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(255, 82, 82, 0.2)' }]}>
+              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Outgoing</Text>
+              <Text style={[styles.balanceAmount, { color: '#ff5252', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
+                {currency} {formatAmount(totals.outgoing)}
+              </Text>
+            </View>
+          </View>
+
+          {/* 4. Total Loan: Loan Amount, Remaining, Paid */}
+          <View style={[styles.balanceCard, { padding: 18, backgroundColor: COLORS.accent, marginBottom: 0 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 0 }]}>Total Loan Status</Text>
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>{currency} {formatAmount(totals.loan.remaining)} Left</Text>
+            </View>
+            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 10 }} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>LOAN AMOUNT</Text>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.total)}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL PAID</Text>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.paid)}</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -317,7 +361,7 @@ const DashboardOverview = () => {
 
           <View style={styles.performanceGrid}>
              <View style={styles.gridItem}>
-               <GaugeChart score={totals.balance > 0 ? 85 : 15} label="Outlook" />
+               <GaugeChart score={totals.totalAmount > 0 ? 85 : 15} label="Outlook" />
              </View>
              <View style={styles.gridItem}>
                <GaugeChart score={Math.min((totals.monthlySpend / (totals.totalIncome || 1)) * 100, 100)} label="Spendings" />

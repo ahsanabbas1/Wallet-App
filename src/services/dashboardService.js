@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { transactionService } from './transactionService';
 import savingsGoalService from './savingsGoalService';
 import { paymentService } from './paymentService';
+import { loanService } from './loanService';
 
 export const dashboardService = {
   async getUserProfile(userId) {
@@ -32,17 +33,22 @@ export const dashboardService = {
     const { data: transactions } = await transactionService.getTransactions(userId, { period: 'ALL' });
     const { data: goalsData } = await savingsGoalService.getSavingsGoals(userId);
 
-    const income  = transactions.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
-    const expense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+    const allLoans = await loanService.getLoans(userId);
+    const loanSummary = allLoans.reduce((acc, l) => {
+      acc.total += parseFloat(l.total_amount || 0);
+      acc.paid += parseFloat(l.paid_amount || 0);
+      acc.remaining += parseFloat(l.remaining || 0);
+      // For the "Total Amount" calculation, we treat given loans as assets and taken loans as liabilities?
+      // User said: Total Amount = Loan + Cash in Hand. 
+      // Usually this means: Current Balance + Net Owed to us.
+      if (l.type === 'given') acc.netRemaining += parseFloat(l.remaining || 0);
+      else acc.netRemaining -= parseFloat(l.remaining || 0);
+      return acc;
+    }, { total: 0, paid: 0, remaining: 0, netRemaining: 0 });
 
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-
-    const monthlySpend = transactions
-      .filter(t => t.type === 'expense')
-      .filter(t => { const d = new Date(t.date); return d.getMonth() === currentMonth && d.getFullYear() === currentYear; })
-      .reduce((s, t) => s + parseFloat(t.amount), 0);
+    const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0);
+    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+    const cashInHand = totalIncome - totalExpense;
 
     let totalSaved = 0;
     let savingsProgress = 0;
@@ -57,8 +63,17 @@ export const dashboardService = {
     if (allCategories) allCategories.forEach(c => { categoryCache[c.id] = c; });
 
     const catTotals = {};
-    let totalExpense = 0;
+    let currentMonthlyExpense = 0;
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
     transactions.filter(t => t.type === 'expense').forEach(t => {
+      const d = new Date(t.date);
+      if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+        currentMonthlyExpense += parseFloat(t.amount);
+      }
+      
       const category = categoryCache[t.category_id];
       let displayCategory = category;
       if (category?.parent_id) displayCategory = categoryCache[category.parent_id] || category;
@@ -66,7 +81,6 @@ export const dashboardService = {
       const amount = parseFloat(t.amount);
       if (!catTotals[catName]) catTotals[catName] = { amount: 0, color: displayCategory?.color || '#4051b5' };
       catTotals[catName].amount += amount;
-      totalExpense += amount;
     });
 
     const breakdown = Object.keys(catTotals).map(name => ({
@@ -84,8 +98,8 @@ export const dashboardService = {
       .reduce((s, t) => s + parseFloat(t.amount), 0);
 
     let expenseChange = 0;
-    if (lastMonthExpenses > 0) expenseChange = ((monthlySpend - lastMonthExpenses) / lastMonthExpenses) * 100;
-    else if (monthlySpend > 0) expenseChange = 100;
+    if (lastMonthExpenses > 0) expenseChange = ((currentMonthlyExpense - lastMonthExpenses) / lastMonthExpenses) * 100;
+    else if (currentMonthlyExpense > 0) expenseChange = 100;
 
     let plannedData = [];
     try { plannedData = (await paymentService.getPlannedPayments(userId)).slice(0, 3); } catch {}
@@ -93,13 +107,21 @@ export const dashboardService = {
     return {
       recentTransactions: transactions.slice(0, 5),
       recentPlanned: plannedData || [],
-      totals: { balance: income - expense, monthlySpend, totalSaved, totalIncome: income },
+      totals: { 
+        totalAmount: cashInHand + loanSummary.netRemaining,
+        incoming: totalIncome,
+        outgoing: currentMonthlyExpense,
+        monthlySpend: currentMonthlyExpense,
+        cashInHand,
+        loan: loanSummary,
+        totalIncome: totalIncome // Keep for insights
+      },
       expenseChange,
       savingsProgress,
       categoryBreakdown: breakdown,
       performanceMetrics: {
-        balanceScore: Math.min(Math.max((income / (expense || 1)) * 50, 0), 100),
-        cashFlowScore: Math.min(Math.max((income - expense) > 0 ? 80 : 20, 0), 100),
+        balanceScore: Math.min(Math.max((totalIncome / (totalExpense || 1)) * 50, 0), 100),
+        cashFlowScore: Math.min(Math.max(cashInHand > 0 ? 80 : 20, 0), 100),
       },
     };
   },
