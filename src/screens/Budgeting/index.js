@@ -379,7 +379,9 @@ const Budgeting = ({ navigation }) => {
 
         {/* Savings Goals Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Savings Goals</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Savings Goals')}>
+            <Text style={styles.sectionTitle}>Savings Goals</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Savings Goals')}>
             <Plus color={COLORS.primary} size={20} />
           </TouchableOpacity>

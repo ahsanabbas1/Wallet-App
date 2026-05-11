@@ -130,6 +130,19 @@ export const loanService = {
     return { queued: false, id: payload.id, isSettling };
   },
 
+  async updatePayment(id, fields) {
+    const { error } = await supabase
+      .from('loan_payments')
+      .update({
+        amount: Number(fields.amount),
+        date: fields.date,
+        notes: fields.notes ?? null,
+      })
+      .eq('id', id);
+    if (error) throw error;
+    return { queued: false };
+  },
+
   async deletePayment(id) {
     const { error } = await supabase.from('loan_payments').delete().eq('id', id);
     if (error) throw error;

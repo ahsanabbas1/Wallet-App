@@ -81,7 +81,7 @@ async function processSinglePlannedPayment(item) {
   const now = new Date();
 
   if (!item.next_date || !item.is_active) return false;
-  
+
   // Check start/end bounds
   if (item.end_date) {
     const endDate = parseLocalDate(item.end_date);
@@ -96,9 +96,25 @@ async function processSinglePlannedPayment(item) {
   const nextDue = new Date(item.next_date);
   if (isNaN(nextDue.getTime()) || nextDue > now) return false;
 
-  // AUTO-SYNC: Only record exactly ONE (the current next_date)
-  // This prevents bulk "catch-up" of multiple missed periods
-  const transactions = [{
+  // Compute the new next_date before touching the DB
+  const nextOccurrence = getNextOccurrence(item.next_date.split('T')[0], item.frequency);
+  const timePart = item.next_date.includes('T') ? item.next_date.split('T')[1] : '12:00:00.000';
+  const newNextDate = `${nextOccurrence}T${timePart}`;
+
+  // Advance next_date FIRST with a conditional update (WHERE next_date = current value).
+  // If another concurrent call already advanced it, this update matches 0 rows and we
+  // skip the insert — preventing duplicate transactions.
+  const { data: updated, error: updateError } = await supabase
+    .from('planned_payments')
+    .update({ next_date: newNextDate })
+    .eq('id', item.id)
+    .eq('next_date', item.next_date)
+    .select('id');
+  if (updateError) throw updateError;
+  if (!updated || updated.length === 0) return false; // another call already processed this
+
+  // Now safely record the transaction
+  const tx = {
     id: createId(),
     user_id: item.user_id,
     category_id: item.category_id ?? null,
@@ -106,19 +122,12 @@ async function processSinglePlannedPayment(item) {
     type: item.type || 'expense',
     title: item.title,
     description: item.description || `Auto-recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
-    date: item.next_date, // Use the full timestamp from next_date
-  }];
+    date: item.next_date,
+  };
 
-  const { error: insertError } = await supabase.from('transactions').insert(transactions);
+  const { error: insertError } = await supabase.from('transactions').insert(tx);
   if (insertError) throw insertError;
 
-  // Advance next_date to exactly one period later
-  const nextOccurrence = getNextOccurrence(item.next_date.split('T')[0], item.frequency);
-  // Re-attach the time if present
-  const timePart = item.next_date.includes('T') ? item.next_date.split('T')[1] : '12:00:00.000';
-  const newNextDate = `${nextOccurrence}T${timePart}`;
-
-  await supabase.from('planned_payments').update({ next_date: newNextDate }).eq('id', item.id);
   return true;
 }
 

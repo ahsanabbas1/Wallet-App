@@ -75,13 +75,14 @@ const LoanManagement = () => {
   const [savingLoan,     setSavingLoan]     = useState(false);
 
   /* ── Add-payment modal ──────────────────────────────────────────── */
-  const [showAddPayment,  setShowAddPayment]  = useState(false);
-  const [paymentLoan,     setPaymentLoan]     = useState(null);
-  const [paymentAmount,   setPaymentAmount]   = useState('');
-  const [paymentDate,     setPaymentDate]     = useState(new Date());
-  const [paymentNotes,    setPaymentNotes]    = useState('');
-  const [showPayDate,     setShowPayDate]     = useState(false);
-  const [savingPayment,   setSavingPayment]   = useState(false);
+  const [showAddPayment,    setShowAddPayment]    = useState(false);
+  const [paymentLoan,       setPaymentLoan]       = useState(null);
+  const [editingPaymentItem, setEditingPaymentItem] = useState(null);
+  const [paymentAmount,     setPaymentAmount]     = useState('');
+  const [paymentDate,       setPaymentDate]       = useState(new Date());
+  const [paymentNotes,      setPaymentNotes]      = useState('');
+  const [showPayDate,       setShowPayDate]       = useState(false);
+  const [savingPayment,     setSavingPayment]     = useState(false);
 
   /* ── Fetch ──────────────────────────────────────────────────────── */
   const fetchLoans = useCallback(async () => {
@@ -188,35 +189,54 @@ const LoanManagement = () => {
   /* ══ PAYMENT CRUD ═══════════════════════════════════════════════════ */
 
   const openAddPayment = (loan) => {
-    setPaymentLoan  (loan);
-    setPaymentAmount('');
-    setPaymentDate  (new Date());
-    setPaymentNotes ('');
-    setShowAddPayment(true);
+    setPaymentLoan       (loan);
+    setEditingPaymentItem(null);
+    setPaymentAmount     ('');
+    setPaymentDate       (new Date());
+    setPaymentNotes      ('');
+    setShowAddPayment    (true);
+  };
+
+  const openEditPayment = (loan, pay) => {
+    setPaymentLoan       (loan);
+    setEditingPaymentItem(pay);
+    setPaymentAmount     (String(pay.amount));
+    setPaymentDate       (new Date(pay.date));
+    setPaymentNotes      (pay.notes || '');
+    setShowAddPayment    (true);
   };
 
   const handleSavePayment = async () => {
     const amt = parseFloat(paymentAmount);
     if (!amt || amt <= 0) return Alert.alert('Invalid', 'Enter a valid payment amount.');
-    if (amt > paymentLoan.remaining + 0.01)
+
+    if (!editingPaymentItem && amt > paymentLoan.remaining + 0.01)
       return Alert.alert('Exceeds Balance', `Remaining balance is ${fmt(paymentLoan.remaining, currency)}.`);
 
     setSavingPayment(true);
     try {
-      const { isSettling } = await loanService.savePayment(
-        {
-          date:  paymentDate.toISOString(),
-          notes: paymentNotes.trim() || null,
+      if (editingPaymentItem) {
+        await loanService.updatePayment(editingPaymentItem.id, {
           amount: amt,
-        },
-        paymentLoan
-      );
-
-      if (isSettling) {
-        Alert.alert('🎉 Fully Settled!', `The loan with ${paymentLoan.person_name} is now fully settled.`);
+          date:   paymentDate.toISOString(),
+          notes:  paymentNotes.trim() || null,
+        });
+      } else {
+        const { isSettling } = await loanService.savePayment(
+          {
+            date:   paymentDate.toISOString(),
+            notes:  paymentNotes.trim() || null,
+            amount: amt,
+          },
+          paymentLoan
+        );
+        if (isSettling) {
+          Alert.alert('🎉 Fully Settled!', `The loan with ${paymentLoan.person_name} is now fully settled.`);
+        }
       }
 
       setShowAddPayment(false);
+      setEditingPaymentItem(null);
       fetchLoans();
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -475,6 +495,12 @@ const LoanManagement = () => {
                             </Text>
                           </View>
                           <TouchableOpacity
+                            style={[styles.paymentDeleteBtn, { marginRight: 4 }]}
+                            onPress={() => openEditPayment(loan, pay)}
+                          >
+                            <Pencil color={COLORS.textSecondary} size={14} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
                             style={styles.paymentDeleteBtn}
                             onPress={() => handleDeletePayment(pay.id)}
                           >
@@ -647,7 +673,7 @@ const LoanManagement = () => {
         visible={showAddPayment}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowAddPayment(false)}
+        onRequestClose={() => { setShowAddPayment(false); setEditingPaymentItem(null); }}
       >
         <KeyboardAvoidingView
           style={styles.modalOverlay}
@@ -657,12 +683,12 @@ const LoanManagement = () => {
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Record Payment</Text>
+                <Text style={styles.modalTitle}>{editingPaymentItem ? 'Edit Payment' : 'Record Payment'}</Text>
                 <Text style={[styles.paymentItemDate, { marginTop: 2 }]}>
                   {paymentLoan?.person_name}  ·  {fmt(paymentLoan?.remaining, currency)} remaining
                 </Text>
               </View>
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowAddPayment(false)}>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => { setShowAddPayment(false); setEditingPaymentItem(null); }}>
                 <X color={COLORS.text} size={18} />
               </TouchableOpacity>
             </View>
@@ -712,7 +738,7 @@ const LoanManagement = () => {
               >
                 {savingPayment
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.saveBtnText}>Save Payment</Text>
+                  : <Text style={styles.saveBtnText}>{editingPaymentItem ? 'Update Payment' : 'Save Payment'}</Text>
                 }
               </TouchableOpacity>
             </ScrollView>

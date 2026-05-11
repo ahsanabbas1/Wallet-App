@@ -18,17 +18,17 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   CalendarClock,
   Plus,
-  ArrowLeft,
+  Menu,
   Clock,
   Calendar as CalendarIcon,
   Repeat,
   X,
-  ChevronRight,
 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useDrawer } from '../../context/DrawerContext';
 
 import AppButton from '../../components/Common/AppButton';
 import AppInput from '../../components/Common/AppInput';
@@ -64,6 +64,7 @@ const buildDefaultForm = () => {
 
 const PlannedPayments = () => {
   const navigation = useNavigation();
+  const { openDrawer } = useDrawer();
   const { userId }   = useAuth();
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
@@ -331,8 +332,8 @@ const PlannedPayments = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <ArrowLeft color={COLORS.text} size={24} />
+        <Pressable onPress={openDrawer} style={styles.backButton}>
+          <Menu color={COLORS.text} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>Planned Payments</Text>
         <Pressable onPress={() => setShowAddModal(true)} style={styles.addButton}>
