@@ -1,12 +1,5 @@
-import { supabase } from '../lib/supabase';
+import { getDb, generateId } from '../lib/db';
 import { transactionService } from './transactionService';
-
-function createId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
 
 function enrichLoan(loan, payments) {
   const loanPayments = (payments || [])
@@ -14,139 +7,133 @@ function enrichLoan(loan, payments) {
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const paidAmount = loanPayments.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
-  const total = parseFloat(loan.total_amount || 0);
-  const remaining = Math.max(total - paidAmount, 0);
-  const pct = total > 0 ? Math.min((paidAmount / total) * 100, 100) : 0;
+  const total      = parseFloat(loan.total_amount || 0);
+  const remaining  = Math.max(total - paidAmount, 0);
+  const pct        = total > 0 ? Math.min((paidAmount / total) * 100, 100) : 0;
 
-  return { ...loan, loan_payments: loanPayments, paid_amount: paidAmount, remaining, pct };
+  return {
+    ...loan,
+    is_settled:   loan.is_settled === 1 || loan.is_settled === true,
+    loan_payments: loanPayments,
+    paid_amount:   paidAmount,
+    remaining,
+    pct,
+  };
 }
 
 export const loanService = {
   async getLoans(userId) {
-    const [resLoans, resPayments] = await Promise.all([
-      supabase.from('loans').select('*').eq('user_id', userId).order('date', { ascending: false }),
-      supabase.from('loan_payments').select('*, loans!inner(user_id)').eq('loans.user_id', userId),
-    ]);
-    if (resLoans.error) throw resLoans.error;
-    const loans = resLoans.data || [];
-    const payments = resPayments.data || [];
+    const db       = getDb();
+    const loans    = await db.getAllAsync(
+      'SELECT * FROM loans WHERE user_id = ? ORDER BY date DESC',
+      [userId]
+    );
+    const loanIds  = loans.map(l => l.id);
+    let payments   = [];
+    if (loanIds.length > 0) {
+      const placeholders = loanIds.map(() => '?').join(', ');
+      payments = await db.getAllAsync(
+        `SELECT * FROM loan_payments WHERE loan_id IN (${placeholders})`,
+        loanIds
+      );
+    }
     return loans.map(loan => enrichLoan(loan, payments));
   },
 
   async saveLoan(loanData, isNew = true) {
-    const payload = {
-      ...loanData,
-      id: loanData.id || createId(),
-      total_amount: Number(loanData.total_amount),
-      created_at: loanData.created_at || new Date().toISOString(),
-    };
+    const db = getDb();
+    const id = loanData.id || generateId();
 
     if (isNew) {
-      const { error } = await supabase.from('loans').insert({
-        id: payload.id,
-        user_id: payload.user_id,
-        type: payload.type,
-        person_name: payload.person_name,
-        total_amount: payload.total_amount,
-        date: payload.date,
-        notes: payload.notes ?? null,
-        is_settled: payload.is_settled ?? false,
-        created_at: payload.created_at,
-      });
-      if (error) throw error;
+      await db.runAsync(
+        `INSERT INTO loans (id, user_id, type, person_name, total_amount, date, notes, is_settled, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id, loanData.user_id, loanData.type, loanData.person_name,
+          Number(loanData.total_amount), loanData.date,
+          loanData.notes ?? null, loanData.is_settled ? 1 : 0,
+          loanData.created_at || new Date().toISOString(),
+        ]
+      );
 
-      const isGiven = payload.type === 'given';
+      const isGiven = loanData.type === 'given';
       await transactionService.addTransaction({
-        user_id: payload.user_id,
-        amount: payload.total_amount,
-        type: isGiven ? 'expense' : 'income',
-        title: isGiven ? `Loan to ${payload.person_name}` : `Loan from ${payload.person_name}`,
-        description: payload.notes || 'Loan',
-        date: payload.date,
+        user_id:     loanData.user_id,
+        amount:      loanData.total_amount,
+        type:        isGiven ? 'expense' : 'income',
+        title:       isGiven ? `Loan to ${loanData.person_name}` : `Loan from ${loanData.person_name}`,
+        description: loanData.notes || 'Loan',
+        date:        loanData.date,
       });
     } else {
-      const { error } = await supabase
-        .from('loans')
-        .update({
-          type: payload.type,
-          person_name: payload.person_name,
-          total_amount: payload.total_amount,
-          date: payload.date,
-          notes: payload.notes ?? null,
-        })
-        .eq('id', payload.id);
-      if (error) throw error;
+      await db.runAsync(
+        `UPDATE loans
+         SET type = ?, person_name = ?, total_amount = ?, date = ?, notes = ?
+         WHERE id = ?`,
+        [loanData.type, loanData.person_name, Number(loanData.total_amount),
+         loanData.date, loanData.notes ?? null, loanData.id]
+      );
     }
-    return { queued: false, id: payload.id };
+    return { id };
   },
 
   async deleteLoan(userId, id) {
-    const { error } = await supabase.from('loans').delete().eq('id', id);
-    if (error) throw error;
-    return { queued: false };
+    const db = getDb();
+    await db.runAsync('DELETE FROM loan_payments WHERE loan_id = ?', [id]);
+    await db.runAsync('DELETE FROM loans WHERE id = ?', [id]);
+    return {};
   },
 
   async markSettled(userId, id, isSettled) {
-    const { error } = await supabase.from('loans').update({ is_settled: isSettled }).eq('id', id);
-    if (error) throw error;
+    const db = getDb();
+    await db.runAsync('UPDATE loans SET is_settled = ? WHERE id = ?', [isSettled ? 1 : 0, id]);
   },
 
   async savePayment(paymentData, loan) {
-    const payload = {
-      ...paymentData,
-      id: paymentData.id || createId(),
-      loan_id: loan.id,
-      amount: Number(paymentData.amount),
-      created_at: paymentData.created_at || new Date().toISOString(),
-    };
+    const db  = getDb();
+    const id  = paymentData.id || generateId();
+    const amt = Number(paymentData.amount);
 
-    const newPaid = (loan.paid_amount || 0) + payload.amount;
+    await db.runAsync(
+      `INSERT INTO loan_payments (id, loan_id, amount, date, notes, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, loan.id, amt, paymentData.date, paymentData.notes ?? null,
+       paymentData.created_at || new Date().toISOString()]
+    );
+
+    const newPaid    = (loan.paid_amount || 0) + amt;
     const isSettling = newPaid >= parseFloat(loan.total_amount || 0);
 
-    const { error } = await supabase.from('loan_payments').insert({
-      id: payload.id,
-      loan_id: payload.loan_id,
-      amount: payload.amount,
-      date: payload.date,
-      notes: payload.notes ?? null,
-      created_at: payload.created_at,
-    });
-    if (error) throw error;
-
     if (isSettling) {
-      await supabase.from('loans').update({ is_settled: true }).eq('id', loan.id);
+      await db.runAsync('UPDATE loans SET is_settled = 1 WHERE id = ?', [loan.id]);
     }
 
     const isGiven = loan.type === 'given';
     await transactionService.addTransaction({
-      user_id: loan.user_id,
-      amount: payload.amount,
-      type: isGiven ? 'income' : 'expense',
-      title: isGiven ? `Loan repaid by ${loan.person_name}` : `Loan repaid to ${loan.person_name}`,
-      description: payload.notes || 'Loan repayment',
-      date: payload.date,
+      user_id:     loan.user_id,
+      amount:      amt,
+      type:        isGiven ? 'income' : 'expense',
+      title:       isGiven ? `Loan repaid by ${loan.person_name}` : `Loan repaid to ${loan.person_name}`,
+      description: paymentData.notes || 'Loan repayment',
+      date:        paymentData.date,
     });
 
-    return { queued: false, id: payload.id, isSettling };
+    return { id, isSettling };
   },
 
   async updatePayment(id, fields) {
-    const { error } = await supabase
-      .from('loan_payments')
-      .update({
-        amount: Number(fields.amount),
-        date: fields.date,
-        notes: fields.notes ?? null,
-      })
-      .eq('id', id);
-    if (error) throw error;
-    return { queued: false };
+    const db = getDb();
+    await db.runAsync(
+      'UPDATE loan_payments SET amount = ?, date = ?, notes = ? WHERE id = ?',
+      [Number(fields.amount), fields.date, fields.notes ?? null, id]
+    );
+    return {};
   },
 
   async deletePayment(id) {
-    const { error } = await supabase.from('loan_payments').delete().eq('id', id);
-    if (error) throw error;
-    return { queued: false };
+    const db = getDb();
+    await db.runAsync('DELETE FROM loan_payments WHERE id = ?', [id]);
+    return {};
   },
 };
 

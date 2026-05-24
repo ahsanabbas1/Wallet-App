@@ -312,7 +312,7 @@ export default function Settings() {
           <SettingRow
             icon={Info}
             label="App Version"
-            value="1.0.0"
+            value="2.0.0"
             onPress={null}
             rightElement={<View />}
           />

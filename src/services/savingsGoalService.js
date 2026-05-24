@@ -1,86 +1,91 @@
-import { supabase } from '../lib/supabase';
-
-function createId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
+import { getDb, generateId } from '../lib/db';
 
 export const savingsGoalService = {
   async getSavingsGoals(userId) {
-    const { data, error } = await supabase
-      .from('savings_goals')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    return { data: data || [] };
+    const db   = getDb();
+    const data = await db.getAllAsync(
+      'SELECT * FROM savings_goals WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    return { data };
   },
 
   async saveSavingsGoal(userId, goalData, existingId = null) {
-    const id = existingId || goalData.id || createId();
-    const payload = {
-      id,
-      user_id: userId,
-      title: goalData.title,
-      target_amount: Number(goalData.target_amount),
-      saved_amount: Number(goalData.saved_amount ?? 0),
-      icon: goalData.icon ?? null,
-      color: goalData.color ?? null,
-      start_date: goalData.start_date ?? null,
-      target_date: goalData.target_date ?? null,
-      repeat_basis: goalData.repeat_basis ?? null,
-      repeat_value: goalData.repeat_value == null ? null : Number(goalData.repeat_value),
-      created_at: goalData.created_at || new Date().toISOString(),
-    };
+    const db = getDb();
+    const id = existingId || goalData.id || generateId();
 
     if (existingId) {
-      const { error } = await supabase
-        .from('savings_goals')
-        .update({
-          title: payload.title,
-          target_amount: payload.target_amount,
-          saved_amount: payload.saved_amount,
-          icon: payload.icon,
-          color: payload.color,
-          start_date: payload.start_date,
-          target_date: payload.target_date,
-          repeat_basis: payload.repeat_basis,
-          repeat_value: payload.repeat_value,
-        })
-        .eq('id', existingId);
-      if (error) throw error;
+      await db.runAsync(
+        `UPDATE savings_goals
+         SET title = ?, target_amount = ?, saved_amount = ?, icon = ?, color = ?,
+             start_date = ?, target_date = ?, repeat_basis = ?, repeat_value = ?
+         WHERE id = ?`,
+        [
+          goalData.title,
+          Number(goalData.target_amount),
+          Number(goalData.saved_amount ?? 0),
+          goalData.icon     ?? null,
+          goalData.color    ?? null,
+          goalData.start_date  ?? null,
+          goalData.target_date ?? null,
+          goalData.repeat_basis ?? null,
+          goalData.repeat_value == null ? null : Number(goalData.repeat_value),
+          existingId,
+        ]
+      );
     } else {
-      const { error } = await supabase.from('savings_goals').insert(payload);
-      if (error) throw error;
+      await db.runAsync(
+        `INSERT INTO savings_goals
+           (id, user_id, title, target_amount, saved_amount, icon, color,
+            start_date, target_date, repeat_basis, repeat_value, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id, userId,
+          goalData.title,
+          Number(goalData.target_amount),
+          Number(goalData.saved_amount ?? 0),
+          goalData.icon     ?? null,
+          goalData.color    ?? null,
+          goalData.start_date  ?? null,
+          goalData.target_date ?? null,
+          goalData.repeat_basis ?? null,
+          goalData.repeat_value == null ? null : Number(goalData.repeat_value),
+          goalData.created_at || new Date().toISOString(),
+        ]
+      );
     }
-    return { queued: false, id };
+    return { id };
   },
 
   async updateSavingsGoal(userId, id, updates) {
-    const { error } = await supabase
-      .from('savings_goals')
-      .update({
-        ...(updates.title !== undefined && { title: updates.title }),
-        ...(updates.target_amount !== undefined && { target_amount: Number(updates.target_amount) }),
-        ...(updates.saved_amount !== undefined && { saved_amount: Number(updates.saved_amount) }),
-        ...(updates.icon !== undefined && { icon: updates.icon ?? null }),
-        ...(updates.color !== undefined && { color: updates.color ?? null }),
-        ...(updates.start_date !== undefined && { start_date: updates.start_date ?? null }),
-        ...(updates.target_date !== undefined && { target_date: updates.target_date ?? null }),
-        ...(updates.repeat_basis !== undefined && { repeat_basis: updates.repeat_basis ?? null }),
-        ...(updates.repeat_value !== undefined && { repeat_value: updates.repeat_value == null ? null : Number(updates.repeat_value) }),
-      })
-      .eq('id', id);
-    if (error) throw error;
-    return { queued: false, id };
+    const db     = getDb();
+    const fields = [];
+    const vals   = [];
+
+    const add = (col, val) => { fields.push(`${col} = ?`); vals.push(val); };
+
+    if (updates.title        !== undefined) add('title',        updates.title);
+    if (updates.target_amount !== undefined) add('target_amount', Number(updates.target_amount));
+    if (updates.saved_amount  !== undefined) add('saved_amount',  Number(updates.saved_amount));
+    if (updates.icon          !== undefined) add('icon',          updates.icon ?? null);
+    if (updates.color         !== undefined) add('color',         updates.color ?? null);
+    if (updates.start_date    !== undefined) add('start_date',    updates.start_date ?? null);
+    if (updates.target_date   !== undefined) add('target_date',   updates.target_date ?? null);
+    if (updates.repeat_basis  !== undefined) add('repeat_basis',  updates.repeat_basis ?? null);
+    if (updates.repeat_value  !== undefined) add('repeat_value',  updates.repeat_value == null ? null : Number(updates.repeat_value));
+
+    if (fields.length === 0) return { id };
+    await db.runAsync(
+      `UPDATE savings_goals SET ${fields.join(', ')} WHERE id = ?`,
+      [...vals, id]
+    );
+    return { id };
   },
 
   async deleteSavingsGoal(userId, id) {
-    const { error } = await supabase.from('savings_goals').delete().eq('id', id);
-    if (error) throw error;
-    return { queued: false, id };
+    const db = getDb();
+    await db.runAsync('DELETE FROM savings_goals WHERE id = ?', [id]);
+    return { id };
   },
 };
 

@@ -1,47 +1,57 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { supabase } from '../lib/supabase';
+import { getDb } from '../lib/db';
 
 const ProfileContext = createContext({
   currency: 'PKR',
-  name: '',
-  loading: true,
-  refresh: () => {},
+  name:     '',
+  loading:  true,
+  refresh:        () => {},
   updateCurrency: () => {},
-  updateName: () => {},
+  updateName:     () => {},
 });
 
 export const ProfileProvider = ({ children }) => {
-  const { userId } = useAuth();
+  const { userId, dbReady } = useAuth();
   const [currency, setCurrency] = useState('PKR');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [name,     setName]     = useState('');
+  const [loading,  setLoading]  = useState(true);
 
   const refresh = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
+    if (!userId || !dbReady) { setLoading(false); return; }
     try {
-      const { data } = await supabase
-        .from('users')
-        .select('name, currency')
-        .eq('id', userId)
-        .single();
-      if (data) {
-        setCurrency(data.currency || 'PKR');
-        setName(data.name || '');
+      const db   = getDb();
+      const row  = await db.getFirstAsync(
+        'SELECT name, currency FROM users WHERE id = ?',
+        [userId]
+      );
+      if (row) {
+        setCurrency(row.currency || 'PKR');
+        setName(row.name || '');
       }
     } catch {}
     finally { setLoading(false); }
-  }, [userId]);
+  }, [userId, dbReady]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  const updateCurrency = useCallback((code) => {
+  const updateCurrency = useCallback(async (code) => {
     setCurrency(code);
-  }, []);
+    if (!userId || !dbReady) return;
+    try {
+      const db = getDb();
+      await db.runAsync('UPDATE users SET currency = ? WHERE id = ?', [code, userId]);
+    } catch {}
+  }, [userId, dbReady]);
 
-  const updateName = useCallback((newName) => {
+  const updateName = useCallback(async (newName) => {
     setName(newName);
-  }, []);
+    if (!userId || !dbReady) return;
+    try {
+      const db = getDb();
+      await db.runAsync('UPDATE users SET name = ? WHERE id = ?', [newName, userId]);
+    } catch {}
+  }, [userId, dbReady]);
 
   return (
     <ProfileContext.Provider value={{ currency, name, loading, refresh, updateCurrency, updateName }}>

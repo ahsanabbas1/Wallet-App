@@ -1,7 +1,5 @@
-import { supabase } from '../lib/supabase';
+import { getDb, generateId } from '../lib/db';
 import { paymentService } from './paymentService';
-
-/* ─── Notification type registry ─────────────────────────────────────────── */
 
 export const NOTIFICATION_TYPES = {
   PAYMENT_DUE:       'payment_due',
@@ -25,8 +23,6 @@ export const NOTIFICATION_META = {
   [NOTIFICATION_TYPES.LARGE_TRANSACTION]: { label: 'Large Transaction Alerts',  color: '#ff9800', icon: 'ArrowUpRight'   },
 };
 
-/* ─── Default preferences ────────────────────────────────────────────────── */
-
 export const DEFAULT_PREFERENCES = {
   [NOTIFICATION_TYPES.PAYMENT_DUE]:       { enabled: true,  daysBefore: 1 },
   [NOTIFICATION_TYPES.BUDGET_WARNING]:    { enabled: true,  threshold: 80 },
@@ -38,17 +34,15 @@ export const DEFAULT_PREFERENCES = {
   [NOTIFICATION_TYPES.LARGE_TRANSACTION]: { enabled: false, thresholdAmount: 10000 },
 };
 
-/* ─── Preferences CRUD ───────────────────────────────────────────────────── */
+/* ── Preferences ──────────────────────────────────────────────────────────── */
 
 export const getPreferences = async (userId) => {
   try {
-    const { data } = await supabase
-      .from('users')
-      .select('notification_prefs')
-      .eq('id', userId)
-      .single();
-
-    const stored = data?.notification_prefs || {};
+    const db  = getDb();
+    const row = await db.getFirstAsync('SELECT notification_prefs FROM users WHERE id = ?', [userId]);
+    const stored = row?.notification_prefs
+      ? JSON.parse(row.notification_prefs)
+      : {};
     const merged = {};
     Object.keys(DEFAULT_PREFERENCES).forEach(type => {
       merged[type] = { ...DEFAULT_PREFERENCES[type], ...(stored[type] || {}) };
@@ -61,10 +55,11 @@ export const getPreferences = async (userId) => {
 
 export const savePreferences = async (userId, prefs) => {
   try {
-    await supabase
-      .from('users')
-      .update({ notification_prefs: prefs })
-      .eq('id', userId);
+    const db = getDb();
+    await db.runAsync(
+      'UPDATE users SET notification_prefs = ? WHERE id = ?',
+      [JSON.stringify(prefs), userId]
+    );
     return true;
   } catch (e) {
     console.warn('savePreferences error:', e.message);
@@ -72,18 +67,16 @@ export const savePreferences = async (userId, prefs) => {
   }
 };
 
-/* ─── Notification CRUD ──────────────────────────────────────────────────── */
+/* ── Notification CRUD ────────────────────────────────────────────────────── */
 
 export const getNotifications = async (userId, limit = 50) => {
   try {
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-    if (error) throw error;
-    return data || [];
+    const db   = getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+      [userId, limit]
+    );
+    return rows.map(n => ({ ...n, is_read: n.is_read === 1, data: n.data ? JSON.parse(n.data) : null }));
   } catch (e) {
     console.warn('getNotifications error:', e.message);
     return [];
@@ -92,75 +85,78 @@ export const getNotifications = async (userId, limit = 50) => {
 
 export const getUnreadCount = async (userId) => {
   try {
-    const { count, error } = await supabase
-      .from('notifications')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('is_read', false);
-    if (error) throw error;
-    return count || 0;
-  } catch {
-    return 0;
-  }
+    const db  = getDb();
+    const row = await db.getFirstAsync(
+      'SELECT COUNT(*) AS cnt FROM notifications WHERE user_id = ? AND is_read = 0',
+      [userId]
+    );
+    return row?.cnt ?? 0;
+  } catch { return 0; }
 };
 
 export const markAsRead = async (notificationId) => {
-  await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId);
+  try {
+    const db = getDb();
+    await db.runAsync('UPDATE notifications SET is_read = 1 WHERE id = ?', [notificationId]);
+  } catch {}
 };
 
 export const markAllAsRead = async (userId) => {
-  await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
+  try {
+    const db = getDb();
+    await db.runAsync('UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0', [userId]);
+  } catch {}
 };
 
 export const deleteNotification = async (id) => {
-  await supabase.from('notifications').delete().eq('id', id);
+  try {
+    const db = getDb();
+    await db.runAsync('DELETE FROM notifications WHERE id = ?', [id]);
+  } catch {}
 };
 
 export const clearAllNotifications = async (userId) => {
-  await supabase.from('notifications').delete().eq('user_id', userId);
+  try {
+    const db = getDb();
+    await db.runAsync('DELETE FROM notifications WHERE user_id = ?', [userId]);
+  } catch {}
 };
 
-/* ─── Internal helper: insert with dedup ────────────────────────────────── */
+/* ── Internal: dedup insert ───────────────────────────────────────────────── */
 
 const createNotification = async (userId, type, title, body, data = {}, dedupKey = null) => {
   try {
+    const db = getDb();
     if (dedupKey) {
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { data: existing } = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('dedup_key', dedupKey)
-        .gte('created_at', cutoff)
-        .limit(1);
-      if (existing && existing.length > 0) return;
+      const cutoff   = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const existing = await db.getFirstAsync(
+        'SELECT id FROM notifications WHERE user_id = ? AND dedup_key = ? AND created_at >= ? LIMIT 1',
+        [userId, dedupKey, cutoff]
+      );
+      if (existing) return;
     }
-    await supabase.from('notifications').insert({
-      user_id: userId, type, title, body, data,
-      dedup_key: dedupKey, is_read: false,
-    });
+    await db.runAsync(
+      `INSERT INTO notifications (id, user_id, type, title, body, data, dedup_key, is_read, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
+      [generateId(), userId, type, title, body, JSON.stringify(data), dedupKey ?? null, new Date().toISOString()]
+    );
   } catch (e) {
     console.warn('createNotification error:', e.message);
   }
 };
 
-/* ─── Helper: expand category IDs to include children ───────────────────── */
+/* ── Generators ───────────────────────────────────────────────────────────── */
 
 const getRelatedCategoryIds = (categoryId, allCategories) => {
   const children = allCategories.filter(c => c.parent_id === categoryId).map(c => c.id);
   return [categoryId, ...children];
 };
 
-/* ─── Individual generators ──────────────────────────────────────────────── */
-
 const checkPlannedPayments = async (userId, prefs, currency) => {
   if (!prefs[NOTIFICATION_TYPES.PAYMENT_DUE]?.enabled) return;
   const daysBefore = prefs[NOTIFICATION_TYPES.PAYMENT_DUE]?.daysBefore ?? 1;
-
-  const payments = await paymentService.getPlannedPayments(userId);
-
+  const payments   = await paymentService.getPlannedPayments(userId);
   if (!payments?.length) return;
-
   const now = new Date();
   for (const p of payments) {
     if (!p.next_date) continue;
@@ -169,8 +165,7 @@ const checkPlannedPayments = async (userId, prefs, currency) => {
     if (diff >= 0 && diff <= daysBefore) {
       const dueLabel = diff === 0 ? 'today' : diff === 1 ? 'tomorrow' : `in ${diff} days`;
       await createNotification(
-        userId,
-        NOTIFICATION_TYPES.PAYMENT_DUE,
+        userId, NOTIFICATION_TYPES.PAYMENT_DUE,
         `Payment Due: ${p.title}`,
         `${currency} ${parseFloat(p.amount).toLocaleString(undefined, { maximumFractionDigits: 0 })} due ${dueLabel}.`,
         { payment_id: p.id, amount: p.amount, frequency: p.frequency },
@@ -186,39 +181,34 @@ const checkBudgets = async (userId, prefs, currency) => {
   if (!warnEnabled && !exceedEnabled) return;
 
   const warnThreshold = (prefs[NOTIFICATION_TYPES.BUDGET_WARNING]?.threshold ?? 80) / 100;
-  const now       = new Date();
-  const periodKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const now        = new Date();
+  const periodKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-  // FIX: fetch all categories for hierarchy expansion
-  const [budgetRes, allCatRes, txRes] = await Promise.all([
-    supabase.from('budgets').select('id, category_id, total_amount, categories(name, color)').eq('user_id', userId).eq('period', periodKey),
-    supabase.from('categories').select('id, parent_id').or(`user_id.eq.${userId},user_id.is.null`),
-    supabase.from('transactions').select('category_id, amount').eq('user_id', userId).eq('type', 'expense').gte('date', monthStart).lte('date', monthEnd),
-  ]);
-
-  const budgets = budgetRes.data || [];
-  const allCats = allCatRes.data || [];
-  const txData  = txRes.data || [];
+  const db      = getDb();
+  const budgets = await db.getAllAsync('SELECT * FROM budgets WHERE user_id = ?', [userId]);
+  const allCats = await db.getAllAsync('SELECT id, parent_id, name, color FROM categories WHERE user_id = ? OR user_id IS NULL', [userId]);
+  const txData  = await db.getAllAsync(
+    "SELECT category_id, amount FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?",
+    [userId, monthStart, monthEnd]
+  );
+  const catMap  = Object.fromEntries(allCats.map(c => [c.id, c]));
 
   if (!budgets.length) return;
 
   for (const budget of budgets) {
-    // FIX: include sub-category transactions
     const relatedIds = getRelatedCategoryIds(budget.category_id, allCats);
-    const spent = txData
+    const spent      = txData
       .filter(t => relatedIds.includes(t.category_id))
       .reduce((s, t) => s + parseFloat(t.amount), 0);
-
-    const limit   = parseFloat(budget.total_amount);
-    const ratio   = limit > 0 ? spent / limit : 0;
-    const catName = budget.categories?.name || 'Category';
+    const limit      = parseFloat(budget.total_amount);
+    const ratio      = limit > 0 ? spent / limit : 0;
+    const catName    = catMap[budget.category_id]?.name || 'Category';
 
     if (exceedEnabled && ratio >= 1) {
       await createNotification(
-        userId,
-        NOTIFICATION_TYPES.BUDGET_EXCEEDED,
+        userId, NOTIFICATION_TYPES.BUDGET_EXCEEDED,
         `Budget Exceeded: ${catName}`,
         `You've spent ${currency} ${spent.toLocaleString(undefined, { maximumFractionDigits: 0 })} against a ${currency} ${limit.toLocaleString(undefined, { maximumFractionDigits: 0 })} budget this month.`,
         { budget_id: budget.id, spent, limit },
@@ -227,8 +217,7 @@ const checkBudgets = async (userId, prefs, currency) => {
     } else if (warnEnabled && ratio >= warnThreshold && ratio < 1) {
       const pct = (ratio * 100).toFixed(0);
       await createNotification(
-        userId,
-        NOTIFICATION_TYPES.BUDGET_WARNING,
+        userId, NOTIFICATION_TYPES.BUDGET_WARNING,
         `Budget Warning: ${catName}`,
         `${pct}% of your ${catName} budget used. ${currency} ${(limit - spent).toLocaleString(undefined, { maximumFractionDigits: 0 })} remaining.`,
         { budget_id: budget.id, spent, limit, percent: ratio * 100 },
@@ -246,11 +235,11 @@ const checkSavingsGoals = async (userId, prefs, currency) => {
   const milestones = prefs[NOTIFICATION_TYPES.GOAL_MILESTONE]?.milestones ?? [25, 50, 75, 100];
   const daysBefore = prefs[NOTIFICATION_TYPES.GOAL_DEADLINE]?.daysBefore  ?? 7;
 
-  const { data: goals } = await supabase
-    .from('savings_goals')
-    .select('id, title, target_amount, saved_amount, target_date')
-    .eq('user_id', userId);
-
+  const db    = getDb();
+  const goals = await db.getAllAsync(
+    'SELECT id, title, target_amount, saved_amount, target_date FROM savings_goals WHERE user_id = ?',
+    [userId]
+  );
   if (!goals?.length) return;
 
   const now = new Date();
@@ -263,8 +252,7 @@ const checkSavingsGoals = async (userId, prefs, currency) => {
       for (const milestone of milestones) {
         if (pct >= milestone) {
           await createNotification(
-            userId,
-            NOTIFICATION_TYPES.GOAL_MILESTONE,
+            userId, NOTIFICATION_TYPES.GOAL_MILESTONE,
             milestone === 100 ? `🎉 Goal Reached: ${goal.title}` : `${milestone}% Milestone: ${goal.title}`,
             milestone === 100
               ? `Congratulations! You've reached your savings goal of ${currency} ${target.toLocaleString(undefined, { maximumFractionDigits: 0 })}.`
@@ -282,8 +270,7 @@ const checkSavingsGoals = async (userId, prefs, currency) => {
       if (diff >= 0 && diff <= daysBefore && pct < 100) {
         const remaining = target - saved;
         await createNotification(
-          userId,
-          NOTIFICATION_TYPES.GOAL_DEADLINE,
+          userId, NOTIFICATION_TYPES.GOAL_DEADLINE,
           `Goal Deadline: ${goal.title}`,
           `${diff === 0 ? 'Today is' : `${diff} days until`} the deadline. ${currency} ${remaining.toLocaleString(undefined, { maximumFractionDigits: 0 })} still needed.`,
           { goal_id: goal.id, days_remaining: diff, remaining },
@@ -296,26 +283,30 @@ const checkSavingsGoals = async (userId, prefs, currency) => {
 
 const checkSpendingSpike = async (userId, prefs, currency) => {
   if (!prefs[NOTIFICATION_TYPES.SPENDING_SPIKE]?.enabled) return;
-  const threshold  = (prefs[NOTIFICATION_TYPES.SPENDING_SPIKE]?.threshold ?? 30) / 100;
-  const now        = new Date();
-  const curStart   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const prvStart   = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
-  const prvEnd     = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
-  const periodKey  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const threshold = (prefs[NOTIFICATION_TYPES.SPENDING_SPIKE]?.threshold ?? 30) / 100;
+  const now       = new Date();
+  const curStart  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const prvStart  = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+  const prvEnd    = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
+  const periodKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const [curRes, prvRes] = await Promise.all([
-    supabase.from('transactions').select('amount').eq('user_id', userId).eq('type', 'expense').gte('date', curStart),
-    supabase.from('transactions').select('amount').eq('user_id', userId).eq('type', 'expense').gte('date', prvStart).lte('date', prvEnd),
-  ]);
+  const db     = getDb();
+  const curTxs = await db.getAllAsync(
+    "SELECT amount FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ?",
+    [userId, curStart]
+  );
+  const prvTxs = await db.getAllAsync(
+    "SELECT amount FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?",
+    [userId, prvStart, prvEnd]
+  );
 
-  const cur = (curRes.data || []).reduce((s, t) => s + parseFloat(t.amount), 0);
-  const prv = (prvRes.data || []).reduce((s, t) => s + parseFloat(t.amount), 0);
+  const cur = curTxs.reduce((s, t) => s + parseFloat(t.amount), 0);
+  const prv = prvTxs.reduce((s, t) => s + parseFloat(t.amount), 0);
 
   if (prv > 0 && (cur - prv) / prv > threshold) {
     const pct = (((cur - prv) / prv) * 100).toFixed(0);
     await createNotification(
-      userId,
-      NOTIFICATION_TYPES.SPENDING_SPIKE,
+      userId, NOTIFICATION_TYPES.SPENDING_SPIKE,
       'Spending Spike Detected',
       `Your spending this month is ${pct}% higher than last month. ${currency} ${cur.toLocaleString(undefined, { maximumFractionDigits: 0 })} spent so far.`,
       { current: cur, previous: prv, increase_pct: pct },
@@ -326,20 +317,14 @@ const checkSpendingSpike = async (userId, prefs, currency) => {
 
 const checkNegativeBalance = async (userId, prefs, currency) => {
   if (!prefs[NOTIFICATION_TYPES.NEGATIVE_BALANCE]?.enabled) return;
-
-  const { data: txs } = await supabase
-    .from('transactions')
-    .select('amount, type')
-    .eq('user_id', userId);
-
+  const db  = getDb();
+  const txs = await db.getAllAsync('SELECT amount, type FROM transactions WHERE user_id = ?', [userId]);
   if (!txs?.length) return;
-
-  const balance = txs.reduce((s, t) => s + (t.type === 'income' ? 1 : -1) * parseFloat(t.amount), 0);
+  const balance   = txs.reduce((s, t) => s + (t.type === 'income' ? 1 : -1) * parseFloat(t.amount), 0);
   if (balance < 0) {
     const periodKey = new Date().toISOString().split('T')[0];
     await createNotification(
-      userId,
-      NOTIFICATION_TYPES.NEGATIVE_BALANCE,
+      userId, NOTIFICATION_TYPES.NEGATIVE_BALANCE,
       'Negative Balance Alert',
       `Your overall balance is ${currency} ${Math.abs(balance).toLocaleString(undefined, { maximumFractionDigits: 0 })} in the red. Review your expenses.`,
       { balance },
@@ -353,36 +338,30 @@ const checkLargeTransactions = async (userId, prefs, currency) => {
   const threshold = prefs[NOTIFICATION_TYPES.LARGE_TRANSACTION]?.thresholdAmount ?? 10000;
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: txs } = await supabase
-    .from('transactions')
-    .select('id, title, amount, categories(name)')
-    .eq('user_id', userId)
-    .eq('type', 'expense')
-    .gte('date', yesterday)
-    .gte('amount', threshold);
-
+  const db  = getDb();
+  const txs = await db.getAllAsync(
+    "SELECT t.id, t.title, t.amount, t.category_id, c.name AS cat_name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? AND t.amount >= ?",
+    [userId, yesterday, threshold]
+  );
   if (!txs?.length) return;
 
   for (const t of txs) {
     await createNotification(
-      userId,
-      NOTIFICATION_TYPES.LARGE_TRANSACTION,
+      userId, NOTIFICATION_TYPES.LARGE_TRANSACTION,
       `Large Expense: ${t.title || 'Transaction'}`,
-      `A ${t.categories?.name || 'expense'} of ${currency} ${parseFloat(t.amount).toLocaleString(undefined, { maximumFractionDigits: 0 })} was recorded.`,
+      `A ${t.cat_name || 'expense'} of ${currency} ${parseFloat(t.amount).toLocaleString(undefined, { maximumFractionDigits: 0 })} was recorded.`,
       { transaction_id: t.id, amount: t.amount },
       `large_tx_${t.id}`
     );
   }
 };
 
-/* ─── Main: generate all notifications ──────────────────────────────────── */
-
 export const generateNotifications = async (userId) => {
   try {
-    // Fetch user currency once and pass to all checkers
-    const profileRes = await supabase.from('users').select('currency').eq('id', userId).single();
-    const currency   = profileRes.data?.currency || 'PKR';
-    const prefs      = await getPreferences(userId);
+    const db  = getDb();
+    const row = await db.getFirstAsync('SELECT currency FROM users WHERE id = ?', [userId]);
+    const currency = row?.currency || 'PKR';
+    const prefs    = await getPreferences(userId);
 
     await Promise.all([
       checkPlannedPayments(userId, prefs, currency),

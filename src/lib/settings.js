@@ -1,58 +1,46 @@
+import { getDb } from './db';
 import { supabase } from './supabase';
 
-/**
- * Fetches the user settings for the currently authenticated user.
- * @returns {Promise<Object>} The settings object, or default {} if none exist.
- */
+// Resolves the current userId from the Supabase auth session (still used for auth only)
+async function getCurrentUserId() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
+}
+
 export const getUserSettings = async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return {};
+    const userId = await getCurrentUserId();
+    if (!userId) return {};
 
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('settings')
-      .eq('user_id', session.user.id)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // No settings row found, return empty default
-        return {};
-      }
-      throw error;
-    }
-
-    return data?.settings || {};
+    const db  = getDb();
+    const row = await db.getFirstAsync(
+      'SELECT settings FROM user_settings WHERE user_id = ?',
+      [userId]
+    );
+    if (!row) return {};
+    return row.settings ? JSON.parse(row.settings) : {};
   } catch (error) {
     console.warn('Error fetching user settings:', error.message);
     return {};
   }
 };
 
-/**
- * Updates or creates the user settings for the currently authenticated user.
- * @param {Object} newSettings - The new settings partial object to merge.
- * @returns {Promise<boolean>} True if successful, false otherwise.
- */
 export const updateUserSettings = async (newSettings) => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return false;
+    const userId = await getCurrentUserId();
+    if (!userId) return false;
 
-    // First fetch existing settings to deeply merge
-    const currentSettings = await getUserSettings();
-    const mergedSettings = { ...currentSettings, ...newSettings };
+    const current      = await getUserSettings();
+    const merged       = { ...current, ...newSettings };
+    const mergedJson   = JSON.stringify(merged);
+    const now          = new Date().toISOString();
 
-    const { error } = await supabase
-      .from('user_settings')
-      .upsert({
-        user_id: session.user.id,
-        settings: mergedSettings,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
-
-    if (error) throw error;
+    const db = getDb();
+    await db.runAsync(
+      `INSERT INTO user_settings (user_id, settings, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET settings = excluded.settings, updated_at = excluded.updated_at`,
+      [userId, mergedJson, now]
+    );
     return true;
   } catch (error) {
     console.error('Error updating user settings:', error.message);

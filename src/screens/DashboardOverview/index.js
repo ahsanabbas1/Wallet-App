@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,6 +16,7 @@ import {
   Bell,
   Wallet,
   RefreshCcw,
+  Pencil,
 } from 'lucide-react-native';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -42,7 +43,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
-  const { userId } = useAuth();
+  const { userId, dbReady } = useAuth();
   const { currency, name, loading: profileLoading } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -67,10 +68,25 @@ const DashboardOverview = () => {
   const [expenseChange, setExpenseChange] = useState(0);
   const [savingsProgress, setSavingsProgress] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
+  const [cashModalVisible, setCashModalVisible] = useState(false);
+  const [cashAdjInput, setCashAdjInput] = useState('');
+
+  const openCashModal = async () => {
+    const adj = await dashboardService.getCashAdjustment(userId);
+    setCashAdjInput(adj !== 0 ? String(adj) : '');
+    setCashModalVisible(true);
+  };
+
+  const saveCashAdjustment = async () => {
+    const val = parseFloat(cashAdjInput) || 0;
+    await dashboardService.setCashAdjustment(userId, val);
+    setCashModalVisible(false);
+    loadDashboardData();
+  };
 
   // Single load function — uses userId from context, no extra getSession() call
   const loadDashboardData = async () => {
-    if (!userId) return;
+    if (!userId || !dbReady) return;
     try {
       setLoading(true);
 
@@ -100,14 +116,14 @@ const DashboardOverview = () => {
   useFocusEffect(
     useCallback(() => {
       loadDashboardData();
-    }, [userId])
+    }, [userId, dbReady])
   );
 
   // Realtime subscriptions — one channel, three tables.
   // Transactions/payments: reload dashboard data (which also refreshes bell count).
   // Notifications only: lightweight unread-count refresh, no full reload.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !dbReady) return;
     const channel = supabase
       .channel(`dashboard_rt_${userId}`)
       .on('postgres_changes',
@@ -271,15 +287,18 @@ const DashboardOverview = () => {
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
             {/* 2. Total Cash In Hand: Income - Expense */}
-            <View style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
-              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Cash In Hand</Text>
+            <Pressable onPress={openCashModal} style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Cash In Hand</Text>
+                <Pencil color="rgba(0, 230, 118, 0.6)" size={14} />
+              </View>
               <Text style={[styles.balanceAmount, { color: '#00e676', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
                 {currency} {formatAmount(totals.cashInHand)}
               </Text>
               <Text style={{ color: 'rgba(0, 230, 118, 0.7)', fontSize: 10, fontWeight: '600', marginTop: 4 }}>
                 {((totals.cashInHand / (totals.totalIncome || 1)) * 100).toFixed(1)}% liquidity
               </Text>
-            </View>
+            </Pressable>
  
             {/* 3. Total Expense of the Month: Outgoing */}
             <View style={[styles.balanceCard, { flex: 1, marginLeft: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(255, 82, 82, 0.2)' }]}>
@@ -543,6 +562,35 @@ const DashboardOverview = () => {
           </View>
         </View>
       </ScrollView>
+      <Modal visible={cashModalVisible} transparent animationType="fade" onRequestClose={() => setCashModalVisible(false)}>
+      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setCashModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable onPress={() => {}} style={{ backgroundColor: COLORS.card, borderRadius: 16, padding: 24, width: SCREEN_WIDTH * 0.85 }}>
+            <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Adjust Cash In Hand</Text>
+            <Text style={{ color: COLORS.subText || 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>
+              Enter a positive or negative amount to adjust your calculated cash balance.
+            </Text>
+            <TextInput
+              style={{ backgroundColor: COLORS.background, color: COLORS.text, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
+              placeholder="e.g. 5000 or -2000"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              keyboardType="numeric"
+              value={cashAdjInput}
+              onChangeText={setCashAdjInput}
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 12 }}>
+              <Pressable onPress={() => setCashModalVisible(false)} style={{ paddingVertical: 10, paddingHorizontal: 20 }}>
+                <Text style={{ color: COLORS.subText || 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Cancel</Text>
+              </Pressable>
+              <Pressable onPress={saveCashAdjustment} style={{ backgroundColor: '#00e676', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 10 }}>
+                <Text style={{ color: '#000', fontWeight: '700' }}>Save</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };

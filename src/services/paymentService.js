@@ -1,31 +1,23 @@
-import { supabase } from '../lib/supabase';
+import { getDb, generateId } from '../lib/db';
 
 function parseLocalDate(dateString) {
   if (!dateString) return null;
-  // If it contains a time or T, parse as full ISO
   if (dateString.includes('T') || dateString.includes(':')) return new Date(dateString);
-  
   const [year, month, day] = dateString.split('-').map(Number);
   if (!year || !month || !day) return null;
   return new Date(year, month - 1, day);
 }
 
 function formatLocalDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
-function addDays(date, days) {
-  const next = new Date(date); next.setDate(next.getDate() + days); return next;
-}
-function addMonths(date, months) {
-  const next = new Date(date); next.setMonth(next.getMonth() + months); return next;
-}
-function addYears(date, years) {
-  const next = new Date(date); next.setFullYear(next.getFullYear() + years); return next;
-}
+function addDays(date, days)     { const n = new Date(date); n.setDate(n.getDate() + days);         return n; }
+function addMonths(date, months) { const n = new Date(date); n.setMonth(n.getMonth() + months);     return n; }
+function addYears(date, years)   { const n = new Date(date); n.setFullYear(n.getFullYear() + years); return n; }
 
 function normalizeFrequency(frequency, customDays) {
   if (frequency === 'custom') return `custom:${Math.max(1, Number(customDays) || 1)}`;
@@ -42,92 +34,63 @@ function getFrequencyLabel(frequency) {
 }
 
 function getNextOccurrence(dateString, frequency) {
-  const baseDate = parseLocalDate(dateString);
-  if (!baseDate) return dateString;
-  if (frequency === 'daily') return formatLocalDate(addDays(baseDate, 1));
-  if (frequency === 'weekly') return formatLocalDate(addDays(baseDate, 7));
-  if (frequency === 'monthly') return formatLocalDate(addMonths(baseDate, 1));
-  if (frequency === 'yearly') return formatLocalDate(addYears(baseDate, 1));
+  const base = parseLocalDate(dateString);
+  if (!base) return dateString;
+  if (frequency === 'daily')   return formatLocalDate(addDays(base, 1));
+  if (frequency === 'weekly')  return formatLocalDate(addDays(base, 7));
+  if (frequency === 'monthly') return formatLocalDate(addMonths(base, 1));
+  if (frequency === 'yearly')  return formatLocalDate(addYears(base, 1));
   if (frequency?.startsWith('custom:')) {
     const days = Math.max(1, Number(frequency.split(':')[1] || 1));
-    return formatLocalDate(addDays(baseDate, days));
+    return formatLocalDate(addDays(base, days));
   }
-  return formatLocalDate(addMonths(baseDate, 1));
-}
-
-function getDueDates(nextDateString, frequency, untilDate = new Date()) {
-  const dueDates = [];
-  let cursor = nextDateString;
-  for (let i = 0; i < 120; i++) {
-    const dueDate = parseLocalDate(cursor);
-    if (!dueDate || dueDate > untilDate) break;
-    dueDates.push(cursor);
-    cursor = getNextOccurrence(cursor, frequency);
-  }
-  return { dueDates, nextDate: cursor };
+  return formatLocalDate(addMonths(base, 1));
 }
 
 function toTransactionTimestamp(dateString) {
-  // If it's already an ISO string with time, return it. Otherwise add default time.
   if (dateString.includes('T')) return dateString;
   return `${dateString}T12:00:00.000`;
 }
 
-function createId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => ((Math.random() * 16) | 0).toString(16));
-}
-
-async function processSinglePlannedPayment(item) {
+async function processSinglePlannedPayment(db, item) {
   const now = new Date();
-
   if (!item.next_date || !item.is_active) return false;
 
-  // Check start/end bounds
   if (item.end_date) {
-    const endDate = parseLocalDate(item.end_date);
-    if (endDate && now > endDate) return false;
+    const end = parseLocalDate(item.end_date);
+    if (end && now > end) return false;
   }
   if (item.start_date) {
-    const startDate = parseLocalDate(item.start_date);
-    if (startDate && now < startDate) return false;
+    const start = parseLocalDate(item.start_date);
+    if (start && now < start) return false;
   }
 
-  // Compare full timestamp: next_date vs now
   const nextDue = new Date(item.next_date);
   if (isNaN(nextDue.getTime()) || nextDue > now) return false;
 
   // Compute the new next_date before touching the DB
   const nextOccurrence = getNextOccurrence(item.next_date.split('T')[0], item.frequency);
-  const timePart = item.next_date.includes('T') ? item.next_date.split('T')[1] : '12:00:00.000';
-  const newNextDate = `${nextOccurrence}T${timePart}`;
+  const timePart       = item.next_date.includes('T') ? item.next_date.split('T')[1] : '12:00:00.000';
+  const newNextDate    = `${nextOccurrence}T${timePart}`;
 
-  // Advance next_date FIRST with a conditional update (WHERE next_date = current value).
-  // If another concurrent call already advanced it, this update matches 0 rows and we
-  // skip the insert — preventing duplicate transactions.
-  const { data: updated, error: updateError } = await supabase
-    .from('planned_payments')
-    .update({ next_date: newNextDate })
-    .eq('id', item.id)
-    .eq('next_date', item.next_date)
-    .select('id');
-  if (updateError) throw updateError;
-  if (!updated || updated.length === 0) return false; // another call already processed this
+  // Advance next_date FIRST with a conditional update — prevents duplicate recording
+  // if two calls race on the same due item
+  const result = await db.runAsync(
+    'UPDATE planned_payments SET next_date = ? WHERE id = ? AND next_date = ?',
+    [newNextDate, item.id, item.next_date]
+  );
+  if ((result?.changes ?? 0) === 0) return false; // another call won the race
 
-  // Now safely record the transaction
-  const tx = {
-    id: createId(),
-    user_id: item.user_id,
-    category_id: item.category_id ?? null,
-    amount: Number(item.amount),
-    type: item.type || 'expense',
-    title: item.title,
-    description: item.description || `Auto-recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
-    date: item.next_date,
-  };
-
-  const { error: insertError } = await supabase.from('transactions').insert(tx);
-  if (insertError) throw insertError;
-
+  await db.runAsync(
+    `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      generateId(), item.user_id, item.category_id ?? null, Number(item.amount),
+      item.type || 'expense', item.title,
+      item.description || `Auto-recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
+      item.next_date, new Date().toISOString(),
+    ]
+  );
   return true;
 }
 
@@ -135,13 +98,15 @@ let dueSyncPromise = null;
 async function processDuePlannedPayments(userId) {
   if (dueSyncPromise) return await dueSyncPromise;
   dueSyncPromise = (async () => {
-    const { data } = await supabase.from('planned_payments').select('*').eq('user_id', userId);
+    const db   = getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM planned_payments WHERE user_id = ? AND is_active = 1',
+      [userId]
+    );
     let changed = false;
-    for (const item of data || []) {
-      if (item.is_active) {
-        const processed = await processSinglePlannedPayment(item).catch(() => false);
-        if (processed) changed = true;
-      }
+    for (const item of rows) {
+      const processed = await processSinglePlannedPayment(db, item).catch(() => false);
+      if (processed) changed = true;
     }
     return changed;
   })();
@@ -157,63 +122,80 @@ export const paymentService = {
 
   async getPlannedPayments(userId) {
     await processDuePlannedPayments(userId).catch(() => {});
-    const { data, error } = await supabase.from('planned_payments').select('*').eq('user_id', userId);
-    if (error) throw error;
-    return data || [];
+    const db = getDb();
+    return db.getAllAsync('SELECT * FROM planned_payments WHERE user_id = ?', [userId]);
   },
 
   async addPlannedPayment(paymentData) {
-    // custom_days is a UI helper and shouldn't be sent to Supabase
+    const db = getDb();
     const { custom_days, ...rest } = paymentData;
+    const id        = rest.id || generateId();
+    const frequency = normalizeFrequency(paymentData.frequency, paymentData.custom_days);
 
-    const payload = {
-      ...rest,
-      id: paymentData.id || createId(),
-      frequency: normalizeFrequency(paymentData.frequency, paymentData.custom_days),
-      is_active: true,
-      created_at: new Date().toISOString(),
-      amount: Number(paymentData.amount),
-    };
-    const { error } = await supabase.from('planned_payments').insert(payload);
-    if (error) throw error;
+    await db.runAsync(
+      `INSERT INTO planned_payments
+         (id, user_id, title, amount, type, frequency, next_date,
+          category_id, description, is_active, start_date, end_date, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+      [
+        id, rest.user_id, rest.title, Number(rest.amount), rest.type || 'expense',
+        frequency, rest.next_date, rest.category_id ?? null,
+        rest.description ?? null, rest.start_date ?? null, rest.end_date ?? null,
+        new Date().toISOString(),
+      ]
+    );
     return true;
   },
 
   async updatePlannedPayment(id, fields) {
-    const { error } = await supabase.from('planned_payments').update(fields).eq('id', id);
-    if (error) throw error;
+    const db     = getDb();
+    const cols   = [];
+    const vals   = [];
+    const add    = (c, v) => { cols.push(`${c} = ?`); vals.push(v); };
+
+    if (fields.title       !== undefined) add('title',       fields.title);
+    if (fields.amount      !== undefined) add('amount',      Number(fields.amount));
+    if (fields.type        !== undefined) add('type',        fields.type);
+    if (fields.frequency   !== undefined) add('frequency',   fields.frequency);
+    if (fields.next_date   !== undefined) add('next_date',   fields.next_date);
+    if (fields.start_date  !== undefined) add('start_date',  fields.start_date ?? null);
+    if (fields.end_date    !== undefined) add('end_date',    fields.end_date ?? null);
+    if (fields.category_id !== undefined) add('category_id', fields.category_id ?? null);
+    if (fields.description !== undefined) add('description', fields.description ?? null);
+    if (fields.is_active   !== undefined) add('is_active',   fields.is_active ? 1 : 0);
+
+    if (cols.length === 0) return true;
+    await db.runAsync(`UPDATE planned_payments SET ${cols.join(', ')} WHERE id = ?`, [...vals, id]);
     return true;
   },
 
   async recordPlannedPaymentNow(item) {
+    const db      = getDb();
     const dueDate = item.next_date || formatLocalDate(new Date());
-    const tx = {
-      id: createId(),
-      user_id: item.user_id,
-      category_id: item.category_id ?? null,
-      amount: Number(item.amount),
-      type: item.type || 'expense',
-      title: item.title,
-      description: item.description || `Recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
-      date: toTransactionTimestamp(dueDate),
-    };
 
-    const { error: insertError } = await supabase.from('transactions').insert(tx);
-    if (insertError) throw insertError;
+    await db.runAsync(
+      `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        generateId(), item.user_id, item.category_id ?? null, Number(item.amount),
+        item.type || 'expense', item.title,
+        item.description || `Recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
+        toTransactionTimestamp(dueDate), new Date().toISOString(),
+      ]
+    );
 
-    // Advance next_date to exactly one period later
-    const datePart = dueDate.split('T')[0];
+    const datePart       = dueDate.split('T')[0];
     const nextOccurrence = getNextOccurrence(datePart, item.frequency);
-    const timePart = dueDate.includes('T') ? dueDate.split('T')[1] : '12:00:00.000';
-    const newNextDate = `${nextOccurrence}T${timePart}`;
+    const timePart       = dueDate.includes('T') ? dueDate.split('T')[1] : '12:00:00.000';
+    const newNextDate    = `${nextOccurrence}T${timePart}`;
 
-    await supabase.from('planned_payments').update({ next_date: newNextDate }).eq('id', item.id);
+    await db.runAsync('UPDATE planned_payments SET next_date = ? WHERE id = ?', [newNextDate, item.id]);
     return true;
   },
 
   async deletePlannedPayment(id) {
-    const { error } = await supabase.from('planned_payments').delete().eq('id', id);
-    if (error) throw error;
+    const db = getDb();
+    await db.runAsync('DELETE FROM planned_payments WHERE id = ?', [id]);
     return true;
   },
 };

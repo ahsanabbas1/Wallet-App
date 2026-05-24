@@ -1,153 +1,152 @@
-import { supabase } from '../lib/supabase';
-
-function createId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
+import { getDb, generateId } from '../lib/db';
 
 export const shoppingService = {
   async getLists(userId) {
-    const { data: lists, error: listsError } = await supabase
-      .from('shopping_lists')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-    if (listsError) throw listsError;
-
+    const db    = getDb();
+    const lists = await db.getAllAsync(
+      'SELECT * FROM shopping_lists WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
     if (!lists || lists.length === 0) return [];
 
-    const listIds = lists.map(l => l.id);
-    const { data: items } = await supabase
-      .from('shopping_items')
-      .select('*')
-      .in('list_id', listIds);
+    const ids          = lists.map(l => l.id);
+    const placeholders = ids.map(() => '?').join(', ');
+    const items        = await db.getAllAsync(
+      `SELECT * FROM shopping_items WHERE list_id IN (${placeholders})`,
+      ids
+    );
 
     return lists.map(list => ({
       ...list,
-      shopping_items: (items || []).filter(i => i.list_id === list.id),
+      is_archived:     list.is_archived === 1,
+      shopping_items:  (items || []).filter(i => i.list_id === list.id)
+                         .map(i => ({ ...i, is_completed: i.is_completed === 1 })),
     }));
   },
 
   async saveList(userId, listData) {
-    const id = listData.id || createId();
+    const db    = getDb();
+    const id    = listData.id || generateId();
     const isNew = !listData.id;
-    const payload = { id, user_id: userId, title: listData.title, created_at: listData.created_at || new Date().toISOString() };
+    const now   = new Date().toISOString();
 
     if (isNew) {
-      const { error } = await supabase.from('shopping_lists').insert(payload);
-      if (error) throw error;
+      await db.runAsync(
+        'INSERT INTO shopping_lists (id, user_id, title, is_archived, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)',
+        [id, userId, listData.title, listData.created_at || now, now]
+      );
     } else {
-      const { error } = await supabase.from('shopping_lists').update({ title: listData.title }).eq('id', id);
-      if (error) throw error;
+      await db.runAsync(
+        'UPDATE shopping_lists SET title = ?, updated_at = ? WHERE id = ?',
+        [listData.title, now, id]
+      );
     }
-    return { queued: false, id };
+    return { id };
   },
 
   async deleteList(userId, id) {
-    await supabase.from('shopping_items').delete().eq('list_id', id);
-    const { error } = await supabase.from('shopping_lists').delete().eq('id', id);
-    if (error) throw error;
-    return { queued: false };
+    const db = getDb();
+    await db.runAsync('DELETE FROM shopping_items WHERE list_id = ?', [id]);
+    await db.runAsync('DELETE FROM shopping_lists WHERE id = ?', [id]);
+    return {};
   },
 
   async archiveList(userId, id, isArchived) {
-    const { error } = await supabase.from('shopping_lists').update({ is_archived: isArchived }).eq('id', id);
-    if (error) throw error;
+    const db = getDb();
+    await db.runAsync('UPDATE shopping_lists SET is_archived = ? WHERE id = ?', [isArchived ? 1 : 0, id]);
   },
 
   async saveItem(listId, itemData) {
-    const id = itemData.id || createId();
+    const db    = getDb();
+    const id    = itemData.id || generateId();
     const isNew = !itemData.id;
-    const payload = {
-      id,
-      list_id: listId,
-      name: itemData.name,
-      description: itemData.description ?? null,
-      quantity: itemData.quantity ?? 1,
-      price: itemData.price ?? null,
-      is_completed: itemData.is_completed ?? false,
-      created_at: itemData.created_at || new Date().toISOString(),
-    };
 
     if (isNew) {
-      const { error } = await supabase.from('shopping_items').insert(payload);
-      if (error) throw error;
+      await db.runAsync(
+        `INSERT INTO shopping_items (id, list_id, name, description, quantity, price, is_completed, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+        [id, listId, itemData.name, itemData.description ?? null,
+         itemData.quantity ?? 1, itemData.price ?? null,
+         itemData.created_at || new Date().toISOString()]
+      );
     } else {
-      const { error } = await supabase
-        .from('shopping_items')
-        .update({ name: payload.name, description: payload.description, quantity: payload.quantity, price: payload.price })
-        .eq('id', id);
-      if (error) throw error;
+      await db.runAsync(
+        'UPDATE shopping_items SET name = ?, description = ?, quantity = ?, price = ? WHERE id = ?',
+        [itemData.name, itemData.description ?? null, itemData.quantity ?? 1, itemData.price ?? null, id]
+      );
     }
-    return { queued: false, id };
+    return { id };
   },
 
   async deleteItem(id) {
-    const { error } = await supabase.from('shopping_items').delete().eq('id', id);
-    if (error) throw error;
-    return { queued: false };
+    const db = getDb();
+    await db.runAsync('DELETE FROM shopping_items WHERE id = ?', [id]);
+    return {};
   },
 
   async toggleItem(listId, itemId, currentStatus) {
-    const newStatus = !currentStatus;
+    const db        = getDb();
+    const newStatus = currentStatus ? 0 : 1;
 
-    const { error } = await supabase.from('shopping_items').update({ is_completed: newStatus }).eq('id', itemId);
-    if (error) throw error;
+    await db.runAsync('UPDATE shopping_items SET is_completed = ? WHERE id = ?', [newStatus, itemId]);
 
-    const { data: allItems } = await supabase.from('shopping_items').select('id, is_completed').eq('list_id', listId);
-    const allDone = (allItems || []).length > 0 && (allItems || []).every(i =>
-      i.id === itemId ? newStatus : i.is_completed
+    const allItems = await db.getAllAsync(
+      'SELECT id, is_completed FROM shopping_items WHERE list_id = ?',
+      [listId]
+    );
+    const allDone  = allItems.length > 0 && allItems.every(i =>
+      i.id === itemId ? newStatus === 1 : i.is_completed === 1
     );
 
     if (allDone) {
-      await supabase.from('shopping_lists').update({ is_archived: true }).eq('id', listId);
+      await db.runAsync('UPDATE shopping_lists SET is_archived = 1 WHERE id = ?', [listId]);
     }
-
     return { allDone };
   },
 
   async getWarranties(userId) {
-    const { data, error } = await supabase.from('warranties').select('*').eq('user_id', userId);
-    if (error) throw error;
-    return data || [];
+    const db   = getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM warranties WHERE user_id = ?',
+      [userId]
+    );
+    return rows.map(w => ({ ...w, is_notified: w.is_notified === 1 }));
   },
 
   async saveWarranty(userId, warrantyData) {
-    const id = warrantyData.id || createId();
+    const db    = getDb();
+    const id    = warrantyData.id || generateId();
     const isNew = !warrantyData.id;
-    const payload = {
-      id,
-      user_id: userId,
-      name: warrantyData.name,
-      purchase_date: warrantyData.purchase_date ?? null,
-      expiry_date: warrantyData.expiry_date ?? null,
-      color: warrantyData.color ?? null,
-      created_at: warrantyData.created_at || new Date().toISOString(),
-    };
 
     if (isNew) {
-      const { error } = await supabase.from('warranties').insert(payload);
-      if (error) throw error;
+      await db.runAsync(
+        `INSERT INTO warranties (id, user_id, name, purchase_date, expiry_date, color, is_notified, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+        [id, userId, warrantyData.name, warrantyData.purchase_date ?? null,
+         warrantyData.expiry_date ?? null, warrantyData.color ?? null,
+         warrantyData.created_at || new Date().toISOString()]
+      );
     } else {
-      const { error } = await supabase
-        .from('warranties')
-        .update({ name: payload.name, purchase_date: payload.purchase_date, expiry_date: payload.expiry_date, color: payload.color })
-        .eq('id', id);
-      if (error) throw error;
+      await db.runAsync(
+        'UPDATE warranties SET name = ?, purchase_date = ?, expiry_date = ?, color = ? WHERE id = ?',
+        [warrantyData.name, warrantyData.purchase_date ?? null,
+         warrantyData.expiry_date ?? null, warrantyData.color ?? null, id]
+      );
     }
-    return { queued: false, id };
+    return { id };
   },
 
   async deleteWarranty(userId, id) {
-    const { error } = await supabase.from('warranties').delete().eq('id', id);
-    if (error) throw error;
-    return { queued: false };
+    const db = getDb();
+    await db.runAsync('DELETE FROM warranties WHERE id = ?', [id]);
+    return {};
   },
 
   async updateWarrantyNotified(id) {
-    supabase.from('warranties').update({ is_notified: true }).eq('id', id).catch(() => {});
+    try {
+      const db = getDb();
+      await db.runAsync('UPDATE warranties SET is_notified = 1 WHERE id = ?', [id]);
+    } catch {}
   },
 };
 

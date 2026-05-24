@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DARK_COLORS, LIGHT_COLORS } from '../constants/theme';
-import { supabase } from '../lib/supabase';
+import { getDb } from '../lib/db';
+import { useAuth } from './AuthContext';
 
 const STORAGE_KEY = 'app_theme';
 
@@ -12,49 +13,45 @@ const ThemeContext = createContext({
   setTheme:    () => {},
 });
 
-export const ThemeProvider = ({ userId, children }) => {
+export const ThemeProvider = ({ children }) => {
+  const { userId, dbReady } = useAuth();
   const [isDark, setIsDark] = useState(true);
 
-  // Load saved theme on mount (AsyncStorage first, then DB)
   useEffect(() => {
     const load = async () => {
       try {
+        // AsyncStorage is the primary store (instant, no DB round-trip)
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored !== null) {
-          setIsDark(stored === 'dark');
-          return;
-        }
-        // Fallback: read from DB if no local preference
-        if (userId) {
-          const { data } = await supabase
-            .from('users')
-            .select('theme')
-            .eq('id', userId)
-            .single();
-          if (data?.theme) {
-            const dark = data.theme === 'dark';
+        if (stored !== null) { setIsDark(stored === 'dark'); return; }
+
+        // Fallback: read from local SQLite
+        if (userId && dbReady) {
+          const db  = getDb();
+          const row = await db.getFirstAsync('SELECT theme FROM users WHERE id = ?', [userId]);
+          if (row?.theme) {
+            const dark = row.theme === 'dark';
             setIsDark(dark);
-            await AsyncStorage.setItem(STORAGE_KEY, data.theme);
+            await AsyncStorage.setItem(STORAGE_KEY, row.theme);
           }
         }
       } catch {}
     };
     load();
-  }, [userId]);
+  }, [userId, dbReady]);
 
   const setTheme = useCallback(async (dark) => {
     setIsDark(dark);
     const value = dark ? 'dark' : 'light';
     try {
       await AsyncStorage.setItem(STORAGE_KEY, value);
-      if (userId) {
-        await supabase.from('users').update({ theme: value }).eq('id', userId);
+      if (userId && dbReady) {
+        const db = getDb();
+        await db.runAsync('UPDATE users SET theme = ? WHERE id = ?', [value, userId]);
       }
     } catch {}
-  }, [userId]);
+  }, [userId, dbReady]);
 
   const toggleTheme = useCallback(() => setTheme(!isDark), [isDark, setTheme]);
-
   const colors = isDark ? DARK_COLORS : LIGHT_COLORS;
 
   return (
