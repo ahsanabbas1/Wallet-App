@@ -188,6 +188,16 @@ export async function runMigrations(db) {
     await db.execAsync("ALTER TABLE users ADD COLUMN madhab TEXT DEFAULT 'sunni'");
   } catch (_) {}
 
+  // Add expenses_auto to khums_years (idempotent)
+  try {
+    await db.execAsync('ALTER TABLE khums_years ADD COLUMN expenses_auto REAL DEFAULT 0');
+  } catch (_) {}
+
+  // Add income_receivable (loans given / outstanding receivables) to khums_years (idempotent)
+  try {
+    await db.execAsync('ALTER TABLE khums_years ADD COLUMN income_receivable REAL DEFAULT 0');
+  } catch (_) {}
+
   // Khums tables
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS khums_years (
@@ -236,6 +246,16 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_khums_years_user    ON khums_years(user_id);
     CREATE INDEX IF NOT EXISTS idx_khums_expenses_year ON khums_expenses(khums_year_id);
     CREATE INDEX IF NOT EXISTS idx_khums_payments_year ON khums_payments(khums_year_id);
+
+    CREATE TABLE IF NOT EXISTS khums_history (
+      id           TEXT PRIMARY KEY,
+      user_id      TEXT NOT NULL,
+      payment_date TEXT NOT NULL,
+      amount       REAL NOT NULL,
+      notes        TEXT,
+      created_at   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_khums_history_user ON khums_history(user_id, payment_date);
   `);
 
   await seedDefaultCategories(db);
