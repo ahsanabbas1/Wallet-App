@@ -4,8 +4,9 @@ import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
 import { SIZES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut, Banknote, Building2 } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut, Banknote, Building2, Landmark } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useProfile } from '../context/ProfileContext';
 
 const { height, width } = Dimensions.get('window');
 
@@ -27,6 +28,7 @@ const GlobalDrawer = () => {
   const { isOpen, closeDrawer, slideAnim, overlayAnim, drawerWidth } = useDrawer();
   const navigation = useNavigation();
   const { colors: COLORS } = useTheme();
+  const { madhab } = useProfile();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   if (!isOpen) {
@@ -77,6 +79,9 @@ const GlobalDrawer = () => {
           {/* <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} /> */}
           <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />
           <DrawerItem icon={Banknote}   label="Loan Management" onPress={() => handleNavigate('Loans')} />
+          {madhab === 'shia' && (
+            <DrawerItem icon={Landmark} label="Khums" onPress={() => handleNavigate('Khums')} />
+          )}
           {/* <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} /> */}
           {/* <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} /> */}
           <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />

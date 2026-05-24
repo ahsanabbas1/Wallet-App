@@ -183,6 +183,61 @@ export async function runMigrations(db) {
     await db.execAsync('ALTER TABLE transactions ADD COLUMN account_id TEXT');
   } catch (_) {}
 
+  // Add madhab to users (idempotent)
+  try {
+    await db.execAsync("ALTER TABLE users ADD COLUMN madhab TEXT DEFAULT 'sunni'");
+  } catch (_) {}
+
+  // Khums tables
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS khums_years (
+      id             TEXT PRIMARY KEY,
+      user_id        TEXT NOT NULL,
+      year_label     TEXT,
+      year_start     TEXT NOT NULL,
+      year_end       TEXT NOT NULL,
+      income_auto    REAL DEFAULT 0,
+      income_extra   REAL DEFAULT 0,
+      income_exempt  REAL DEFAULT 0,
+      expenses_total REAL DEFAULT 0,
+      surplus        REAL DEFAULT 0,
+      khums_due      REAL DEFAULT 0,
+      sahm_imam      REAL DEFAULT 0,
+      sahm_sadat     REAL DEFAULT 0,
+      paid_imam      REAL DEFAULT 0,
+      paid_sadat     REAL DEFAULT 0,
+      status         TEXT DEFAULT 'open',
+      notes          TEXT,
+      created_at     TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS khums_expenses (
+      id             TEXT PRIMARY KEY,
+      user_id        TEXT NOT NULL,
+      khums_year_id  TEXT NOT NULL,
+      category       TEXT,
+      amount         REAL,
+      description    TEXT,
+      created_at     TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS khums_payments (
+      id             TEXT PRIMARY KEY,
+      user_id        TEXT NOT NULL,
+      khums_year_id  TEXT NOT NULL,
+      recipient_type TEXT,
+      recipient_name TEXT,
+      amount         REAL,
+      date           TEXT,
+      notes          TEXT,
+      created_at     TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_khums_years_user    ON khums_years(user_id);
+    CREATE INDEX IF NOT EXISTS idx_khums_expenses_year ON khums_expenses(khums_year_id);
+    CREATE INDEX IF NOT EXISTS idx_khums_payments_year ON khums_payments(khums_year_id);
+  `);
+
   await seedDefaultCategories(db);
   await seedMissingCategories(db);
 }

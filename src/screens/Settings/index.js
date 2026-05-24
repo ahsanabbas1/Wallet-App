@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2 } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -54,7 +54,7 @@ export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId, user } = useAuth();
-  const { updateCurrency, updateName: updateProfileName } = useProfile();
+  const { updateCurrency, updateName: updateProfileName, madhab, updateMadhab } = useProfile();
   const { colors: COLORS, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [loading, setLoading] = useState(true);
@@ -64,6 +64,7 @@ export default function Settings() {
   const [nameEdit, setNameEdit] = useState('');
   const [currency, setCurrency] = useState('PKR');
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [showMadhabPicker,  setShowMadhabPicker]  = useState(false);
   const [editingName, setEditingName] = useState(false);
 
   const loadProfile = async () => {
@@ -263,6 +264,31 @@ export default function Settings() {
               ))}
             </View>
           )}
+          <SettingRow
+            icon={BookOpen}
+            label="School of Thought"
+            value={madhab === 'shia' ? 'Shia (Ithna-Ashari)' : 'Sunni'}
+            onPress={() => setShowMadhabPicker(v => !v)}
+          />
+          {showMadhabPicker && (
+            <View style={styles.picker}>
+              {[{ key: 'sunni', label: 'Sunni' }, { key: 'shia', label: 'Shia (Ithna-Ashari)' }].map(m => (
+                <Pressable
+                  key={m.key}
+                  style={({ pressed }) => [
+                    styles.pickerRow,
+                    madhab === m.key && styles.pickerRowActive,
+                    pressed && { opacity: 0.6 }
+                  ]}
+                  onPress={() => { updateMadhab(m.key); setShowMadhabPicker(false); }}
+                >
+                  <Text style={[styles.pickerCode, madhab === m.key && { color: COLORS.primary }]}>
+                    {m.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Appearance */}
@@ -303,6 +329,15 @@ export default function Settings() {
             value="Manage accounts & balances"
             onPress={() => navigation.navigate('Accounts')}
           />
+          {madhab === 'shia' && (
+            <SettingRow
+              icon={Landmark}
+              label="Khums"
+              value="Annual surplus tax calculator"
+              color="#7c3aed"
+              onPress={() => navigation.navigate('Khums')}
+            />
+          )}
         </View>
 
         {/* Account */}

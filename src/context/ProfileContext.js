@@ -5,16 +5,19 @@ import { getDb } from '../lib/db';
 const ProfileContext = createContext({
   currency: 'PKR',
   name:     '',
+  madhab:   'sunni',
   loading:  true,
   refresh:        () => {},
   updateCurrency: () => {},
   updateName:     () => {},
+  updateMadhab:   () => {},
 });
 
 export const ProfileProvider = ({ children }) => {
   const { userId, dbReady } = useAuth();
   const [currency, setCurrency] = useState('PKR');
   const [name,     setName]     = useState('');
+  const [madhab,   setMadhab]   = useState('sunni');
   const [loading,  setLoading]  = useState(true);
 
   const refresh = useCallback(async () => {
@@ -22,12 +25,13 @@ export const ProfileProvider = ({ children }) => {
     try {
       const db   = getDb();
       const row  = await db.getFirstAsync(
-        'SELECT name, currency FROM users WHERE id = ?',
+        'SELECT name, currency, madhab FROM users WHERE id = ?',
         [userId]
       );
       if (row) {
         setCurrency(row.currency || 'PKR');
         setName(row.name || '');
+        setMadhab(row.madhab || 'sunni');
       }
     } catch {}
     finally { setLoading(false); }
@@ -53,8 +57,17 @@ export const ProfileProvider = ({ children }) => {
     } catch {}
   }, [userId, dbReady]);
 
+  const updateMadhab = useCallback(async (value) => {
+    setMadhab(value);
+    if (!userId || !dbReady) return;
+    try {
+      const db = getDb();
+      await db.runAsync('UPDATE users SET madhab = ? WHERE id = ?', [value, userId]);
+    } catch {}
+  }, [userId, dbReady]);
+
   return (
-    <ProfileContext.Provider value={{ currency, name, loading, refresh, updateCurrency, updateName }}>
+    <ProfileContext.Provider value={{ currency, name, madhab, loading, refresh, updateCurrency, updateName, updateMadhab }}>
       {children}
     </ProfileContext.Provider>
   );
