@@ -161,7 +161,30 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_warranties_user   ON warranties(user_id);
   `);
 
+  // Accounts table (Feature 4 — bank/wallet account management)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id           TEXT PRIMARY KEY,
+      user_id      TEXT NOT NULL,
+      bank_name    TEXT,
+      account_name TEXT NOT NULL,
+      account_type TEXT DEFAULT 'savings',
+      balance      REAL DEFAULT 0,
+      color        TEXT DEFAULT '#4f5ff7',
+      icon         TEXT DEFAULT 'Wallet',
+      is_active    INTEGER DEFAULT 1,
+      created_at   TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id, is_active);
+  `);
+
+  // Add account_id to transactions (idempotent)
+  try {
+    await db.execAsync('ALTER TABLE transactions ADD COLUMN account_id TEXT');
+  } catch (_) {}
+
   await seedDefaultCategories(db);
+  await seedMissingCategories(db);
 }
 
 function uuid() {
@@ -246,6 +269,69 @@ const DEFAULT_CATEGORIES = [
       { name: 'Selling Assets', icon: 'DollarSign' },
     ]},
 ];
+
+async function seedMissingCategories(db) {
+  const now = new Date().toISOString();
+  const sql = 'INSERT INTO categories (id, user_id, parent_id, name, icon, color, type, created_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)';
+
+  const newParents = [
+    { name: 'Education', color: '#8B5CF6', icon: 'GraduationCap', type: 'expense',
+      subs: ['Tuition', 'Books & Stationery', 'Online Courses', 'School Fees', 'Exam Fees'] },
+    { name: 'Travel', color: '#0EA5E9', icon: 'Plane', type: 'expense',
+      subs: ['Flights', 'Hotels & Stays', 'Travel Insurance', 'Visa & Passport', 'Travel Meals'] },
+    { name: 'Personal Care', color: '#EC4899', icon: 'Sparkles', type: 'expense',
+      subs: ['Haircut & Salon', 'Cosmetics', 'Skincare', 'Spa & Massage'] },
+    { name: 'Kids & Family', color: '#F97316', icon: 'Baby', type: 'expense',
+      subs: ['Childcare', 'Baby Supplies', 'School Activities', 'Toys & Games'] },
+    { name: 'Subscriptions', color: '#6366F1', icon: 'Repeat', type: 'expense',
+      subs: ['Apps & Software', 'Newspapers & Magazines', 'Cloud Storage', 'Membership Fees'] },
+    { name: 'Charity & Zakat', color: '#10B981', icon: 'Heart', type: 'expense',
+      subs: ['Zakat', 'Sadaqah', 'NGO Donations', 'Food Aid'] },
+    { name: 'Rental Income', color: '#14B8A6', icon: 'Building2', type: 'income',
+      subs: ['Residential Rent', 'Commercial Rent', 'Shop Rent'] },
+    { name: 'Side Income', color: '#F59E0B', icon: 'Zap', type: 'income',
+      subs: ['Reselling', 'Content Creation', 'Tutoring', 'Commission'] },
+  ];
+
+  for (const cat of newParents) {
+    const existing = await db.getFirstAsync(
+      'SELECT id FROM categories WHERE name = ? AND parent_id IS NULL', [cat.name]
+    );
+    if (existing) continue;
+    const parentId = uuid();
+    await db.runAsync(sql, [parentId, null, cat.name, cat.icon, cat.color, cat.type, now]);
+    for (const subName of cat.subs) {
+      await db.runAsync(sql, [uuid(), parentId, subName, 'Dot', cat.color, cat.type, now]);
+    }
+  }
+
+  const extraSubs = [
+    { parentName: 'Food & Drink',       subs: ['Takeaway', 'Bakery', 'Coffee & Tea', 'Home Cooking'] },
+    { parentName: 'Transportation',     subs: ['Car Wash', 'Driving License', 'Vehicle Tax'] },
+    { parentName: 'Housing & Utilities', subs: ['Mobile Phone Bill', 'Security & CCTV', 'Furniture'] },
+    { parentName: 'Entertainment',      subs: ['Sports Events', 'Books & Reading', 'Board Games'] },
+    { parentName: 'Shopping',           subs: ['Accessories', 'Luxury Items', 'Stationery', 'Toys'] },
+    { parentName: 'Health & Personal',  subs: ['Dental', 'Eye Care', 'Mental Health', 'Vitamins'] },
+    { parentName: 'Financial',          subs: ['Loan Payment', 'Investment', 'Savings Transfer', 'Credit Card'] },
+    { parentName: 'Employment',         subs: ['Part-time Job', 'Freelance Payment'] },
+    { parentName: 'Other Income',       subs: ['Cashback', 'Government Benefits', 'Insurance Claim', 'Prize Money'] },
+  ];
+
+  for (const { parentName, subs } of extraSubs) {
+    const parent = await db.getFirstAsync(
+      'SELECT id, color, type FROM categories WHERE name = ? AND parent_id IS NULL', [parentName]
+    );
+    if (!parent) continue;
+    for (const subName of subs) {
+      const exists = await db.getFirstAsync(
+        'SELECT id FROM categories WHERE name = ? AND parent_id = ?', [subName, parent.id]
+      );
+      if (!exists) {
+        await db.runAsync(sql, [uuid(), parent.id, subName, 'Dot', parent.color, parent.type, now]);
+      }
+    }
+  }
+}
 
 async function seedDefaultCategories(db) {
   const row = await db.getFirstAsync('SELECT COUNT(*) as count FROM categories');

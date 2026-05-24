@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
 import { SIZES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut, Banknote } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut, Banknote, Building2 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 const { height, width } = Dimensions.get('window');
@@ -66,7 +66,8 @@ const GlobalDrawer = () => {
         </View>
 
         <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false}>
-          <DrawerItem icon={Home} label="Dashboard" onPress={() => handleNavigate('Dashboard')} />
+          <DrawerItem icon={Home}      label="Dashboard" onPress={() => handleNavigate('Dashboard')} />
+          <DrawerItem icon={Building2} label="Accounts"  onPress={() => handleNavigate('Accounts')} />
           <DrawerItem icon={List} label="Expenses" onPress={() => handleNavigate('Expenses')} />
           <DrawerItem icon={Target} label="Savings Goals" onPress={() => handleNavigate('Savings Goals')} />
           <DrawerItem icon={BarChart3} label="Reports" onPress={() => handleNavigate('Reports')} />

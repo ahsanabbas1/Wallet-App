@@ -1,15 +1,16 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'; // useMemo used for styles, fmt, and derived data
 import {
-  View, Text, ScrollView, Pressable, Modal,
+  View, Text, ScrollView, Pressable, Modal, Alert,
   ActivityIndicator, TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Menu, CalendarDays, X,
+  Menu, CalendarDays, X, Download, FileSpreadsheet, FileText,
   TrendingUp, TrendingDown, ArrowUp, ArrowDown,
   AlertTriangle, Lightbulb, BarChart3,
   Table2, List as ListIcon, Activity,
 } from 'lucide-react-native';
+import { exportToExcel, exportToPDF } from '../../services/reportExportService';
 import { useDrawer }       from '../../context/DrawerContext';
 import { useAuth }         from '../../context/AuthContext';
 import { useProfile }      from '../../context/ProfileContext';
@@ -325,8 +326,10 @@ const Reports = () => {
   const [isCustomActive, setIsCustomActive] = useState(false);
 
   /* ── modal ────────────────────────────────────────────────────────── */
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerTab,     setPickerTab]     = useState('FROM');
+  const [pickerVisible,     setPickerVisible]     = useState(false);
+  const [pickerTab,         setPickerTab]         = useState('FROM');
+  const [exportMenuVisible, setExportMenuVisible] = useState(false);
+  const [exporting,         setExporting]         = useState(false);
 
   /* ── UI ───────────────────────────────────────────────────────────── */
   const [activeTab,  setActiveTab]  = useState(0);
@@ -418,6 +421,22 @@ const Reports = () => {
     setAppliedEnd('');
   };
 
+  const handleExport = async (type) => {
+    setExportMenuVisible(false);
+    setExporting(true);
+    try {
+      if (type === 'excel') {
+        await exportToExcel(rawData.current, metrics, breakdown, currency, periodLabel);
+      } else {
+        await exportToPDF(rawData.current, metrics, breakdown, currency, periodLabel);
+      }
+    } catch (e) {
+      console.error('Export error:', e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   /* ── render ───────────────────────────────────────────────────────── */
   if (loading) {
     return (
@@ -452,10 +471,60 @@ const Reports = () => {
             <Menu color={COLORS.text} size={22} />
           </Pressable>
           <Text style={styles.headerTitle}>Reports</Text>
+          <Pressable
+            style={[styles.calendarBtn, { marginRight: 6 }, exporting && { opacity: 0.5 }]}
+            onPress={() => setExportMenuVisible(true)}
+            disabled={exporting}
+          >
+            <Download color={COLORS.textSecondary} size={18} />
+          </Pressable>
           <Pressable style={[styles.calendarBtn, isCustomActive && styles.calendarBtnActive]} onPress={openPicker}>
             <CalendarDays color={isCustomActive ? '#fff' : COLORS.textSecondary} size={18} />
           </Pressable>
         </View>
+
+        {/* ── Export menu modal ───────────────────────────────────── */}
+        <Modal visible={exportMenuVisible} transparent animationType="fade" onRequestClose={() => setExportMenuVisible(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setExportMenuVisible(false)}>
+            <View style={{
+              position: 'absolute', top: 60, right: 16,
+              backgroundColor: COLORS.card, borderRadius: 16, overflow: 'hidden',
+              borderWidth: 1, borderColor: COLORS.border,
+              shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 8,
+              minWidth: 200,
+            }}>
+              <View style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+                <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Export · {periodLabel}
+                </Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: pressed ? COLORS.surface : 'transparent' }]}
+                onPress={() => handleExport('excel')}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#22c55e' + '22', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileSpreadsheet color="#22c55e" size={18} />
+                </View>
+                <View>
+                  <Text style={{ color: COLORS.text, fontWeight: '700', fontSize: 14 }}>Export as Excel</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Summary, Transactions, Categories</Text>
+                </View>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: pressed ? COLORS.surface : 'transparent' }]}
+                onPress={() => handleExport('pdf')}
+              >
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#ef4444' + '22', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText color="#ef4444" size={18} />
+                </View>
+                <View>
+                  <Text style={{ color: COLORS.text, fontWeight: '700', fontSize: 14 }}>Export as PDF</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Formatted report with charts</Text>
+                </View>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Modal>
 
         {/* ── Period filter pills ─────────────────────────────────── */}
         <View style={styles.filterRow}>

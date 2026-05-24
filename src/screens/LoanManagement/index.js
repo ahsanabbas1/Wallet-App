@@ -58,10 +58,11 @@ const LoanManagement = () => {
   const styles                  = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   /* ── Data ───────────────────────────────────────────────────────── */
-  const [loans,   setLoans]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [tab,     setTab]     = useState('all');
-  const [expanded, setExpanded] = useState(null);
+  const [loans,      setLoans]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [statusTab,  setStatusTab]  = useState('active'); // 'active' | 'archive'
+  const [tab,        setTab]        = useState('all');
+  const [expanded,   setExpanded]   = useState(null);
 
   /* ── Add-loan modal ─────────────────────────────────────────────── */
   const [showAddLoan,    setShowAddLoan]    = useState(false);
@@ -100,23 +101,28 @@ const LoanManagement = () => {
 
   useFocusEffect(useCallback(() => { fetchLoans(); }, [fetchLoans]));
 
-  /* ── Summary figures ────────────────────────────────────────────── */
+  /* ── Summary figures (based on statusTab) ──────────────────────── */
   const summary = useMemo(() => {
-    const given    = loans.filter(l => l.type === GIVEN);
-    const received = loans.filter(l => l.type === RECEIVED);
+    const pool     = loans.filter(l => statusTab === 'active' ? !l.is_settled : l.is_settled);
+    const given    = pool.filter(l => l.type === GIVEN);
+    const received = pool.filter(l => l.type === RECEIVED);
     return {
       totalGiven:         given.reduce   ((s, l) => s + parseFloat(l.total_amount), 0),
       totalReceived:      received.reduce((s, l) => s + parseFloat(l.total_amount), 0),
       remainingGiven:     given.reduce   ((s, l) => s + l.remaining, 0),
       remainingReceived:  received.reduce((s, l) => s + l.remaining, 0),
     };
-  }, [loans]);
+  }, [loans, statusTab]);
 
   /* ── Filtered list ──────────────────────────────────────────────── */
   const filteredLoans = useMemo(() => {
-    if (tab === 'all') return loans;
-    return loans.filter(l => l.type === tab);
-  }, [loans, tab]);
+    return loans
+      .filter(l => statusTab === 'active' ? !l.is_settled : l.is_settled)
+      .filter(l => tab === 'all' || l.type === tab);
+  }, [loans, statusTab, tab]);
+
+  const activeCount  = useMemo(() => loans.filter(l => !l.is_settled).length, [loans]);
+  const archiveCount = useMemo(() => loans.filter(l =>  l.is_settled).length, [loans]);
 
   /* ══ LOAN CRUD ══════════════════════════════════════════════════════ */
 
@@ -331,12 +337,30 @@ const LoanManagement = () => {
           </View>
         </View>
 
-        {/* ── Tabs ── */}
+        {/* ── Status tabs (Active / Archive) ── */}
+        <View style={styles.statusTabRow}>
+          {[
+            { key: 'active',  label: `Active (${activeCount})` },
+            { key: 'archive', label: `Archive (${archiveCount})` },
+          ].map(t => (
+            <TouchableOpacity
+              key={t.key}
+              style={[styles.statusTab, statusTab === t.key && styles.statusTabActive]}
+              onPress={() => { setStatusTab(t.key); setTab('all'); setExpanded(null); }}
+            >
+              <Text style={[styles.statusTabText, statusTab === t.key && styles.statusTabTextActive]}>
+                {t.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── Type tabs (All / Given / Received) ── */}
         <View style={styles.tabRow}>
           {[
-            { key: 'all',      label: `All (${loans.length})` },
-            { key: 'given',    label: `Given (${loans.filter(l => l.type === GIVEN).length})` },
-            { key: 'received', label: `Received (${loans.filter(l => l.type === RECEIVED).length})` },
+            { key: 'all',      label: `All (${filteredLoans.length})` },
+            { key: 'given',    label: `Given (${filteredLoans.filter(l => l.type === GIVEN).length})` },
+            { key: 'received', label: `Received (${filteredLoans.filter(l => l.type === RECEIVED).length})` },
           ].map(t => (
             <TouchableOpacity
               key={t.key}
@@ -358,9 +382,13 @@ const LoanManagement = () => {
             <View style={styles.emptyIconWrap}>
               <Wallet color={COLORS.textSecondary} size={36} />
             </View>
-            <Text style={styles.emptyTitle}>No Loans Yet</Text>
+            <Text style={styles.emptyTitle}>
+              {statusTab === 'active' ? 'No Active Loans' : 'No Archived Loans'}
+            </Text>
             <Text style={styles.emptySubtitle}>
-              Tap + to record a loan you gave or received.
+              {statusTab === 'active'
+                ? 'Tap + to record a loan you gave or received.'
+                : 'Loans that are fully settled will appear here.'}
             </Text>
           </View>
         ) : (
@@ -449,8 +477,16 @@ const LoanManagement = () => {
                   <Text style={[styles.paymentItemDate, { marginTop: 8 }]}>📝 {loan.notes}</Text>
                 ) : null}
 
-                {/* Add payment / settle buttons */}
-                {!loan.is_settled && (
+                {/* Add payment / settle / reactivate buttons */}
+                {loan.is_settled ? (
+                  <TouchableOpacity
+                    style={styles.reactivateBtn}
+                    onPress={() => handleMarkSettled(loan)}
+                  >
+                    <RefreshCw color={COLORS.warning} size={15} />
+                    <Text style={styles.reactivateBtnText}>Reactivate Loan</Text>
+                  </TouchableOpacity>
+                ) : (
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                     <TouchableOpacity
                       style={[styles.addPaymentBtn, { flex: 1, borderColor: barClr + '60', backgroundColor: barClr + '12' }]}
@@ -510,16 +546,6 @@ const LoanManagement = () => {
                       ))
                     )}
 
-                    {loan.is_settled && (
-                      <TouchableOpacity
-                        style={{ marginTop: 8, alignSelf: 'flex-end' }}
-                        onPress={() => handleMarkSettled(loan)}
-                      >
-                        <Text style={{ color: COLORS.warning, fontSize: 12, fontWeight: '600' }}>
-                          Mark as Active
-                        </Text>
-                      </TouchableOpacity>
-                    )}
                   </View>
                 )}
               </View>

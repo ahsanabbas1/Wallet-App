@@ -4,6 +4,7 @@ import savingsGoalService from './savingsGoalService';
 import { paymentService } from './paymentService';
 import { loanService } from './loanService';
 import budgetService, { decodeBudget, getActivePeriod, getRelatedCategoryIds } from './budgetService';
+import { accountService } from './accountService';
 
 export const dashboardService = {
   async getUserProfile(userId) {
@@ -61,7 +62,10 @@ export const dashboardService = {
     const totalIncome     = transactions.filter(t => t.type === 'income'  && !isLoan(t)).reduce((s, t) => s + parseFloat(t.amount), 0);
     const totalExpenseAll = transactions.filter(t => t.type === 'expense' && !isLoan(t)).reduce((s, t) => s + parseFloat(t.amount), 0);
     const cashAdj         = await this.getCashAdjustment(userId);
-    const cashInHand      = totalIncome - totalExpenseAll + cashAdj;
+    const accountsTotal   = await accountService.getTotalBalance(userId);
+    const cashInHand      = accountsTotal > 0
+      ? accountsTotal
+      : totalIncome - totalExpenseAll + cashAdj;
 
     let totalSaved = 0, savingsProgress = 0;
     if (goalsData?.length > 0) {

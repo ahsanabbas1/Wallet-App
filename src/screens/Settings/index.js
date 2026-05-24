@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -292,6 +292,17 @@ export default function Settings() {
               </Pressable>
             </View>
           </View>
+        </View>
+
+        {/* Financial */}
+        <SectionHeader title="Financial" />
+        <View style={styles.card}>
+          <SettingRow
+            icon={Building2}
+            label="Bank Accounts"
+            value="Manage accounts & balances"
+            onPress={() => navigation.navigate('Accounts')}
+          />
         </View>
 
         {/* Account */}

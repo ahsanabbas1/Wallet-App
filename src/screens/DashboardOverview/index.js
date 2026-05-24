@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,7 +16,8 @@ import {
   Bell,
   Wallet,
   RefreshCcw,
-  Pencil,
+  Eye,
+  EyeOff,
 } from 'lucide-react-native';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -68,21 +69,9 @@ const DashboardOverview = () => {
   const [expenseChange, setExpenseChange] = useState(0);
   const [savingsProgress, setSavingsProgress] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
-  const [cashModalVisible, setCashModalVisible] = useState(false);
-  const [cashAdjInput, setCashAdjInput] = useState('');
+  const [balanceVisible, setBalanceVisible] = useState(false);
 
-  const openCashModal = async () => {
-    const adj = await dashboardService.getCashAdjustment(userId);
-    setCashAdjInput(adj !== 0 ? String(adj) : '');
-    setCashModalVisible(true);
-  };
-
-  const saveCashAdjustment = async () => {
-    const val = parseFloat(cashAdjInput) || 0;
-    await dashboardService.setCashAdjustment(userId, val);
-    setCashModalVisible(false);
-    loadDashboardData();
-  };
+  const mv = (formatted) => balanceVisible ? formatted : '••••••';
 
   // Single load function — uses userId from context, no extra getSession() call
   const loadDashboardData = async () => {
@@ -215,6 +204,14 @@ const DashboardOverview = () => {
             </Pressable>
             <Pressable
               style={styles.iconButton}
+              onPress={() => setBalanceVisible(v => !v)}
+            >
+              {balanceVisible
+                ? <Eye color={COLORS.text} size={20} />
+                : <EyeOff color={COLORS.textSecondary} size={20} />}
+            </Pressable>
+            <Pressable
+              style={styles.iconButton}
               onPress={() => navigation.navigate('Notifications')}
             >
               <Bell color={COLORS.text} size={22} />
@@ -251,7 +248,7 @@ const DashboardOverview = () => {
               <View>
                 <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.8)', marginBottom: 4 }]}>Total Net Worth</Text>
                 <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.085, color: '#fff', marginBottom: 0, fontWeight: '800' }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {currency} {formatAmount(totals.totalAmount)}
+                  {mv(`${currency} ${formatAmount(totals.totalAmount)}`)}
                 </Text>
               </View>
               <TrendingUp color="rgba(255,255,255,0.4)" size={24} />
@@ -262,24 +259,24 @@ const DashboardOverview = () => {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
               <View style={{ minWidth: '40%' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Available Cash</Text>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>{currency} {formatAmount(totals.cashInHand)}</Text>
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>{mv(`${currency} ${formatAmount(totals.cashInHand)}`)}</Text>
               </View>
               <View style={{ minWidth: '40%' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Net Loan Pos.</Text>
                 <Text style={{ color: '#00e676', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                  {totals.loan.netRemaining >= 0 ? '+' : ''}{formatAmount(totals.loan.netRemaining)}
+                  {mv(`${totals.loan.netRemaining >= 0 ? '+' : ''}${formatAmount(totals.loan.netRemaining)}`)}
                 </Text>
               </View>
               <View style={{ minWidth: '40%' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Budget Usage</Text>
                 <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                  {((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}%
+                  {mv(`${((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}%`)}
                 </Text>
               </View>
               <View style={{ minWidth: '40%' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Savings</Text>
                 <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                  {savingsProgress.toFixed(0)}%
+                  {mv(`${savingsProgress.toFixed(0)}%`)}
                 </Text>
               </View>
             </View>
@@ -287,27 +284,24 @@ const DashboardOverview = () => {
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
             {/* 2. Total Cash In Hand: Income - Expense */}
-            <Pressable onPress={openCashModal} style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Cash In Hand</Text>
-                <Pencil color="rgba(0, 230, 118, 0.6)" size={14} />
-              </View>
+            <View style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
+              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Cash In Hand</Text>
               <Text style={[styles.balanceAmount, { color: '#00e676', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
-                {currency} {formatAmount(totals.cashInHand)}
+                {mv(`${currency} ${formatAmount(totals.cashInHand)}`)}
               </Text>
               <Text style={{ color: 'rgba(0, 230, 118, 0.7)', fontSize: 10, fontWeight: '600', marginTop: 4 }}>
-                {((totals.cashInHand / (totals.totalIncome || 1)) * 100).toFixed(1)}% liquidity
+                {mv(`${((totals.cashInHand / (totals.totalIncome || 1)) * 100).toFixed(1)}% liquidity`)}
               </Text>
-            </Pressable>
+            </View>
  
             {/* 3. Total Expense of the Month: Outgoing */}
             <View style={[styles.balanceCard, { flex: 1, marginLeft: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(255, 82, 82, 0.2)' }]}>
               <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Expenses</Text>
               <Text style={[styles.balanceAmount, { color: '#ff5252', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
-                {currency} {formatAmount(totals.outgoing)}
+                {mv(`${currency} ${formatAmount(totals.outgoing)}`)}
               </Text>
               <Text style={{ color: expenseChange > 0 ? COLORS.error : COLORS.success, fontSize: 10, fontWeight: '600', marginTop: 4 }}>
-                {expenseChange > 0 ? '↑' : '↓'} {Math.abs(expenseChange).toFixed(1)}% vs prev
+                {mv(`${expenseChange > 0 ? '↑' : '↓'} ${Math.abs(expenseChange).toFixed(1)}% vs prev`)}
               </Text>
             </View>
           </View>
@@ -335,9 +329,9 @@ const DashboardOverview = () => {
                   <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10 }}>{totals.budget.count} ACTIVE BUDGETS</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{currency} {formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))} Left</Text>
+                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{mv(`${currency} ${formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))} Left`)}</Text>
                   <Text style={{ color: totals.budget.totalUsed > totals.budget.totalBudget ? '#ff5252' : '#00e676', fontSize: 10, fontWeight: '700' }}>
-                    {((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}% USED
+                    {mv(`${((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}% USED`)}
                   </Text>
                 </View>
               </View>
@@ -354,11 +348,11 @@ const DashboardOverview = () => {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
                   <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL BUDGET</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.budget.totalBudget)}</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.budget.totalBudget))}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL SPENT</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.budget.totalUsed)}</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.budget.totalUsed))}</Text>
                 </View>
               </View>
             </Pressable>
@@ -381,17 +375,17 @@ const DashboardOverview = () => {
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 0 }]}>Total Loan Status</Text>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{currency} {formatAmount(totals.loan.remaining)} Left</Text>
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{mv(`${currency} ${formatAmount(totals.loan.remaining)} Left`)}</Text>
               </View>
               <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 10 }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
                   <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>LOAN AMOUNT</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.total)}</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.loan.total))}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL PAID</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{formatAmount(totals.loan.paid)}</Text>
+                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.loan.paid))}</Text>
                 </View>
               </View>
             </Pressable>
@@ -465,6 +459,7 @@ const DashboardOverview = () => {
                 method={item.description || ''}
                 color={item.categories?.color || COLORS.primary}
                 isPositive={item.type === 'income'}
+                masked={!balanceVisible}
                 onEdit={() => navigation.navigate('AddTransaction', { transaction: item })}
                 onDelete={() => handleDeleteTransaction(item)}
               />
@@ -515,9 +510,9 @@ const DashboardOverview = () => {
                   </View>
                   <View style={styles.transactionAmountContainer}>
                     <Text style={[styles.transactionAmount, { color: loan.type === 'given' ? COLORS.error : COLORS.success }]}>
-                      {currency} {formatAmount(loan.total_amount)}
+                      {mv(`${currency} ${formatAmount(loan.total_amount)}`)}
                     </Text>
-                    <Text style={styles.transactionMethod}>{formatAmount(loan.remaining)} remaining</Text>
+                    <Text style={styles.transactionMethod}>{mv(`${formatAmount(loan.remaining)} remaining`)}</Text>
                   </View>
                 </View>
               ))}
@@ -562,35 +557,6 @@ const DashboardOverview = () => {
           </View>
         </View>
       </ScrollView>
-      <Modal visible={cashModalVisible} transparent animationType="fade" onRequestClose={() => setCashModalVisible(false)}>
-      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }} onPress={() => setCashModalVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <Pressable onPress={() => {}} style={{ backgroundColor: COLORS.card, borderRadius: 16, padding: 24, width: SCREEN_WIDTH * 0.85 }}>
-            <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Adjust Cash In Hand</Text>
-            <Text style={{ color: COLORS.subText || 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>
-              Enter a positive or negative amount to adjust your calculated cash balance.
-            </Text>
-            <TextInput
-              style={{ backgroundColor: COLORS.background, color: COLORS.text, borderRadius: 10, padding: 14, fontSize: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}
-              placeholder="e.g. 5000 or -2000"
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              keyboardType="numeric"
-              value={cashAdjInput}
-              onChangeText={setCashAdjInput}
-              autoFocus
-            />
-            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 20, gap: 12 }}>
-              <Pressable onPress={() => setCashModalVisible(false)} style={{ paddingVertical: 10, paddingHorizontal: 20 }}>
-                <Text style={{ color: COLORS.subText || 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Cancel</Text>
-              </Pressable>
-              <Pressable onPress={saveCashAdjustment} style={{ backgroundColor: '#00e676', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 10 }}>
-                <Text style={{ color: '#000', fontWeight: '700' }}>Save</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Pressable>
-      </Modal>
     </SafeAreaView>
   );
 };

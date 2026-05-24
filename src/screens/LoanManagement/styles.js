@@ -69,7 +69,38 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* ── Tabs ────────────────────────────────────────────────────────── */
+  /* ── Status tabs (Active / Archive) ─────────────────────────────── */
+  statusTabRow: {
+    flexDirection: 'row',
+    marginHorizontal: SIZES.padding,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 10,
+  },
+  statusTab: {
+    flex: 1,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  statusTabActive: {
+    backgroundColor: COLORS.primary + '18',
+    borderColor: COLORS.primary,
+  },
+  statusTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  statusTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+
+  /* ── Type tabs (All / Given / Received) ─────────────────────────── */
   tabRow: {
     flexDirection: 'row',
     marginHorizontal: SIZES.padding,
@@ -115,11 +146,11 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     borderColor: COLORS.border,
   },
   loanCardSettled: {
-    opacity: 0.65,
+    borderColor: COLORS.success + '44',
   },
   loanCardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
   loanAvatar: {
@@ -129,6 +160,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    marginTop: 2,
   },
   loanAvatarText: {
     color: '#fff',
@@ -141,24 +173,28 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   loanPersonRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginBottom: 2,
+    flexWrap: 'nowrap',
   },
   loanPersonName: {
     color: COLORS.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
+    flex: 1,
+    flexShrink: 1,
   },
   typeBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
+    flexShrink: 0,
   },
   typeBadgeText: {
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   loanDate: {
     color: COLORS.textSecondary,
@@ -166,12 +202,13 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   loanActions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
+    flexShrink: 0,
   },
   actionBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     backgroundColor: COLORS.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -449,6 +486,25 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+  },
+
+  /* ── Reactivate button (shown on archive cards) ─────────────────── */
+  reactivateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.warning + '60',
+    backgroundColor: COLORS.warning + '12',
+    gap: 6,
+  },
+  reactivateBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.warning,
   },
 
   settledBadge: {

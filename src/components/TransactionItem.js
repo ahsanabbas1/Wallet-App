@@ -14,6 +14,7 @@ const TransactionItem = memo(({
   method,
   color,
   isPositive,
+  masked,
   onEdit,
   onDelete
 }) => {
@@ -21,10 +22,10 @@ const TransactionItem = memo(({
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
-  // Normalize amount to a clean display string — always use absolute value,
-  // sign comes from isPositive prop to avoid double-negation bugs.
   let displayAmount;
-  if (typeof amount === 'number') {
+  if (masked) {
+    displayAmount = '••••••';
+  } else if (typeof amount === 'number') {
     displayAmount = (isPositive ? '+' : '-') + currency + ' ' + formatAmount(amount);
   } else if (typeof amount === 'string') {
     const rawNum = Math.abs(parseFloat(amount.replace(/[^0-9.]/g, '')) || 0);

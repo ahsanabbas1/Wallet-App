@@ -18,8 +18,11 @@
     "@supabase/supabase-js": "^2.99.3",
     "dotenv": "^17.3.1",
     "expo": "~54.0.0",
+    "expo-file-system": "~19.0.22",
     "expo-linear-gradient": "~15.0.8",
     "expo-linking": "~8.0.11",
+    "expo-print": "~15.0.8",
+    "expo-sharing": "~14.0.8",
     "expo-sqlite": "~16.0.10",
     "expo-status-bar": "~3.0.9",
     "expo-web-browser": "~15.0.10",
@@ -32,7 +35,8 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^3.0.0",
-    "react-native-web": "^0.21.0"
+    "react-native-web": "^0.21.0",
+    "xlsx": "^0.18.5"
   },
   "private": true,
   "devDependencies": {

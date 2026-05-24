@@ -13,6 +13,7 @@ import Notifications      from '../screens/Notifications/index';
 import About              from '../screens/About/index';
 import AddTransaction     from '../screens/AddTransaction/index';
 import LoanManagement    from '../screens/LoanManagement/index';
+import Accounts           from '../screens/Accounts/index';
 import { useTheme }       from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator();
@@ -31,6 +32,7 @@ const MainStack = () => (
     <Stack.Screen name="Notifications" component={Notifications}     />
     <Stack.Screen name="About"         component={About}             />
     <Stack.Screen name="Loans"         component={LoanManagement}    />
+    <Stack.Screen name="Accounts"      component={Accounts}          />
   </Stack.Navigator>
 );
 
