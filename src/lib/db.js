@@ -43,6 +43,10 @@ export async function closeUserDatabase(userId) {
   }
 }
 
+export function getActiveUserId() {
+  return _activeUserId;
+}
+
 export function generateId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;

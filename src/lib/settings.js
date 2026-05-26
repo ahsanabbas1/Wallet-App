@@ -1,15 +1,12 @@
-import { getDb } from './db';
-import { supabase } from './supabase';
+import { getDb, getActiveUserId } from './db';
 
-// Resolves the current userId from the Supabase auth session (still used for auth only)
-async function getCurrentUserId() {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user?.id ?? null;
+function getCurrentUserId() {
+  return getActiveUserId();
 }
 
 export const getUserSettings = async () => {
   try {
-    const userId = await getCurrentUserId();
+    const userId = getCurrentUserId();
     if (!userId) return {};
 
     const db  = getDb();
@@ -27,7 +24,7 @@ export const getUserSettings = async () => {
 
 export const updateUserSettings = async (newSettings) => {
   try {
-    const userId = await getCurrentUserId();
+    const userId = getCurrentUserId();
     if (!userId) return false;
 
     const current      = await getUserSettings();

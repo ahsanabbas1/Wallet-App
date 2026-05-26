@@ -11,7 +11,6 @@ import {
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -133,31 +132,6 @@ const Budgeting = ({ navigation }) => {
   // Refresh whenever the screen comes into focus
   useFocusEffect(useCallback(() => { fetchData(); }, [userId]));
 
-  // ── Realtime subscription: update instantly when transactions or budgets change
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel(`budget_realtime_${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
-        () => fetchData()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'budgets', filter: `user_id=eq.${userId}` },
-        () => fetchData()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'savings_goals', filter: `user_id=eq.${userId}` },
-        () => fetchData()
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [userId]);
 
   const onDateChange = (event, selectedDate) => {
     setShowPicker(false);

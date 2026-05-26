@@ -15,7 +15,8 @@ import { useDrawer }       from '../../context/DrawerContext';
 import { useAuth }         from '../../context/AuthContext';
 import { useProfile }      from '../../context/ProfileContext';
 import { useTheme }        from '../../context/ThemeContext';
-import { supabase }        from '../../lib/supabase';
+import { getDb }           from '../../lib/db';
+import { transactionService } from '../../services/transactionService';
 import { useFocusEffect }  from '@react-navigation/native';
 
 import MiniCalendar            from '../../components/Calendar';
@@ -79,54 +80,51 @@ const buildPrevRange = (period, currentStart) => {
   return { start: prevStart, end: prevEnd };
 };
 
-/* ─── single unified Supabase fetch ─────────────────────────────────────── */
+/* ─── single unified SQLite fetch ───────────────────────────────────────── */
 
 const fetchAllReportData = async (userId, period, customDates) => {
+  const db = getDb();
   const { start, end } = buildDateRange(period, customDates);
   const { start: pStart, end: pEnd } = buildPrevRange(period, start);
 
-  // Batch: current + previous + 6-month bar data
-  const [curRes, prevRes, ...monthRes] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select('id, amount, type, date, category_id, categories(name, color, icon)')
-      .eq('user_id', userId)
-      .gte('date', start.toISOString())
-      .lte('date', end.toISOString())
-      .order('date', { ascending: true }),
+  // Build category map once — used to attach category objects to transactions
+  const cats   = await transactionService.getCategories(userId);
+  const catMap = Object.fromEntries(cats.map(c => [c.id, c]));
+  const attach = (rows) => rows.map(t => ({ ...t, categories: catMap[t.category_id] || null }));
 
-    supabase
-      .from('transactions')
-      .select('id, amount, type, date, categories(name, color)')
-      .eq('user_id', userId)
-      .gte('date', pStart.toISOString())
-      .lte('date', pEnd.toISOString()),
-
-    // 6 individual month queries in parallel
+  // Current + previous + 6 monthly buckets — all in parallel
+  const [curRows, prevRows, ...monthRows] = await Promise.all([
+    db.getAllAsync(
+      'SELECT * FROM transactions WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date ASC',
+      [userId, start.toISOString(), end.toISOString()]
+    ),
+    db.getAllAsync(
+      'SELECT * FROM transactions WHERE user_id = ? AND date >= ? AND date <= ?',
+      [userId, pStart.toISOString(), pEnd.toISOString()]
+    ),
     ...Array.from({ length: 6 }, (_, i) => {
-      const now = new Date();
-      const d   = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-      return supabase
-        .from('transactions')
-        .select('amount, type')
-        .eq('user_id', userId)
-        .gte('date', new Date(d.getFullYear(), d.getMonth(), 1).toISOString())
-        .lt('date',  new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString());
+      const now  = new Date();
+      const d    = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const mS   = new Date(d.getFullYear(), d.getMonth(), 1).toISOString();
+      const mE   = new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString();
+      return db.getAllAsync(
+        'SELECT amount, type, is_loan FROM transactions WHERE user_id = ? AND date >= ? AND date < ?',
+        [userId, mS, mE]
+      );
     }),
   ]);
 
-  const current  = curRes.data  || [];
-  const previous = prevRes.data || [];
+  const current  = attach(curRows);
+  const previous = attach(prevRows);
 
-  // 6-month trend bars
-  const sixMonthBars = monthRes.map((res, i) => {
-    const now = new Date();
-    const d   = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    const txs = res.data || [];
+  const sixMonthBars = monthRows.map((rows, i) => {
+    const now     = new Date();
+    const d       = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    const nonLoan = rows.filter(t => t.is_loan !== 1);
     return {
       label:   MONTH_NAMES[d.getMonth()],
-      expense: txs.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0),
-      income:  txs.filter(t => t.type === 'income') .reduce((s, t) => s + parseFloat(t.amount), 0),
+      expense: nonLoan.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0),
+      income:  nonLoan.filter(t => t.type === 'income') .reduce((s, t) => s + parseFloat(t.amount), 0),
     };
   });
 
@@ -136,12 +134,15 @@ const fetchAllReportData = async (userId, period, customDates) => {
 /* ─── derived data builders (memoised in component) ─────────────────────── */
 
 const deriveMetrics = (current, previous) => {
-  const income  = current.filter(t => t.type === 'income') .reduce((s, t) => s + parseFloat(t.amount), 0);
-  const expense = current.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+  const cur  = current .filter(t => t.is_loan !== 1);
+  const prev = previous.filter(t => t.is_loan !== 1);
+
+  const income  = cur.filter(t => t.type === 'income') .reduce((s, t) => s + parseFloat(t.amount), 0);
+  const expense = cur.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
   const net     = income - expense;
 
-  const prevExpense = previous.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
-  const prevIncome  = previous.filter(t => t.type === 'income') .reduce((s, t) => s + parseFloat(t.amount), 0);
+  const prevExpense = prev.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0);
+  const prevIncome  = prev.filter(t => t.type === 'income') .reduce((s, t) => s + parseFloat(t.amount), 0);
 
   const expenseChange = prevExpense > 0 ? ((expense - prevExpense) / prevExpense) * 100 : 0;
   const incomeChange  = prevIncome  > 0 ? ((income  - prevIncome)  / prevIncome)  * 100 : 0;
@@ -151,7 +152,7 @@ const deriveMetrics = (current, previous) => {
 
 const deriveBreakdown = (current, totalExpense) => {
   const map = {};
-  current.filter(t => t.type === 'expense').forEach(t => {
+  current.filter(t => t.is_loan !== 1 && t.type === 'expense').forEach(t => {
     const n = t.categories?.name || 'Other';
     if (!map[n]) map[n] = { amount: 0, color: t.categories?.color || '#4f5ff7' };
     map[n].amount += parseFloat(t.amount);
@@ -167,12 +168,12 @@ const deriveBreakdown = (current, totalExpense) => {
 
 const deriveCategoryVariance = (current, previous) => {
   const prevMap = {};
-  previous.filter(t => t.type === 'expense').forEach(t => {
+  previous.filter(t => t.is_loan !== 1 && t.type === 'expense').forEach(t => {
     const n = t.categories?.name || 'Other';
     prevMap[n] = (prevMap[n] || 0) + parseFloat(t.amount);
   });
   const currMap = {};
-  current.filter(t => t.type === 'expense').forEach(t => {
+  current.filter(t => t.is_loan !== 1 && t.type === 'expense').forEach(t => {
     const n = t.categories?.name || 'Other';
     currMap[n] = (currMap[n] || 0) + parseFloat(t.amount);
   });
@@ -214,9 +215,10 @@ const deriveInsights = (metrics, breakdown, catVariance, fmt) => {
 };
 
 const deriveChartData = (current, sixMonthBars) => {
+  const nonLoanCurrent = current.filter(t => t.is_loan !== 1);
   // Monthly grouped data for line + bar charts
   const monthMap = {};
-  current.forEach(t => {
+  nonLoanCurrent.forEach(t => {
     const d  = new Date(t.date);
     const mk = `${MONTH_NAMES[d.getMonth()]} '${String(d.getFullYear()).slice(-2)}`;
     if (!monthMap[mk]) monthMap[mk] = { month: mk, income: 0, expense: 0, date: d };
@@ -237,7 +239,7 @@ const deriveChartData = (current, sixMonthBars) => {
 
   // Income breakdown
   const incomeMap = {};
-  current.filter(t => t.type === 'income').forEach(t => {
+  nonLoanCurrent.filter(t => t.type === 'income').forEach(t => {
     const n = t.categories?.name || 'Other';
     if (!incomeMap[n]) incomeMap[n] = { amount: 0, color: t.categories?.color || '#4051b5' };
     incomeMap[n].amount += parseFloat(t.amount);
@@ -252,7 +254,7 @@ const deriveChartData = (current, sixMonthBars) => {
 
 const deriveCashFlow = (current) => {
   const months = {};
-  current.forEach(t => {
+  current.filter(t => t.is_loan !== 1).forEach(t => {
     const d  = new Date(t.date);
     const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     const dk = d.toISOString().split('T')[0];
@@ -337,7 +339,7 @@ const Reports = () => {
   const [loading,    setLoading]    = useState(true);
   const [fetchError, setFetchError] = useState(false);
 
-  /* ── raw data from Supabase (single fetch) ────────────────────────── */
+  /* ── raw data (single fetch) ─────────────────────────────────────── */
   const [rawData, setRawData] = useState({
     current: [], previous: [], sixMonthBars: [],
   });
@@ -363,18 +365,6 @@ const Reports = () => {
 
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
-  // Realtime: re-fetch when transactions change
-  useEffect(() => {
-    if (!userId) return;
-    const channel = supabase
-      .channel(`reports_realtime_${userId}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
-        () => fetchData()
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [userId]);
 
   /* ── memoised derived data ───────────────────────────────────────── */
   const metrics        = useMemo(() => deriveMetrics(rawData.current, rawData.previous),                      [rawData]);
@@ -754,98 +744,218 @@ const Reports = () => {
         {/* ══════════════════════════════════════════════════════════
             TAB 1 — ANALYTICS
             ══════════════════════════════════════════════════════════ */}
-        {activeTab === 1 && (
-          <>
-            {/* KPI summary row */}
-            <View style={styles.kpiRow}>
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Total Income</Text>
-                <Text style={[styles.kpiValue, { color: '#0bda73' }]}>{fmt(metrics.income)}</Text>
-                <View style={styles.kpiChange}>
-                  {metrics.incomeChange >= 0
-                    ? <TrendingUp  color="#0bda73" size={12} />
-                    : <TrendingDown color="#f44336" size={12} />}
-                  <Text style={[styles.kpiChangeText, { color: metrics.incomeChange >= 0 ? '#0bda73' : '#f44336' }]}>
-                    {Math.abs(metrics.incomeChange).toFixed(1)}%
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.kpiCard}>
-                <Text style={styles.kpiLabel}>Total Expense</Text>
-                <Text style={[styles.kpiValue, { color: '#f44336' }]}>{fmt(metrics.expense)}</Text>
-                <View style={styles.kpiChange}>
-                  {metrics.expenseChange <= 0
-                    ? <TrendingDown color="#0bda73" size={12} />
-                    : <TrendingUp  color="#f44336" size={12} />}
-                  <Text style={[styles.kpiChangeText, { color: metrics.expenseChange <= 0 ? '#0bda73' : '#f44336' }]}>
-                    {Math.abs(metrics.expenseChange).toFixed(1)}%
-                  </Text>
-                </View>
-              </View>
-            </View>
+        {activeTab === 1 && (() => {
+          const savingsRate = metrics.income > 0 ? ((metrics.net / metrics.income) * 100) : 0;
+          const totalFlow   = metrics.income + metrics.expense;
+          const incRatio    = totalFlow > 0 ? (metrics.income / totalFlow) * 100 : 50;
 
-            {/* Income vs Expenses */}
-            <View style={styles.chartCard}>
-              <Text style={styles.chartCardTitle}>Income vs Expenses</Text>
-              <IncomeExpenseBarChart data={chartData.incomeExpBar} height={200} />
-            </View>
+          return (
+            <>
+              {/* ── 1. Summary Card ──────────────────────────────── */}
+              <View style={[styles.chartCard, { padding: 0, overflow: 'hidden' }]}>
 
-            {/* Spending trend line */}
-            <View style={styles.chartCard}>
-              <Text style={styles.chartCardTitle}>Expense Trend</Text>
-              <LineChart
-                data={chartData.trendLine}
-                color={COLORS.primary}
-                height={180}
-              />
-            </View>
-
-            {/* Savings trajectory */}
-            <View style={styles.chartCard}>
-              <Text style={styles.chartCardTitle}>Cumulative Savings</Text>
-              <SavingsAreaChart data={chartData.savingsArea} height={180} />
-            </View>
-
-            {/* Income breakdown */}
-            {chartData.incomeBreakdown.length > 0 && (
-              <View style={styles.breakdownCard}>
-                <Text style={[styles.chartCardTitle, { marginBottom: 14 }]}>Income Sources</Text>
-                {chartData.incomeBreakdown.map((item, i) => (
-                  <View key={i} style={styles.breakdownRow}>
-                    <View style={styles.breakdownMeta}>
-                      <View style={styles.breakdownLeft}>
-                        <View style={[styles.catDot, { backgroundColor: item.color }]} />
-                        <Text style={styles.catName}>{item.name}</Text>
-                        <Text style={{ color: COLORS.textSecondary, fontSize: 11, marginLeft: 6 }}>
-                          {item.percent}%
+                {/* Top: Income + Expense side by side */}
+                <View style={{ flexDirection: 'row' }}>
+                  {/* Income */}
+                  <View style={{ flex: 1, padding: 18, paddingBottom: 14, borderRightWidth: 1, borderRightColor: COLORS.divider }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7 }}>Income</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: metrics.incomeChange >= 0 ? '#0bda7318' : '#f4433618', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
+                        {metrics.incomeChange >= 0
+                          ? <ArrowUp   color="#0bda73" size={10} />
+                          : <ArrowDown color="#f44336" size={10} />}
+                        <Text style={{ color: metrics.incomeChange >= 0 ? '#0bda73' : '#f44336', fontSize: 10, fontWeight: '700' }}>
+                          {Math.abs(metrics.incomeChange).toFixed(1)}%
                         </Text>
                       </View>
-                      <Text style={[styles.catAmount, { color: '#0bda73' }]}>{fmt(item.amount)}</Text>
                     </View>
-                    <View style={styles.progressTrack}>
-                      <View style={[styles.progressFill, {
-                        width: `${Math.max(parseFloat(item.percent), 1)}%`,
-                        backgroundColor: item.color,
-                      }]} />
+                    <Text style={{ color: '#0bda73', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{fmt(metrics.income)}</Text>
+                    <Text style={{ color: COLORS.textTertiary, fontSize: 10, marginTop: 4 }}>vs prev period</Text>
+                  </View>
+
+                  {/* Expense */}
+                  <View style={{ flex: 1, padding: 18, paddingBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7 }}>Expense</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: metrics.expenseChange <= 0 ? '#0bda7318' : '#f4433618', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
+                        {metrics.expenseChange <= 0
+                          ? <ArrowDown color="#0bda73" size={10} />
+                          : <ArrowUp   color="#f44336" size={10} />}
+                        <Text style={{ color: metrics.expenseChange <= 0 ? '#0bda73' : '#f44336', fontSize: 10, fontWeight: '700' }}>
+                          {Math.abs(metrics.expenseChange).toFixed(1)}%
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: '#f44336', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{fmt(metrics.expense)}</Text>
+                    <Text style={{ color: COLORS.textTertiary, fontSize: 10, marginTop: 4 }}>vs prev period</Text>
+                  </View>
+                </View>
+
+                {/* Income/Expense ratio bar */}
+                <View style={{ paddingHorizontal: 18, paddingTop: 4, paddingBottom: 6 }}>
+                  <View style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.divider, flexDirection: 'row', overflow: 'hidden' }}>
+                    <View style={{ width: `${incRatio}%`, backgroundColor: '#0bda73' }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }}>
+                    <Text style={{ color: '#0bda73', fontSize: 10, fontWeight: '600' }}>Income {incRatio.toFixed(0)}%</Text>
+                    <Text style={{ color: '#f44336', fontSize: 10, fontWeight: '600' }}>Expense {(100 - incRatio).toFixed(0)}%</Text>
+                  </View>
+                </View>
+
+                {/* Bottom: Net + Savings Rate */}
+                <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.divider }}>
+                  <View style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRightWidth: 1, borderRightColor: COLORS.divider }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>Net Balance</Text>
+                    <Text style={{ color: metrics.net >= 0 ? '#0bda73' : '#f44336', fontSize: 17, fontWeight: '800' }}>
+                      {metrics.net >= 0 ? '+' : ''}{fmt(metrics.net)}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>Savings Rate</Text>
+                    <Text style={{ color: savingsRate >= 0 ? '#0bda73' : '#f44336', fontSize: 17, fontWeight: '800' }}>
+                      {savingsRate.toFixed(1)}%
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* ── 2. Monthly Income vs Expenses ────────────────── */}
+              <View style={styles.chartCard}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <View>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>Monthly Overview</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>Income vs Expenses per month</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#0bda73' }} />
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600' }}>Income</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f44336' }} />
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600' }}>Expense</Text>
                     </View>
                   </View>
-                ))}
+                </View>
+                <IncomeExpenseBarChart data={chartData.incomeExpBar} height={200} />
               </View>
-            )}
 
-            {/* Cash Flow table */}
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Cash Flow</Text>
-                <Text style={styles.sectionSubtitle}>Tap a month to expand daily view</Text>
+              {/* ── 3. Expense Trend ─────────────────────────────── */}
+              <View style={styles.chartCard}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <View>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>Spending Trend</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>How your expenses move over time</Text>
+                  </View>
+                  <View style={{ backgroundColor: COLORS.primary + '18', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                    <Text style={{ color: COLORS.primary, fontSize: 10, fontWeight: '700' }}>MONTHLY</Text>
+                  </View>
+                </View>
+                <LineChart data={chartData.trendLine} color={COLORS.primary} height={180} />
               </View>
-              <BarChart3 color={COLORS.textSecondary} size={18} />
-            </View>
-            <View style={{ paddingHorizontal: 0, marginBottom: 8 }}>
-              <CashFlowTable data={cashFlowData} />
-            </View>
-          </>
-        )}
+
+              {/* ── 4. Top Expense Categories ────────────────────── */}
+              {breakdown.length > 0 && (
+                <View style={styles.chartCard}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                    <View>
+                      <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>Top Categories</Text>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>Where your money goes</Text>
+                    </View>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>{breakdown.length} active</Text>
+                  </View>
+
+                  {breakdown.slice(0, 6).map((item, i) => {
+                    const variance = catVariance[item.label] || 0;
+                    return (
+                      <View key={i} style={{ marginBottom: 16 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+                          {/* Left: color dot + name + variance */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color }} />
+                            <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{item.label}</Text>
+                            {Math.abs(variance) > 1 && (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                {variance > 0 ? <ArrowUp color="#f44336" size={10} /> : <ArrowDown color="#0bda73" size={10} />}
+                                <Text style={{ color: variance > 0 ? '#f44336' : '#0bda73', fontSize: 10, fontWeight: '700' }}>
+                                  {Math.abs(variance).toFixed(0)}%
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          {/* Right: amount + percent */}
+                          <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                            <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '700' }}>{fmt(item.amount)}</Text>
+                            <Text style={{ color: COLORS.textSecondary, fontSize: 10, marginTop: 1 }}>{item.percent.toFixed(1)}%</Text>
+                          </View>
+                        </View>
+                        {/* Progress bar */}
+                        <View style={{ height: 5, backgroundColor: COLORS.divider, borderRadius: 3, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${Math.max(item.percent, 1)}%`, backgroundColor: item.color, borderRadius: 3 }} />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* ── 5. Savings Trajectory ────────────────────────── */}
+              <View style={styles.chartCard}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                  <View>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>Savings Growth</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>Cumulative net balance over time</Text>
+                  </View>
+                  <View style={{ backgroundColor: metrics.net >= 0 ? '#0bda7318' : '#f4433618', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                    <Text style={{ color: metrics.net >= 0 ? '#0bda73' : '#f44336', fontSize: 10, fontWeight: '700' }}>
+                      {metrics.net >= 0 ? 'GROWING' : 'DECLINING'}
+                    </Text>
+                  </View>
+                </View>
+                <SavingsAreaChart data={chartData.savingsArea} height={180} />
+              </View>
+
+              {/* ── 6. Income Sources ────────────────────────────── */}
+              {chartData.incomeBreakdown.length > 0 && (
+                <View style={styles.chartCard}>
+                  <View style={{ marginBottom: 18 }}>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>Income Sources</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>Where your income comes from</Text>
+                  </View>
+                  {chartData.incomeBreakdown.map((item, i) => (
+                    <View key={i} style={{ marginBottom: 16 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: item.color }} />
+                          <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{item.name}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                          <Text style={{ color: '#0bda73', fontSize: 13, fontWeight: '700' }}>{fmt(item.amount)}</Text>
+                          <Text style={{ color: COLORS.textSecondary, fontSize: 10, marginTop: 1 }}>{item.percent}%</Text>
+                        </View>
+                      </View>
+                      <View style={{ height: 5, backgroundColor: COLORS.divider, borderRadius: 3, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', width: `${Math.max(parseFloat(item.percent), 1)}%`, backgroundColor: item.color, borderRadius: 3 }} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* ── 7. Cash Flow Table ───────────────────────────── */}
+              <View style={[styles.sectionHeader, { marginTop: 4 }]}>
+                <View>
+                  <Text style={styles.sectionTitle}>Cash Flow</Text>
+                  <Text style={styles.sectionSubtitle}>Tap a month to expand daily view</Text>
+                </View>
+                <BarChart3 color={COLORS.textSecondary} size={18} />
+              </View>
+              <View style={{ marginBottom: 8 }}>
+                <CashFlowTable data={cashFlowData} />
+              </View>
+            </>
+          );
+        })()}
 
         {/* ══════════════════════════════════════════════════════════
             TAB 2 — BOOK

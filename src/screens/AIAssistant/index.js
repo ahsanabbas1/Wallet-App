@@ -4,9 +4,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { Send, Bot, User, Sparkles, Menu, TrendingUp, PieChart, ShoppingCart, Target } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { useProfile } from '../../context/ProfileContext';
+import { transactionService } from '../../services/transactionService';
+import { budgetService } from '../../services/budgetService';
+import savingsGoalService from '../../services/savingsGoalService';
+import { shoppingService } from '../../services/shoppingService';
+import { paymentService } from '../../services/paymentService';
 
 const VERCEL_PROXY_URL = 'https://wallet-app-ten-sooty.vercel.app/api/chat';
 const DAILY_LIMIT = 10;
@@ -14,6 +20,7 @@ const DAILY_LIMIT = 10;
 const AIAssistant = () => {
   const { openDrawer } = useDrawer();
   const { userId } = useAuth();
+  const { name: profileName, currency: profileCurrency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const scrollViewRef = useRef();
@@ -28,57 +35,43 @@ const AIAssistant = () => {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [usageCount, setUsageCount] = useState(0);
-  const [userCurrency, setUserCurrency] = useState('PKR');
+  const userCurrency = profileCurrency || 'PKR';
 
   useEffect(() => {
-    if (userId) {
-      fetchUsage();
-      fetchUserCurrency();
-    }
+    if (userId) fetchUsage();
   }, [userId]);
 
-  const fetchUserCurrency = async () => {
-    const { data } = await supabase.from('users').select('currency').eq('id', userId).single();
-    if (data?.currency) setUserCurrency(data.currency);
-  };
+  const aiUsageKey = (date) => `ai_usage_${userId}_${date}`;
 
   const fetchUsage = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await supabase
-      .from('ai_usage').select('request_count')
-      .eq('user_id', userId).eq('usage_date', today).single();
-    if (data) setUsageCount(data.request_count);
-    else if (error?.code === 'PGRST116') setUsageCount(0);
+    const stored = await AsyncStorage.getItem(aiUsageKey(today));
+    setUsageCount(stored ? parseInt(stored, 10) : 0);
   };
 
   const updateUsage = async () => {
     const today = new Date().toISOString().split('T')[0];
     const newCount = usageCount + 1;
-    await supabase.from('ai_usage').upsert(
-      { user_id: userId, usage_date: today, request_count: newCount },
-      { onConflict: 'user_id,usage_date' }
-    );
+    await AsyncStorage.setItem(aiUsageKey(today), String(newCount));
     setUsageCount(newCount);
   };
 
   const getFinancialContext = async () => {
     try {
-      const [profileRes, txRes, budgetRes, goalRes, shoppingRes, plannedRes] = await Promise.all([
-        supabase.from('users').select('name, currency, notifications_enabled, language').eq('id', userId).single(),
-        supabase.from('transactions').select('*, categories(name, color, type)').eq('user_id', userId).order('date', { ascending: false }).limit(100),
-        supabase.from('budgets').select('*, categories(name, color)').eq('user_id', userId),
-        supabase.from('savings_goals').select('*').eq('user_id', userId),
-        supabase.from('shopping_lists').select('*, shopping_items(*)').eq('user_id', userId).eq('is_archived', false),
-        supabase.from('planned_payments').select('*').eq('user_id', userId).limit(20),
+      const [txRes, budgetRes, goalRes, shoppingLists, plannedPayments, allCats] = await Promise.all([
+        transactionService.getTransactions(userId, { period: 'ALL' }),
+        budgetService.getBudgets(userId),
+        savingsGoalService.getSavingsGoals(userId),
+        shoppingService.getLists(userId),
+        paymentService.getPlannedPayments(userId),
+        transactionService.getCategories(userId),
       ]);
 
-      const profile = profileRes.data;
-      const currency = profile?.currency || 'PKR';
-      const transactions = txRes.data || [];
+      const catMap = Object.fromEntries((allCats || []).map(c => [c.id, c]));
+      const currency = userCurrency;
+      const transactions = (txRes.data || []).filter(t => t.is_loan !== 1);
       const budgets = budgetRes.data || [];
       const goals = goalRes.data || [];
-      const shoppingLists = shoppingRes.data || [];
-      const plannedPayments = plannedRes.data || [];
 
       const now = new Date();
       const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -106,7 +99,7 @@ const AIAssistant = () => {
         const spent = thisMonthTxns.filter(t => t.category_id === b.category_id && t.type === 'expense')
           .reduce((s, t) => s + parseFloat(t.amount), 0);
         return {
-          category: b.categories?.name || 'Unknown',
+          category: catMap[b.category_id]?.name || 'Unknown',
           limit: parseFloat(b.total_amount),
           spent,
           percentUsed: b.total_amount > 0 ? ((spent / parseFloat(b.total_amount)) * 100).toFixed(1) : 0
@@ -145,7 +138,7 @@ const AIAssistant = () => {
         .map(([name, amount]) => ({ name, amount }));
 
       const context = {
-        userName: profile?.name || 'User',
+        userName: profileName || 'User',
         currency,
         currentDate: now.toLocaleDateString(),
         currentMonth: now.toLocaleString('default', { month: 'long', year: 'numeric' }),

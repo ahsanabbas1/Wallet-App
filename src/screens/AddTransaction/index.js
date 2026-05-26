@@ -200,6 +200,16 @@ const Calculator = ({ onUseResult, onClose }) => {
   );
 };
 
+// ─── Cash virtual account ────────────────────────────────────────────────────
+const CASH_ACCOUNT = {
+  id: '__cash__',
+  account_name: 'Cash',
+  bank_name: 'No balance tracking',
+  icon: 'Banknote',
+  color: '#22c55e',
+  balance: null,
+};
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 const AddTransaction = ({ navigation, route }) => {
@@ -215,8 +225,10 @@ const AddTransaction = ({ navigation, route }) => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showCalcModal, setShowCalcModal] = useState(false);
   const [accounts, setAccounts] = useState([]);
-  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [selectedAccount, setSelectedAccount] = useState(CASH_ACCOUNT);
   const [showAccountPicker, setShowAccountPicker] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryModalParent, setCategoryModalParent] = useState(null);
 
   const [form, setForm] = useState({
     type: editTransaction?.type || 'expense',
@@ -262,11 +274,13 @@ const AddTransaction = ({ navigation, route }) => {
         }
       }
       setAccounts(accts || []);
-      if (accts && accts.length > 0) {
-        const preselect = isEdit && editTransaction?.account_id
-          ? accts.find(a => a.id === editTransaction.account_id) ?? accts[0]
-          : accts[0];
+      if (isEdit) {
+        const preselect = editTransaction?.account_id
+          ? (accts || []).find(a => a.id === editTransaction.account_id) ?? CASH_ACCOUNT
+          : CASH_ACCOUNT;
         setSelectedAccount(preselect);
+      } else {
+        setSelectedAccount(CASH_ACCOUNT);
       }
     } catch (error) {
       Alert.alert('Error', 'Could not load categories.');
@@ -290,10 +304,6 @@ const AddTransaction = ({ navigation, route }) => {
       Alert.alert('No Category', 'Please select a category.');
       return;
     }
-    if (accounts.length > 0 && !selectedAccount) {
-      Alert.alert('No Account', 'Please select a bank account for this transaction.');
-      return;
-    }
     setLoading(true);
     try {
       if (!userId) { Alert.alert('Error', 'You must be logged in.'); return; }
@@ -305,7 +315,7 @@ const AddTransaction = ({ navigation, route }) => {
         title,
         description,
         date: date.toISOString(),
-        account_id: selectedAccount?.id ?? null,
+        account_id: selectedAccount?.id === '__cash__' ? null : selectedAccount?.id ?? null,
       };
       let result;
       if (isEdit) {
@@ -338,13 +348,10 @@ const AddTransaction = ({ navigation, route }) => {
     }
   };
 
-  const [activeParent, setActiveParent] = useState(null);
   const filteredCategories = categories.filter(c => c.type === form.type || c.type === 'both');
-  const parents = filteredCategories.filter(c => !c.parent_id);
-  const subs = filteredCategories.filter(c => c.parent_id && (activeParent ? c.parent_id === activeParent.id : true));
 
   useEffect(() => {
-    if (activeParent && !parents.find(p => p.id === activeParent.id)) setActiveParent(null);
+    setCategoryModalParent(null);
   }, [form.type]);
 
   return (
@@ -382,103 +389,76 @@ const AddTransaction = ({ navigation, route }) => {
             {/* Title */}
             <AppInput label="Title" placeholder="e.g. Grocery Shop" value={form.title} onChangeText={(val) => updateFormField('title', val)} />
 
-            {/* Category Picker */}
+            {/* Category Picker — compact pressable that opens a modal */}
             <View style={styles.inputGroup}>
-              <View style={styles.pickerHeader}>
-                <Text style={styles.label}>{activeParent ? `Category: ${activeParent.name}` : 'Select Category'}</Text>
-                {activeParent && (
-                  <Pressable onPress={() => setActiveParent(null)}>
-                    <Text style={styles.changeText}>Change Group</Text>
-                  </Pressable>
-                )}
-              </View>
+              <Text style={styles.label}>Select Category</Text>
               {fetchingCategories ? (
-                <ActivityIndicator color={COLORS.primary} />
-              ) : !activeParent ? (
-                <View style={styles.broadGrid}>
-                  {parents.map(parent => (
-                    <Pressable key={parent.id} style={[styles.broadCard, { borderBottomColor: parent.color }]} onPress={() => setActiveParent(parent)}>
-                      <View style={[styles.broadIconBox, { backgroundColor: parent.color + '10' }]}>
-                        {(() => { const IC = Icons[parent.icon] || Icons.Circle; return <IC size={24} color={parent.color} />; })()}
-                      </View>
-                      <Text style={styles.broadName}>{parent.name}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <ActivityIndicator color={COLORS.primary} style={{ alignSelf: 'flex-start', marginTop: 6 }} />
               ) : (
-                <View style={styles.categoryList}>
-                  {subs.map((cat) => (
-                    <Pressable
-                      key={cat.id}
-                      style={[styles.categoryChip, selectedCategory?.id === cat.id && { backgroundColor: activeParent.color + '40', borderColor: activeParent.color }]}
-                      onPress={() => setSelectedCategory(cat)}
-                    >
-                      <Text style={[styles.categoryChipText, selectedCategory?.id === cat.id && { color: activeParent.color, fontWeight: 'bold' }]}>
-                        {cat.name}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {/* Account Selector — required */}
-            {accounts.length > 0 ? (
-              <View style={styles.inputGroup}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <Text style={styles.label}>
-                    Account <Text style={{ color: COLORS.error }}>*</Text>
-                  </Text>
-                  {selectedAccount && (
-                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>
-                      Bal: {Number(selectedAccount.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </Text>
-                  )}
-                </View>
                 <Pressable
-                  onPress={() => setShowAccountPicker(true)}
+                  onPress={() => { setCategoryModalParent(null); setShowCategoryModal(true); }}
                   style={({ pressed }) => ({
                     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
                     backgroundColor: COLORS.card, borderRadius: 14, padding: 14,
                     borderWidth: 1.5,
-                    borderColor: selectedAccount ? selectedAccount.color + '90' : COLORS.error + '80',
+                    borderColor: selectedCategory ? selectedCategory.color + '90' : COLORS.border,
                     opacity: pressed ? 0.8 : 1,
+                    marginTop: 8,
                   })}
                 >
-                  {selectedAccount ? (
+                  {selectedCategory ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: selectedAccount.color + '22', alignItems: 'center', justifyContent: 'center' }}>
-                        {(() => { const IC = Icons[selectedAccount.icon] || Icons.Wallet; return <IC size={18} color={selectedAccount.color} />; })()}
+                      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: selectedCategory.color + '22', alignItems: 'center', justifyContent: 'center' }}>
+                        {(() => { const IC = Icons[selectedCategory.icon] || Icons.Circle; return <IC size={18} color={selectedCategory.color} />; })()}
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
-                          {selectedAccount.account_name}
-                        </Text>
-                        {!!selectedAccount.bank_name && (
-                          <Text style={{ color: COLORS.textSecondary, fontSize: 11 }} numberOfLines={1}>
-                            {selectedAccount.bank_name}
-                          </Text>
-                        )}
-                      </View>
+                      <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                        {selectedCategory.name}
+                      </Text>
                     </View>
                   ) : (
-                    <Text style={{ color: COLORS.error, fontSize: 14, flex: 1 }}>Select account (required)</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 14, flex: 1 }}>Tap to select a category</Text>
                   )}
-                  <Icons.ChevronDown color={selectedAccount ? COLORS.textSecondary : COLORS.error} size={18} />
+                  <Icons.ChevronRight color={COLORS.textSecondary} size={18} />
                 </Pressable>
+              )}
+            </View>
+
+            {/* Account Selector — always visible; Cash is default */}
+            <View style={styles.inputGroup}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={styles.label}>Payment Source</Text>
+                {selectedAccount && selectedAccount.id !== '__cash__' && selectedAccount.balance != null && (
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>
+                    Bal: {Number(selectedAccount.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </Text>
+                )}
               </View>
-            ) : (
               <Pressable
-                onPress={() => navigation.navigate('MainTabs', { screen: 'Accounts' })}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.warning + '18', borderRadius: 12, padding: 12, marginBottom: 20, borderWidth: 1, borderColor: COLORS.warning + '40' }}
+                onPress={() => setShowAccountPicker(true)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  backgroundColor: COLORS.card, borderRadius: 14, padding: 14,
+                  borderWidth: 1.5,
+                  borderColor: selectedAccount ? selectedAccount.color + '90' : COLORS.border,
+                  opacity: pressed ? 0.8 : 1,
+                })}
               >
-                <Icons.AlertCircle color={COLORS.warning} size={18} />
-                <Text style={{ color: COLORS.warning, fontSize: 13, flex: 1 }}>
-                  No accounts set up — tap to add a bank account
-                </Text>
-                <Icons.ChevronRight color={COLORS.warning} size={16} />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: selectedAccount.color + '22', alignItems: 'center', justifyContent: 'center' }}>
+                    {(() => { const IC = Icons[selectedAccount.icon] || Icons.Wallet; return <IC size={18} color={selectedAccount.color} />; })()}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
+                      {selectedAccount.account_name}
+                    </Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11 }} numberOfLines={1}>
+                      {selectedAccount.bank_name}
+                    </Text>
+                  </View>
+                </View>
+                <Icons.ChevronDown color={COLORS.textSecondary} size={18} />
               </Pressable>
-            )}
+            </View>
 
             {/* Date & Time */}
             <View style={styles.inputGroup}>
@@ -531,25 +511,25 @@ const AddTransaction = ({ navigation, route }) => {
 
             {/* Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
-              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '800' }}>Select Account</Text>
+              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '800' }}>Select Payment Source</Text>
               <Pressable onPress={() => setShowAccountPicker(false)} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' }}>
                 <Icons.X color={COLORS.textSecondary} size={16} />
               </Pressable>
             </View>
 
-            {/* Account list */}
-            <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ padding: 16, gap: 10 }}>
-              {accounts.map(acct => {
+            {/* Account list — Cash first, then bank accounts */}
+            <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={{ padding: 16, gap: 10 }}>
+              {[CASH_ACCOUNT, ...accounts].map(acct => {
                 const isSelected = selectedAccount?.id === acct.id;
                 const IC = Icons[acct.icon] || Icons.Wallet;
-                const bal = Number(acct.balance || 0);
+                const isCash = acct.id === '__cash__';
                 return (
                   <Pressable
                     key={acct.id}
                     onPress={() => { setSelectedAccount(acct); setShowAccountPicker(false); }}
                     style={({ pressed }) => ({
                       flexDirection: 'row', alignItems: 'center', gap: 14,
-                      padding: 14, borderRadius: 16, marginBottom: 0,
+                      padding: 14, borderRadius: 16,
                       backgroundColor: isSelected ? acct.color + '18' : COLORS.surface,
                       borderWidth: 1.5,
                       borderColor: isSelected ? acct.color : COLORS.border,
@@ -561,16 +541,16 @@ const AddTransaction = ({ navigation, route }) => {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: COLORS.text, fontWeight: '700', fontSize: 15 }}>{acct.account_name}</Text>
-                      {!!acct.bank_name && (
-                        <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>{acct.bank_name}</Text>
-                      )}
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>{acct.bank_name}</Text>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ color: acct.color, fontWeight: '800', fontSize: 15 }}>
-                        {bal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                      </Text>
-                      <Text style={{ color: COLORS.textSecondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3 }}>Balance</Text>
-                    </View>
+                    {!isCash && (
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ color: acct.color, fontWeight: '800', fontSize: 15 }}>
+                          {Number(acct.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        </Text>
+                        <Text style={{ color: COLORS.textSecondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3 }}>Balance</Text>
+                      </View>
+                    )}
                     {isSelected && (
                       <Icons.CheckCircle color={acct.color} size={20} />
                     )}
@@ -580,6 +560,71 @@ const AddTransaction = ({ navigation, route }) => {
             </ScrollView>
 
             {/* Safe bottom padding */}
+            <View style={{ height: 24 }} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Category Picker Modal */}
+      <Modal visible={showCategoryModal} transparent animationType="slide" onRequestClose={() => setShowCategoryModal(false)}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={() => setShowCategoryModal(false)}>
+          <Pressable style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '85%' }} onPress={() => {}}>
+            {/* Handle */}
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 }} />
+
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+              <View>
+                <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '800' }}>
+                  {categoryModalParent ? categoryModalParent.name : 'Select Category'}
+                </Text>
+                {categoryModalParent && (
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>Choose a sub-category</Text>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {categoryModalParent && (
+                  <Pressable onPress={() => setCategoryModalParent(null)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border }}>
+                    <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '600' }}>← Groups</Text>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => setShowCategoryModal(false)} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icons.X color={COLORS.textSecondary} size={16} />
+                </Pressable>
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16 }}>
+              {!categoryModalParent ? (
+                // Step 1: parent grid
+                <View style={styles.broadGrid}>
+                  {filteredCategories.filter(c => !c.parent_id).map(parent => (
+                    <Pressable key={parent.id} style={[styles.broadCard, { borderBottomColor: parent.color }]} onPress={() => setCategoryModalParent(parent)}>
+                      <View style={[styles.broadIconBox, { backgroundColor: parent.color + '10' }]}>
+                        {(() => { const IC = Icons[parent.icon] || Icons.Circle; return <IC size={24} color={parent.color} />; })()}
+                      </View>
+                      <Text style={styles.broadName}>{parent.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                // Step 2: sub-category chips
+                <View style={styles.categoryList}>
+                  {filteredCategories.filter(c => c.parent_id === categoryModalParent.id).map(cat => (
+                    <Pressable
+                      key={cat.id}
+                      style={[styles.categoryChip, selectedCategory?.id === cat.id && { backgroundColor: categoryModalParent.color + '40', borderColor: categoryModalParent.color }]}
+                      onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); setCategoryModalParent(null); }}
+                    >
+                      <Text style={[styles.categoryChipText, selectedCategory?.id === cat.id && { color: categoryModalParent.color, fontWeight: 'bold' }]}>
+                        {cat.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+
             <View style={{ height: 24 }} />
           </Pressable>
         </Pressable>

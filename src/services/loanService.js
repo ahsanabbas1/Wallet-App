@@ -64,6 +64,7 @@ export const loanService = {
         title:       isGiven ? `Loan to ${loanData.person_name}` : `Loan from ${loanData.person_name}`,
         description: loanData.notes || 'Loan',
         date:        loanData.date,
+        is_loan:     1,
       });
     } else {
       await db.runAsync(
@@ -116,6 +117,7 @@ export const loanService = {
       title:       isGiven ? `Loan repaid by ${loan.person_name}` : `Loan repaid to ${loan.person_name}`,
       description: paymentData.notes || 'Loan repayment',
       date:        paymentData.date,
+      is_loan:     1,
     });
 
     return { id, isSettling };

@@ -266,6 +266,16 @@ export async function runMigrations(db) {
     await ensureColumn(db, 'khums_years', 'income_receivable', 'REAL DEFAULT 0');
   } catch (_) { }
 
+  // Add account_id to planned_payments (idempotent)
+  try {
+    await ensureColumn(db, 'planned_payments', 'account_id', 'TEXT');
+  } catch (_) { }
+
+  // Mark loan-generated transactions so they're excluded from income/expense totals
+  try {
+    await ensureColumn(db, 'transactions', 'is_loan', 'INTEGER DEFAULT 0');
+  } catch (_) { }
+
   await seedDefaultCategories(db);
   await seedMissingCategories(db);
 }
@@ -412,6 +422,18 @@ async function seedMissingCategories(db) {
       name: 'Side Income', color: '#F59E0B', icon: 'Zap', type: 'income',
       subs: ['Reselling', 'Content Creation', 'Tutoring', 'Commission']
     },
+    {
+      name: 'Pets', color: '#F97316', icon: 'PawPrint', type: 'expense',
+      subs: ['Vet & Medicine', 'Pet Food', 'Pet Accessories', 'Pet Grooming']
+    },
+    {
+      name: 'Events & Celebrations', color: '#EC4899', icon: 'PartyPopper', type: 'expense',
+      subs: ['Wedding', 'Birthday Party', 'Religious Event', 'Anniversary', 'Graduation']
+    },
+    {
+      name: 'Repairs & Maintenance', color: '#78716C', icon: 'Wrench', type: 'expense',
+      subs: ['Home Repair', 'Appliance Repair', 'Plumbing', 'Electrical Work']
+    },
   ];
 
   for (const cat of newParents) {
@@ -436,6 +458,9 @@ async function seedMissingCategories(db) {
     { parentName: 'Financial', subs: ['Loan Payment', 'Investment', 'Savings Transfer', 'Credit Card'] },
     { parentName: 'Employment', subs: ['Part-time Job', 'Freelance Payment'] },
     { parentName: 'Other Income', subs: ['Cashback', 'Government Benefits', 'Insurance Claim', 'Prize Money'] },
+    { parentName: 'Transportation', subs: ['Bike & Motorcycle', 'Flight Ticket'] },
+    { parentName: 'Shopping', subs: ['Online Shopping', 'Books'] },
+    { parentName: 'Health & Personal', subs: ['Blood Tests', 'Hospital Visit'] },
   ];
 
   for (const { parentName, subs } of extraSubs) {

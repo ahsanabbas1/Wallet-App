@@ -54,7 +54,7 @@ export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
   const { userId, user } = useAuth();
-  const { updateCurrency, updateName: updateProfileName, madhab, updateMadhab } = useProfile();
+  const { currency: profileCurrency, name: profileName, updateCurrency, updateName: updateProfileName, madhab, updateMadhab } = useProfile();
   const { colors: COLORS, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [loading, setLoading] = useState(true);
@@ -67,45 +67,14 @@ export default function Settings() {
   const [showMadhabPicker,  setShowMadhabPicker]  = useState(false);
   const [editingName, setEditingName] = useState(false);
 
-  const loadProfile = async () => {
+  const loadProfile = () => {
     if (!userId) return;
-    setLoading(true);
-    try {
-      setEmail(user?.email || '');
-
-      // 1. Fetch Name (Required)
-      const { data: profile, error: nameError } = await supabase
-        .from('users')
-        .select('name')
-        .eq('id', userId)
-        .single();
-
-      if (nameError) throw nameError;
-
-      if (profile) {
-        setName(profile.name || '');
-        setNameEdit(profile.name || '');
-      }
-
-      // 2. Fetch currency
-      const { data: prefData } = await supabase
-        .from('users')
-        .select('currency')
-        .eq('id', userId)
-        .single();
-
-      if (prefData?.currency) setCurrency(prefData.currency);
-    } catch (e) {
-      console.warn('Profile load error:', e.message);
-      // Fallback for name from user object if DB fails
-      if (!name) {
-        const fallbackName = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
-        setName(fallbackName);
-        setNameEdit(fallbackName);
-      }
-    } finally {
-      setLoading(false);
-    }
+    setEmail(user?.email || '');
+    const resolvedName = profileName || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
+    setName(resolvedName);
+    setNameEdit(resolvedName);
+    setCurrency(profileCurrency || 'PKR');
+    setLoading(false);
   };
 
   useFocusEffect(useCallback(() => { loadProfile(); }, [userId]));
@@ -114,14 +83,9 @@ export default function Settings() {
     if (!nameEdit.trim()) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ name: nameEdit.trim() })
-        .eq('id', userId);
-      if (error) throw error;
       const saved = nameEdit.trim();
+      await updateProfileName(saved);
       setName(saved);
-      updateProfileName(saved); // propagate to ProfileContext → Dashboard updates instantly
       setEditingName(false);
       Alert.alert('Saved', 'Your name has been updated.');
     } catch (e) {
@@ -131,22 +95,10 @@ export default function Settings() {
     }
   };
 
-  const saveCurrency = async (code) => {
+  const saveCurrency = (code) => {
     setCurrency(code);
     setShowCurrencyPicker(false);
-    updateCurrency(code); // update global ProfileContext immediately
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ currency: code, updated_at: new Date().toISOString() })
-        .eq('id', userId);
-      if (error) throw error;
-    } catch (e) {
-      // Revert on failure
-      setCurrency(currency);
-      updateCurrency(currency);
-      Alert.alert('Error', 'Could not save currency. Please try again.');
-    }
+    updateCurrency(code);
   };
 
   const handleSignOut = () => {

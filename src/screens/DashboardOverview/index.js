@@ -24,7 +24,6 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
-import { supabase } from '../../lib/supabase';
 
 // Shared Components
 import TransactionItem from '../../components/TransactionItem';
@@ -108,28 +107,6 @@ const DashboardOverview = () => {
     }, [userId, dbReady])
   );
 
-  // Realtime subscriptions — one channel, three tables.
-  // Transactions/payments: reload dashboard data (which also refreshes bell count).
-  // Notifications only: lightweight unread-count refresh, no full reload.
-  useEffect(() => {
-    if (!userId || !dbReady) return;
-    const channel = supabase
-      .channel(`dashboard_rt_${userId}`)
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
-        () => loadDashboardData()
-      )
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'planned_payments', filter: `user_id=eq.${userId}` },
-        () => loadDashboardData()
-      )
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        () => getUnreadCount(userId).then(setUnreadCount)
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [userId]);
 
   // Idle refresh: reload when app comes back from background after > 5 mins
   useEffect(() => {

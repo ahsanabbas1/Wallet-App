@@ -10,7 +10,6 @@ import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { generateNotifications } from '../../services/notificationService';
 import { useProfile } from '../../context/ProfileContext';
@@ -66,19 +65,6 @@ const SavingsGoals = () => {
 
   useFocusEffect(useCallback(() => { fetchGoals(); }, [userId, currency]));
 
-  // Realtime: update instantly when savings_goals change
-  useEffect(() => {
-    if (!userId) return;
-    const channel = supabase
-      .channel(`goals_realtime_${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'savings_goals', filter: `user_id=eq.${userId}` },
-        () => fetchGoals()
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [userId]);
 
   // ── Goal CRUD ──────────────────────────────────────────────────────────────
 

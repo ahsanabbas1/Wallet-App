@@ -57,7 +57,7 @@ export const dashboardService = {
       return acc;
     }, { total: 0, paid: 0, remaining: 0, netRemaining: 0 });
 
-    const isLoan = (t) => (t.title || '').toLowerCase().includes('loan');
+    const isLoan = (t) => t.is_loan === 1;
 
     const totalIncome     = transactions.filter(t => t.type === 'income'  && !isLoan(t)).reduce((s, t) => s + parseFloat(t.amount), 0);
     const totalExpenseAll = transactions.filter(t => t.type === 'expense' && !isLoan(t)).reduce((s, t) => s + parseFloat(t.amount), 0);

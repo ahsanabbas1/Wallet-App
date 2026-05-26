@@ -16,7 +16,6 @@ import { useAuth }   from '../../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { SIZES } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../lib/supabase';
 import {
   NOTIFICATION_TYPES, NOTIFICATION_META, DEFAULT_PREFERENCES,
   getNotifications, getPreferences, savePreferences,
@@ -100,40 +99,6 @@ export default function Notifications() {
   // Refresh on screen focus
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  // ── Realtime: update inbox live when notifications change ─────────────
-  useEffect(() => {
-    if (!userId) return;
-    const channel = supabase
-      .channel(`notif_realtime_${userId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
-        async () => {
-          // Silent refresh — no full loading spinner
-          const notifs = await getNotifications(userId);
-          setNotifications(notifs);
-        }
-      )
-      // Also listen to transactions/budgets/goals so notifications auto-generate
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` },
-        () => load(true)
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'savings_goals', filter: `user_id=eq.${userId}` },
-        () => load(true)
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'budgets', filter: `user_id=eq.${userId}` },
-        () => load(true)
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [userId]);
 
   /* ── Inbox actions ───────────────────────────────────────────────────── */
   const handleRead = async (id) => {

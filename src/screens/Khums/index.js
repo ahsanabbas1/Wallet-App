@@ -10,10 +10,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   Menu, Plus, X, Info, RefreshCw, Pencil, Trash2,
   ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
-  Calendar, Landmark, DollarSign, ShoppingCart, Home,
-  Car, Heart, GraduationCap, Plane, Sparkles, Gift,
-  Briefcase, MoreHorizontal, Baby, CheckCircle, Shirt,
-  History, TrendingUp, TrendingDown,
+  Calendar, Landmark, DollarSign, CheckCircle,
+  History, TrendingUp, Wallet, ArrowDownLeft,
 } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer }  from '../../context/DrawerContext';
@@ -27,27 +25,10 @@ import { khumsService } from '../../services/khumsService';
 
 const KHUMS_PURPLE = '#7c3aed';
 
-const EXPENSE_CATEGORIES = [
-  { key: 'food',       label: 'Food & Groceries',    Icon: ShoppingCart },
-  { key: 'housing',    label: 'Rent & Housing',       Icon: Home },
-  { key: 'clothing',   label: 'Clothing & Personal',  Icon: Shirt },
-  { key: 'transport',  label: 'Transport',             Icon: Car },
-  { key: 'children',   label: "Children's Expenses",  Icon: Baby },
-  { key: 'healthcare', label: 'Healthcare',            Icon: Heart },
-  { key: 'education',  label: 'Education',             Icon: GraduationCap },
-  { key: 'ziyarah',    label: 'Ziyarah & Hajj',       Icon: Plane },
-  { key: 'wedding',    label: 'Wedding & Events',      Icon: Sparkles },
-  { key: 'gifts',      label: 'Gifts & Charity',       Icon: Gift },
-  { key: 'business',   label: 'Business Costs',        Icon: Briefcase },
-  { key: 'other',      label: 'Other',                 Icon: MoreHorizontal },
-];
-
 const fmt = (n, cur) =>
   `${cur} ${(Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const fmtDate = (d) =>
   new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-const catIcon  = (key) => (EXPENSE_CATEGORIES.find(c => c.key === key) || { Icon: MoreHorizontal }).Icon;
-const catLabel = (key) => (EXPENSE_CATEGORIES.find(c => c.key === key) || { label: key }).label;
 
 /* ─── Status badge ───────────────────────────────────────────────── */
 const StatusBadge = ({ status, styles }) => {
@@ -63,6 +44,21 @@ const StatusBadge = ({ status, styles }) => {
   );
 };
 
+/* ─── Breakdown Step Row ─────────────────────────────────────────── */
+const StepRow = ({ label, value, color, bold, dividerAbove, COLORS, currency }) => (
+  <>
+    {dividerAbove && <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 8 }} />}
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 }}>
+      <Text style={{ color: bold ? COLORS.text : COLORS.textSecondary, fontSize: bold ? 14 : 13, fontWeight: bold ? '700' : '400' }}>
+        {label}
+      </Text>
+      <Text style={{ color: color || COLORS.text, fontSize: bold ? 15 : 13, fontWeight: bold ? '800' : '600' }}>
+        {fmt(value, currency)}
+      </Text>
+    </View>
+  </>
+);
+
 /* ═══════════════════════════════════════════════════════════════════
    MAIN SCREEN
 ═══════════════════════════════════════════════════════════════════ */
@@ -77,14 +73,12 @@ const Khums = () => {
   /* ── Data ───────────────────────────────────────────────────────── */
   const [years,      setYears]      = useState([]);
   const [yearIdx,    setYearIdx]    = useState(0);
-  const [expenses,   setExpenses]   = useState([]);
   const [payments,   setPayments]   = useState([]);
   const [history,    setHistory]    = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [syncing,    setSyncing]    = useState(false);
   const [showPayHistory,  setShowPayHistory]  = useState(false);
-  const [showHistoryList, setShowHistoryList] = useState(true);
-  const [expFilter,  setExpFilter]  = useState('all');
+  const [showHistoryList, setShowHistoryList] = useState(false);
   const [notesVal,   setNotesVal]   = useState('');
   const [saveNotesTm, setSaveNotesTm] = useState(null);
 
@@ -92,7 +86,6 @@ const Khums = () => {
 
   /* ── Modals ─────────────────────────────────────────────────────── */
   const [showNewYear,    setShowNewYear]    = useState(false);
-  const [showExpense,    setShowExpense]    = useState(false);
   const [showPayment,    setShowPayment]    = useState(false);
   const [showIncome,     setShowIncome]     = useState(false);
   const [showAddHistory, setShowAddHistory] = useState(false);
@@ -101,12 +94,6 @@ const Khums = () => {
   const [newYearDate,    setNewYearDate]    = useState(new Date());
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [savingYear,     setSavingYear]     = useState(false);
-
-  // Expense form
-  const [expCat,    setExpCat]    = useState('food');
-  const [expAmount, setExpAmount] = useState('');
-  const [expDesc,   setExpDesc]   = useState('');
-  const [savingExp, setSavingExp] = useState(false);
 
   // Payment form
   const [payType,      setPayType]      = useState('sahm_imam');
@@ -117,9 +104,8 @@ const Khums = () => {
   const [showPayDate,  setShowPayDate]  = useState(false);
   const [savingPay,    setSavingPay]    = useState(false);
 
-  // Income edit form
-  const [extraIncome,      setExtraIncome]      = useState('');
-  const [exemptIncome,     setExemptIncome]     = useState('');
+  // Wealth inputs form
+  const [lastKhumsPaid,    setLastKhumsPaid]    = useState('');
   const [receivableIncome, setReceivableIncome] = useState('');
   const [savingIncome,     setSavingIncome]     = useState(false);
 
@@ -143,11 +129,7 @@ const Khums = () => {
       setHistory(hist);
       if (ys.length > 0) {
         const yr = ys[yearIdx] ?? ys[0];
-        const [exps, pays] = await Promise.all([
-          khumsService.getExpenses(yr.id),
-          khumsService.getPayments(yr.id),
-        ]);
-        setExpenses(exps);
+        const pays = await khumsService.getPayments(yr.id);
         setPayments(pays);
         setNotesVal(yr.notes ?? '');
       }
@@ -162,33 +144,26 @@ const Khums = () => {
 
   const reloadYear = async (yr) => {
     if (!yr) return;
-    const [exps, pays] = await Promise.all([
-      khumsService.getExpenses(yr.id),
-      khumsService.getPayments(yr.id),
-    ]);
-    setExpenses(exps);
+    const pays = await khumsService.getPayments(yr.id);
     setPayments(pays);
     setNotesVal(yr.notes ?? '');
   };
 
   const switchYear = async (newIdx) => {
     setYearIdx(newIdx);
-    setExpFilter('all');
     setShowPayHistory(false);
     const freshYears = await khumsService.getYears(userId);
     setYears(freshYears);
     await reloadYear(freshYears[newIdx]);
   };
 
-  /* ── Sync all from transactions ──────────────────────────────────── */
+  /* ── Sync account balance ────────────────────────────────────────── */
   const handleSyncAll = async () => {
     if (!currentYear) return;
     setSyncing(true);
     try {
-      const { income, expenses: exp, yearStart, effectiveEnd, txCount } =
-        await khumsService.refreshAutoData(currentYear.id);
+      const { currentWealth } = await khumsService.refreshAutoData(currentYear.id);
 
-      // Reload everything so Summary card, Breakdown, and payment bars all reflect new values
       const freshYears = await khumsService.getYears(userId);
       setYears(freshYears);
       const updatedYear = freshYears[yearIdx] ?? freshYears[0];
@@ -196,10 +171,7 @@ const Khums = () => {
 
       Alert.alert(
         'Synced ✓',
-        `Income: ${fmt(income, currency)}\nExpenses: ${fmt(exp, currency)}\n\n` +
-        `${txCount} transaction(s) found\n` +
-        `Period: ${fmtDate(yearStart)} → ${fmtDate(effectiveEnd)}\n\n` +
-        `Khums re-calculated automatically.`
+        `Current Account Balance: ${fmt(currentWealth, currency)}\n\nKhums re-calculated automatically based on your live account wealth.`
       );
     } catch (e) {
       Alert.alert('Sync Error', e.message);
@@ -225,56 +197,14 @@ const Khums = () => {
     }
   };
 
-  /* ── Add expense (manual extra) ──────────────────────────────────── */
-  const handleAddExpense = async () => {
-    if (!expAmount || !currentYear) return;
-    setSavingExp(true);
-    try {
-      await khumsService.addExpense(userId, currentYear.id, {
-        category: expCat, amount: expAmount, description: expDesc,
-      });
-      setShowExpense(false);
-      setExpAmount(''); setExpDesc('');
-      const [freshYears, exps] = await Promise.all([
-        khumsService.getYears(userId),
-        khumsService.getExpenses(currentYear.id),
-      ]);
-      setYears(freshYears);
-      setExpenses(exps);
-    } catch (e) {
-      Alert.alert('Error', e.message);
-    } finally {
-      setSavingExp(false);
-    }
-  };
-
-  const handleDeleteExpense = (exp) => {
-    Alert.alert('Delete Expense', `Remove ${catLabel(exp.category)} ${fmt(exp.amount, currency)}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive',
-        onPress: async () => {
-          await khumsService.deleteExpense(exp.id, currentYear.id);
-          const [freshYears, exps] = await Promise.all([
-            khumsService.getYears(userId),
-            khumsService.getExpenses(currentYear.id),
-          ]);
-          setYears(freshYears);
-          setExpenses(exps);
-        },
-      },
-    ]);
-  };
-
-  /* ── Income edits ────────────────────────────────────────────────── */
-  const handleSaveIncome = async () => {
+  /* ── Wealth inputs save ──────────────────────────────────────────── */
+  const handleSaveWealthInputs = async () => {
     if (!currentYear) return;
     setSavingIncome(true);
     try {
       await khumsService.updateYear(currentYear.id, {
-        income_extra:       parseFloat(extraIncome)       || 0,
-        income_exempt:      parseFloat(exemptIncome)      || 0,
-        income_receivable:  parseFloat(receivableIncome)  || 0,
+        last_khums_paid:   parseFloat(lastKhumsPaid)    || 0,
+        income_receivable: parseFloat(receivableIncome) || 0,
       });
       setShowIncome(false);
       const freshYears = await khumsService.getYears(userId);
@@ -341,8 +271,19 @@ const Khums = () => {
         amount:       histAmount,
         notes:        histNotes,
       });
+
+      // Feed this payment into the current year's calculation as last_khums_paid
+      if (currentYear) {
+        await khumsService.updateYear(currentYear.id, {
+          last_khums_paid: parseFloat(histAmount) || 0,
+        });
+        const freshYears = await khumsService.getYears(userId);
+        setYears(freshYears);
+      }
+
       setShowAddHistory(false);
       setHistAmount(''); setHistNotes('');
+      setShowHistoryList(true); // expand list so user sees the new record
       setHistory(await khumsService.getHistory(userId));
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -391,7 +332,7 @@ const Khums = () => {
             const newIdx = Math.max(0, yearIdx - 1);
             setYearIdx(newIdx);
             if (freshYears.length > 0) await reloadYear(freshYears[newIdx]);
-            else { setExpenses([]); setPayments([]); }
+            else setPayments([]);
           },
         },
       ]
@@ -400,33 +341,34 @@ const Khums = () => {
 
   /* ── Info alert ──────────────────────────────────────────────────── */
   const showInfo = () => Alert.alert(
-    'About Khums',
-    'Khums is 20% of your annual net surplus, obligatory for Shia Muslims.\n\n' +
-    '• Income & Expenses are pulled automatically from your transactions.\n' +
-    '• Surplus = Income − Expenses − Exempt items.\n' +
-    '• Khums Due = Surplus × 20%.\n' +
+    'About Khums (Sistani)',
+    'Khums = 20% of new taxable wealth growth above the already-cleared threshold.\n\n' +
+    'FORMULA:\n' +
+    '① Last Year\'s Threshold = Last Khums Paid × 5\n' +
+    '   (If you paid 50k Khums, 250k of your wealth was already taxed)\n\n' +
+    '② Effective Wealth = Current Balance − Deferred Receivables\n' +
+    '   (Loans outstanding you haven\'t received yet are excluded)\n\n' +
+    '③ New Taxable Savings = Effective Wealth − Threshold\n' +
+    '   (Only growth above the cleared threshold is taxable)\n\n' +
+    '④ Khums Due = max(0, New Taxable Savings) × 20%\n\n' +
+    'KEY RULES:\n' +
+    '• Deferred Receivables: Money owed to you but not yet received is excluded — it is a deferred asset. Enter the outstanding balance.\n\n' +
+    '• Recovered Installments: Cash already received from a debtor sits in your bank balance and is taxed normally — do NOT exclude it.\n\n' +
+    '• Source-Deducted Liabilities: If an employer repays your loan from salary before it reaches you, your net salary already reflects the deduction — do NOT enter any extra deduction.\n\n' +
     '• Sahm-e-Imam (10%): Given to the Marjaʿ.\n' +
     '• Sahm-e-Sadat (10%): Given to deserving Sayyids.\n\n' +
-    'Tap "Sync Transactions" to refresh amounts from your records.\n\n' +
-    'Based on rulings of Ayatollah Sistani.',
+    'Tap "Sync Account Balance" to pull your live account total as Current Wealth.',
     [{ text: 'OK' }]
   );
 
   /* ── Derived values ──────────────────────────────────────────────── */
-  const filteredExpenses = useMemo(() =>
-    expFilter === 'all' ? expenses : expenses.filter(e => e.category === expFilter),
-    [expenses, expFilter]
-  );
   const imamPct  = currentYear
     ? Math.min(100, currentYear.sahm_imam  > 0 ? (currentYear.paid_imam  / currentYear.sahm_imam)  * 100 : 0) : 0;
   const sadatPct = currentYear
     ? Math.min(100, currentYear.sahm_sadat > 0 ? (currentYear.paid_sadat / currentYear.sahm_sadat) * 100 : 0) : 0;
-  const grossTaxable = currentYear
-    ? Math.max(0, (currentYear.income_auto + currentYear.income_extra + (currentYear.income_receivable || 0)) - currentYear.income_exempt) : 0;
-  const totalDeductions = currentYear
-    ? (currentYear.expenses_auto || 0) + currentYear.expenses_total - (currentYear.expenses_auto || 0) + (currentYear.expenses_auto || 0)
-    : 0;
-  // expenses_total already = expenses_auto + manual in recalculate
+
+  const lastYearThreshold = (currentYear?.last_khums_paid || 0) * 5;
+  const effectiveWealth   = (currentYear?.current_wealth  || 0) - (currentYear?.income_receivable || 0);
 
   /* ─────────────────────────────────────────────────────────────────*/
 
@@ -488,27 +430,60 @@ const Khums = () => {
             </Text>
           ) : showHistoryList ? (
             history.map(item => (
-              <View key={item.id} style={styles.expenseItem}>
-                <View style={[styles.expenseIcon, { backgroundColor: KHUMS_PURPLE + '22' }]}>
-                  <History color={KHUMS_PURPLE} size={16} />
+              <View key={item.id}>
+                <View style={styles.expenseItem}>
+                  <View style={[styles.expenseIcon, { backgroundColor: KHUMS_PURPLE + '22' }]}>
+                    <History color={KHUMS_PURPLE} size={16} />
+                  </View>
+                  <View style={styles.expenseInfo}>
+                    <Text style={styles.expenseCat}>{fmtDate(item.payment_date)}</Text>
+                    {item.notes ? <Text style={styles.expenseDesc}>{item.notes}</Text> : null}
+                  </View>
+                  <Text style={[styles.expenseAmount, { color: KHUMS_PURPLE }]}>
+                    {fmt(item.amount, currency)}
+                  </Text>
+                  <TouchableOpacity style={styles.expenseDeleteBtn} onPress={() => handleDeleteHistory(item)}>
+                    <Trash2 color={COLORS.error} size={16} />
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.expenseInfo}>
-                  <Text style={styles.expenseCat}>{fmtDate(item.payment_date)}</Text>
-                  {item.notes ? <Text style={styles.expenseDesc}>{item.notes}</Text> : null}
-                </View>
-                <Text style={[styles.expenseAmount, { color: KHUMS_PURPLE }]}>
-                  {fmt(item.amount, currency)}
-                </Text>
-                <TouchableOpacity style={styles.expenseDeleteBtn} onPress={() => handleDeleteHistory(item)}>
-                  <Trash2 color={COLORS.error} size={16} />
-                </TouchableOpacity>
+                {currentYear && (
+                  <TouchableOpacity
+                    style={{
+                      marginHorizontal: 4,
+                      marginBottom: 8,
+                      paddingVertical: 6,
+                      paddingHorizontal: 12,
+                      backgroundColor: KHUMS_PURPLE + '18',
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: KHUMS_PURPLE + '40',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      alignSelf: 'flex-start',
+                    }}
+                    onPress={async () => {
+                      await khumsService.updateYear(currentYear.id, {
+                        last_khums_paid: Number(item.amount),
+                      });
+                      const freshYears = await khumsService.getYears(userId);
+                      setYears(freshYears);
+                      Alert.alert('Applied ✓', `Last Year's Khums Paid set to ${fmt(item.amount, currency)}. Calculation updated.`);
+                    }}
+                  >
+                    <CheckCircle color={KHUMS_PURPLE} size={13} />
+                    <Text style={{ color: KHUMS_PURPLE, fontSize: 12, fontWeight: '600' }}>
+                      Use as Last Year's Khums Paid
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))
           ) : null}
 
           <View style={[styles.infoBox, { marginHorizontal: 0, marginTop: 10, marginBottom: 0 }]}>
             <Text style={styles.infoBoxText}>
-              These are reference records only — they do not affect the current year's calculation. The current year tracks income and expenses from your transactions automatically.
+              Adding a record here automatically sets "Last Year's Khums Paid" in the current year's calculation, updating the protected threshold. The most recently added record is used.
             </Text>
           </View>
         </View>
@@ -521,7 +496,7 @@ const Khums = () => {
             </View>
             <Text style={styles.emptyTitle}>Start Tracking Khums</Text>
             <Text style={styles.emptySubtitle}>
-              Set your Khums due date to begin. The app will automatically pull your income and expenses from transactions and calculate what you owe.
+              Set your Khums due date to begin. The app will sync your live account balance as your current wealth and calculate what you owe based on Ayatollah Sistani's rules.
             </Text>
             <TouchableOpacity style={styles.emptyCreateBtn} onPress={() => setShowNewYear(true)}>
               <Plus color="#fff" size={18} />
@@ -574,7 +549,7 @@ const Khums = () => {
                 ? <ActivityIndicator size="small" color={KHUMS_PURPLE} />
                 : <RefreshCw color={KHUMS_PURPLE} size={18} />}
               <Text style={{ color: KHUMS_PURPLE, fontSize: 14, fontWeight: '700' }}>
-                {syncing ? 'Syncing Transactions…' : 'Sync Income & Expenses from Transactions'}
+                {syncing ? 'Syncing…' : 'Sync Account Balance'}
               </Text>
             </TouchableOpacity>
 
@@ -586,7 +561,7 @@ const Khums = () => {
                 end={{ x: 1, y: 1 }}
                 style={styles.summaryCard}
               >
-                {/* Top: Khums Due + Status */}
+                {/* Khums Due + Status */}
                 <View style={styles.summaryTopRow}>
                   <View>
                     <Text style={styles.summaryKhumsLabel}>Khums Due</Text>
@@ -595,36 +570,54 @@ const Khums = () => {
                   <StatusBadge status={currentYear.status} styles={styles} />
                 </View>
 
-                {/* Income / Expenses mini-summary — always visible */}
+                {/* Wealth snapshot row */}
                 <View style={styles.summaryDivider} />
                 <View style={styles.summaryShareRow}>
                   <View style={styles.summaryShareBox}>
-                    <Text style={styles.summaryShareTitle}>Total Income</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                      <Wallet color="rgba(255,255,255,0.7)" size={12} />
+                      <Text style={styles.summaryShareTitle}>Current Balance</Text>
+                    </View>
                     <Text style={[styles.summaryShareDue, { color: '#86efac' }]}>
-                      {fmt((currentYear.income_auto || 0) + (currentYear.income_extra || 0) + (currentYear.income_receivable || 0) - (currentYear.income_exempt || 0), currency)}
+                      {fmt(currentYear.current_wealth || 0, currency)}
                     </Text>
-                    <Text style={styles.summaryShareSub}>Auto + Manual − Exempt</Text>
+                    <Text style={styles.summaryShareSub}>Live account total</Text>
                   </View>
                   <View style={styles.summaryShareBox}>
-                    <Text style={styles.summaryShareTitle}>Total Expenses</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                      <ArrowDownLeft color="rgba(255,255,255,0.7)" size={12} />
+                      <Text style={styles.summaryShareTitle}>Deferred Receivables</Text>
+                    </View>
                     <Text style={[styles.summaryShareDue, { color: '#fca5a5' }]}>
-                      {fmt(currentYear.expenses_total || 0, currency)}
+                      {fmt(currentYear.income_receivable || 0, currency)}
                     </Text>
-                    <Text style={styles.summaryShareSub}>Auto + Manual deductions</Text>
+                    <Text style={styles.summaryShareSub}>Loans not yet recovered</Text>
                   </View>
                 </View>
 
-                {/* Surplus row */}
+                {/* Threshold + Taxable row */}
                 <View style={styles.summaryDivider} />
-                <View style={styles.summaryBottomRow}>
-                  <Text style={styles.summaryMeta}>
-                    Net Surplus: {fmt(currentYear.surplus, currency)}
-                  </Text>
-                  <Text style={styles.summaryMeta}>Rate: 20%</Text>
+                <View style={styles.summaryShareRow}>
+                  <View style={styles.summaryShareBox}>
+                    <Text style={styles.summaryShareTitle}>Last Year's Threshold</Text>
+                    <Text style={styles.summaryShareDue}>
+                      {fmt(lastYearThreshold, currency)}
+                    </Text>
+                    <Text style={styles.summaryShareSub}>
+                      {fmt(currentYear.last_khums_paid || 0, currency)} × 5
+                    </Text>
+                  </View>
+                  <View style={styles.summaryShareBox}>
+                    <Text style={styles.summaryShareTitle}>New Taxable Savings</Text>
+                    <Text style={[styles.summaryShareDue, { color: currentYear.surplus > 0 ? '#fbbf24' : '#86efac' }]}>
+                      {fmt(currentYear.surplus, currency)}
+                    </Text>
+                    <Text style={styles.summaryShareSub}>× 20% = Khums Due</Text>
+                  </View>
                 </View>
 
-                {/* No-surplus notice */}
-                {currentYear.surplus === 0 && (currentYear.income_auto > 0 || currentYear.expenses_total > 0) && (
+                {/* No surplus notice */}
+                {currentYear.surplus <= 0 && (currentYear.current_wealth > 0) && (
                   <View style={{
                     marginTop: 10,
                     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -632,13 +625,12 @@ const Khums = () => {
                     padding: 10,
                   }}>
                     <Text style={{ color: '#fff', fontSize: 12, textAlign: 'center', opacity: 0.9 }}>
-                      No Khums due — living expenses exceed income this year.{'\n'}
-                      Add any unrecorded income via "Additional (manual)" if needed.
+                      No Khums due — your wealth has not grown above last year's cleared threshold.
                     </Text>
                   </View>
                 )}
 
-                {/* Sahm breakdown — only when Khums > 0 */}
+                {/* Sahm breakdown */}
                 {currentYear.khums_due > 0 && (
                   <>
                     <View style={styles.summaryDivider} />
@@ -666,168 +658,112 @@ const Khums = () => {
             {/* ── Calculation Breakdown ── */}
             {currentYear && (
               <View style={styles.sectionCard}>
-                <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Calculation Breakdown</Text>
-
-                {/* Income block */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <TrendingUp color={COLORS.success} size={14} />
-                  <Text style={{ color: COLORS.success, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' }}>
-                    Income
-                  </Text>
-                </View>
-                <View style={styles.incomeRow}>
-                  <Text style={styles.incomeLabel}>From Transactions (auto)</Text>
-                  <Text style={styles.incomeValue}>{fmt(currentYear.income_auto, currency)}</Text>
-                </View>
-                <View style={styles.incomeRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.incomeLabel}>Additional (manual)</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.incomeValue}>{fmt(currentYear.income_extra, currency)}</Text>
-                    <TouchableOpacity onPress={() => {
-                      setExtraIncome(String(currentYear.income_extra || ''));
-                      setExemptIncome(String(currentYear.income_exempt || ''));
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                  <Text style={styles.sectionTitle}>Calculation Breakdown</Text>
+                  <TouchableOpacity
+                    style={[styles.sectionAction, { paddingHorizontal: 10, paddingVertical: 6 }]}
+                    onPress={() => {
+                      setLastKhumsPaid(String(currentYear.last_khums_paid || ''));
                       setReceivableIncome(String(currentYear.income_receivable || ''));
                       setShowIncome(true);
-                    }}>
-                      <Pencil color={COLORS.textSecondary} size={14} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.incomeRow}>
-                  <Text style={[styles.incomeLabel, { color: COLORS.success }]}>− Exempt Items</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[styles.incomeValue, { color: COLORS.success }]}>
-                      {fmt(currentYear.income_exempt, currency)}
-                    </Text>
-                    <TouchableOpacity onPress={() => {
-                      setExtraIncome(String(currentYear.income_extra || ''));
-                      setExemptIncome(String(currentYear.income_exempt || ''));
-                      setReceivableIncome(String(currentYear.income_receivable || ''));
-                      setShowIncome(true);
-                    }}>
-                      <Pencil color={COLORS.textSecondary} size={14} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={styles.incomeRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.incomeLabel}>Receivables (Loans Given)</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.incomeValue}>{fmt(currentYear.income_receivable || 0, currency)}</Text>
-                    <TouchableOpacity onPress={() => {
-                      setExtraIncome(String(currentYear.income_extra || ''));
-                      setExemptIncome(String(currentYear.income_exempt || ''));
-                      setReceivableIncome(String(currentYear.income_receivable || ''));
-                      setShowIncome(true);
-                    }}>
-                      <Pencil color={COLORS.textSecondary} size={14} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={[styles.incomeRow, { borderBottomWidth: 0, paddingTop: 8, marginTop: 2 }]}>
-                  <Text style={styles.incomeTotalLabel}>Gross Taxable Income</Text>
-                  <Text style={styles.incomeTotalValue}>{fmt(grossTaxable, currency)}</Text>
-                </View>
-
-                <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 14 }} />
-
-                {/* Expenses block */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <TrendingDown color={COLORS.error} size={14} />
-                  <Text style={{ color: COLORS.error, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' }}>
-                    Living Expenses (Deductions)
-                  </Text>
-                </View>
-                <View style={styles.incomeRow}>
-                  <Text style={styles.incomeLabel}>From Transactions (auto)</Text>
-                  <Text style={[styles.incomeValue, { color: COLORS.error }]}>
-                    {fmt(currentYear.expenses_auto || 0, currency)}
-                  </Text>
-                </View>
-                <View style={styles.incomeRow}>
-                  <Text style={styles.incomeLabel}>Manual Additions</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={[styles.incomeValue, { color: COLORS.error }]}>
-                      {fmt((currentYear.expenses_total || 0) - (currentYear.expenses_auto || 0), currency)}
-                    </Text>
-                    <TouchableOpacity onPress={() => { setExpCat('food'); setExpAmount(''); setExpDesc(''); setShowExpense(true); }}>
-                      <Plus color={COLORS.textSecondary} size={14} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                <View style={[styles.incomeRow, { borderBottomWidth: 0, paddingTop: 8, marginTop: 2 }]}>
-                  <Text style={styles.incomeTotalLabel}>Total Deductions</Text>
-                  <Text style={[styles.incomeTotalValue, { color: COLORS.error }]}>
-                    {fmt(currentYear.expenses_total, currency)}
-                  </Text>
-                </View>
-
-                <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 14 }} />
-
-                {/* Surplus row */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700' }}>Net Surplus</Text>
-                  <Text style={{ color: currentYear.surplus > 0 ? KHUMS_PURPLE : COLORS.success, fontSize: 16, fontWeight: '800' }}>
-                    {fmt(currentYear.surplus, currency)}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                  <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>Khums (20% of surplus)</Text>
-                  <Text style={{ color: KHUMS_PURPLE, fontSize: 15, fontWeight: '800' }}>
-                    {fmt(currentYear.khums_due, currency)}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {/* ── Manual Expense List ── */}
-            {expenses.length > 0 && (
-              <View style={styles.sectionCard}>
-                <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>Manual Expense Entries</Text>
-                  <TouchableOpacity style={styles.sectionAction} onPress={() => { setExpCat('food'); setExpAmount(''); setExpDesc(''); setShowExpense(true); }}>
-                    <Plus color={KHUMS_PURPLE} size={14} />
-                    <Text style={styles.sectionActionText}>Add</Text>
+                    }}
+                  >
+                    <Pencil color={KHUMS_PURPLE} size={13} />
+                    <Text style={styles.sectionActionText}>Edit Inputs</Text>
                   </TouchableOpacity>
                 </View>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View style={styles.chipsRow}>
-                    <TouchableOpacity style={[styles.chip, expFilter === 'all' && styles.chipActive]} onPress={() => setExpFilter('all')}>
-                      <Text style={[styles.chipText, expFilter === 'all' && styles.chipTextActive]}>All</Text>
-                    </TouchableOpacity>
-                    {EXPENSE_CATEGORIES.map(c => (
-                      <TouchableOpacity key={c.key}
-                        style={[styles.chip, expFilter === c.key && styles.chipActive]}
-                        onPress={() => setExpFilter(c.key)}
-                      >
-                        <Text style={[styles.chipText, expFilter === c.key && styles.chipTextActive]}>{c.label}</Text>
-                      </TouchableOpacity>
-                    ))}
+                <StepRow
+                  label="Current Account Balance"
+                  value={currentYear.current_wealth || 0}
+                  color={COLORS.success}
+                  COLORS={COLORS}
+                  currency={currency}
+                />
+                <StepRow
+                  label="− Deferred Receivables"
+                  value={currentYear.income_receivable || 0}
+                  color={COLORS.error}
+                  COLORS={COLORS}
+                  currency={currency}
+                />
+                <StepRow
+                  label="= Effective Wealth"
+                  value={effectiveWealth}
+                  bold
+                  COLORS={COLORS}
+                  currency={currency}
+                  dividerAbove
+                />
+                {/* Last year threshold block */}
+                <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 8 }} />
+                <View style={{
+                  backgroundColor: COLORS.card + 'aa',
+                  borderRadius: 8,
+                  padding: 12,
+                  marginBottom: 4,
+                  borderLeftWidth: 3,
+                  borderLeftColor: KHUMS_PURPLE + '80',
+                }}>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                    Last Year's Cleared Wealth (Protected Zone)
+                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>Khums Paid Last Year</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600' }}>
+                      {fmt(currentYear.last_khums_paid || 0, currency)}
+                    </Text>
                   </View>
-                </ScrollView>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>Total Gross Wealth Cleared (× 5)</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600' }}>
+                      {fmt(lastYearThreshold, currency)}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>Your Retained Portion (4/5)</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600' }}>
+                      {fmt(lastYearThreshold - (currentYear.last_khums_paid || 0), currency)}
+                    </Text>
+                  </View>
+                  <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 6 }} />
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 2 }}>
+                    <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '700' }}>
+                      − Protected Threshold (deducted)
+                    </Text>
+                    <Text style={{ color: KHUMS_PURPLE, fontSize: 13, fontWeight: '700' }}>
+                      {fmt(lastYearThreshold, currency)}
+                    </Text>
+                  </View>
+                </View>
 
-                {filteredExpenses.map(exp => {
-                  const CatIcon = catIcon(exp.category);
-                  return (
-                    <View key={exp.id} style={styles.expenseItem}>
-                      <View style={styles.expenseIcon}>
-                        <CatIcon color={KHUMS_PURPLE} size={16} />
-                      </View>
-                      <View style={styles.expenseInfo}>
-                        <Text style={styles.expenseCat}>{catLabel(exp.category)}</Text>
-                        {exp.description ? <Text style={styles.expenseDesc}>{exp.description}</Text> : null}
-                      </View>
-                      <Text style={styles.expenseAmount}>{fmt(exp.amount, currency)}</Text>
-                      <TouchableOpacity style={styles.expenseDeleteBtn} onPress={() => handleDeleteExpense(exp)}>
-                        <Trash2 color={COLORS.error} size={16} />
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
+                <StepRow
+                  label="= New Taxable Savings"
+                  value={Math.max(0, currentYear.surplus)}
+                  bold
+                  color={currentYear.surplus > 0 ? KHUMS_PURPLE : COLORS.success}
+                  COLORS={COLORS}
+                  currency={currency}
+                  dividerAbove
+                />
+
+                <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 8 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 }}>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>Khums Rate</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>20% (1/5)</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6, marginTop: 2 }}>
+                  <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '800' }}>Khums Due</Text>
+                  <Text style={{ color: KHUMS_PURPLE, fontSize: 17, fontWeight: '900' }}>
+                    {fmt(currentYear.khums_due, currency)}
+                  </Text>
+                </View>
+
+                <View style={[styles.infoBox, { marginHorizontal: 0, marginTop: 12, marginBottom: 0 }]}>
+                  <Text style={styles.infoBoxText}>
+                    Tap "Sync Account Balance" to pull your live account total. Tap "Edit Inputs" to set last year's Khums paid and any outstanding receivables.
+                  </Text>
+                </View>
               </View>
             )}
 
@@ -935,13 +871,6 @@ const Khums = () => {
         )}
       </ScrollView>
 
-      {/* FAB — add manual expense */}
-      {years.length > 0 && (
-        <TouchableOpacity style={styles.fab} onPress={() => { setExpCat('food'); setExpAmount(''); setExpDesc(''); setShowExpense(true); }}>
-          <Plus color="#fff" size={26} />
-        </TouchableOpacity>
-      )}
-
       {/* ══ MODAL: New Khums Year ══ */}
       <Modal visible={showNewYear} transparent animationType="slide" onRequestClose={() => setShowNewYear(false)}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1048,92 +977,42 @@ const Khums = () => {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ══ MODAL: Manual Expense ══ */}
-      <Modal visible={showExpense} transparent animationType="slide" onRequestClose={() => setShowExpense(false)}>
+      {/* ══ MODAL: Wealth Inputs ══ */}
+      <Modal visible={showIncome} transparent animationType="slide" onRequestClose={() => setShowIncome(false)}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Manual Expense</Text>
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowExpense(false)}>
+              <Text style={styles.modalTitle}>Wealth Inputs</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowIncome(false)}>
                 <X color={COLORS.text} size={18} />
               </TouchableOpacity>
             </View>
             <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
               <View style={[styles.infoBox, { marginHorizontal: 0, marginBottom: 16 }]}>
                 <Text style={styles.infoBoxText}>
-                  Add expenses that are not captured in your transactions (e.g. cash spending, unrecorded bills).
+                  These two values drive the entire Khums calculation. Your live account balance is pulled automatically via Sync — only enter inputs that cannot be read from your accounts.
                 </Text>
               </View>
-              <Text style={styles.fieldLabel}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={[styles.chipsRow, { marginBottom: 16 }]}>
-                  {EXPENSE_CATEGORIES.map(c => (
-                    <TouchableOpacity key={c.key}
-                      style={[styles.chip, expCat === c.key && styles.chipActive]}
-                      onPress={() => setExpCat(c.key)}
-                    >
-                      <Text style={[styles.chipText, expCat === c.key && styles.chipTextActive]}>{c.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-              <Text style={styles.fieldLabel}>Amount</Text>
-              <TextInput
-                style={styles.textInput}
-                value={expAmount}
-                onChangeText={setExpAmount}
-                keyboardType="numeric"
-                placeholder={`Amount in ${currency}`}
-                placeholderTextColor={COLORS.textSecondary}
-              />
-              <Text style={styles.fieldLabel}>Description (optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={expDesc}
-                onChangeText={setExpDesc}
-                placeholder="e.g. Monthly rent (cash)"
-                placeholderTextColor={COLORS.textSecondary}
-              />
-              <TouchableOpacity
-                style={[styles.saveBtn, (savingExp || !expAmount) && { opacity: 0.5 }]}
-                onPress={handleAddExpense}
-                disabled={savingExp || !expAmount}
-              >
-                {savingExp ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Add Expense</Text>}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
-      {/* ══ MODAL: Income Edit ══ */}
-      <Modal visible={showIncome} transparent animationType="slide" onRequestClose={() => setShowIncome(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Adjust Income</Text>
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowIncome(false)}>
-                <X color={COLORS.text} size={18} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalScroll} keyboardShouldPersistTaps="handled">
-              <Text style={styles.fieldLabel}>Additional Income (not in transactions)</Text>
+              <Text style={styles.fieldLabel}>Last Year's Khums Paid</Text>
               <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 8 }}>
-                Gifts, business cash, freelance etc. not recorded in your transactions.
+                The total Khums you paid at the end of the previous year. This is multiplied by 5 to reconstruct the gross wealth pool that was already cleared (the "threshold"). Wealth below this threshold is not taxed again.
               </Text>
               <TextInput
                 style={styles.textInput}
-                value={extraIncome}
-                onChangeText={setExtraIncome}
+                value={lastKhumsPaid}
+                onChangeText={setLastKhumsPaid}
                 keyboardType="numeric"
-                placeholder={`Amount in ${currency}`}
+                placeholder={`e.g. 50,000 in ${currency}`}
                 placeholderTextColor={COLORS.textSecondary}
               />
-              <Text style={styles.fieldLabel}>Receivables / Loans Given (outstanding)</Text>
+
+              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Deferred Receivables (Outstanding Loans)</Text>
               <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 8 }}>
-                Money you lent to others that is still owed to you at year-end (e.g. 10 Lac given to a friend). Per Sistani, this remains YOUR Khums-liable asset.
+                Money owed to you that has NOT yet been received on Khums day (e.g. you lent a friend 10 Lac and they repaid 3 Lac — enter 7 Lac here).{'\n\n'}
+                This is SUBTRACTED from your balance before calculating Khums. Cash already received sits in your accounts and is taxed normally — do NOT deduct it here.{'\n\n'}
+                NOTE: Salary-deducted loan repayments are already reflected in your net salary. Do NOT enter them here.
               </Text>
               <TextInput
                 style={styles.textInput}
@@ -1143,24 +1022,13 @@ const Khums = () => {
                 placeholder={`Outstanding amount in ${currency}`}
                 placeholderTextColor={COLORS.textSecondary}
               />
-              <Text style={styles.fieldLabel}>Exempt Income</Text>
-              <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginBottom: 8 }}>
-                Mahr, valid inheritance, blood money (Diyah), previously Khums-paid savings, women's jewelry.
-              </Text>
-              <TextInput
-                style={styles.textInput}
-                value={exemptIncome}
-                onChangeText={setExemptIncome}
-                keyboardType="numeric"
-                placeholder={`Exempt amount in ${currency}`}
-                placeholderTextColor={COLORS.textSecondary}
-              />
+
               <TouchableOpacity
                 style={[styles.saveBtn, savingIncome && { opacity: 0.6 }]}
-                onPress={handleSaveIncome}
+                onPress={handleSaveWealthInputs}
                 disabled={savingIncome}
               >
-                {savingIncome ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+                {savingIncome ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save & Recalculate</Text>}
               </TouchableOpacity>
             </ScrollView>
           </View>

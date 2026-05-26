@@ -1,4 +1,5 @@
 import { getDb, generateId } from '../lib/db';
+import { accountService } from './accountService';
 
 function parseLocalDate(dateString) {
   if (!dateString) return null;
@@ -81,16 +82,22 @@ async function processSinglePlannedPayment(db, item) {
   );
   if ((result?.changes ?? 0) === 0) return false; // another call won the race
 
+  const txId = generateId();
+  const accountId = item.account_id ?? null;
   await db.runAsync(
-    `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at, account_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      generateId(), item.user_id, item.category_id ?? null, Number(item.amount),
+      txId, item.user_id, item.category_id ?? null, Number(item.amount),
       item.type || 'expense', item.title,
       item.description || `Auto-recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
-      item.next_date, new Date().toISOString(),
+      item.next_date, new Date().toISOString(), accountId,
     ]
   );
+  if (accountId) {
+    const delta = (item.type || 'expense') === 'expense' ? -Number(item.amount) : Number(item.amount);
+    await accountService.adjustBalance(accountId, delta).catch(() => {});
+  }
   return true;
 }
 
@@ -135,13 +142,13 @@ export const paymentService = {
     await db.runAsync(
       `INSERT INTO planned_payments
          (id, user_id, title, amount, type, frequency, next_date,
-          category_id, description, is_active, start_date, end_date, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+          category_id, description, is_active, start_date, end_date, created_at, account_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
       [
         id, rest.user_id, rest.title, Number(rest.amount), rest.type || 'expense',
         frequency, rest.next_date, rest.category_id ?? null,
         rest.description ?? null, rest.start_date ?? null, rest.end_date ?? null,
-        new Date().toISOString(),
+        new Date().toISOString(), rest.account_id ?? null,
       ]
     );
     return true;
@@ -163,6 +170,7 @@ export const paymentService = {
     if (fields.category_id !== undefined) add('category_id', fields.category_id ?? null);
     if (fields.description !== undefined) add('description', fields.description ?? null);
     if (fields.is_active   !== undefined) add('is_active',   fields.is_active ? 1 : 0);
+    if (fields.account_id  !== undefined) add('account_id',  fields.account_id ?? null);
 
     if (cols.length === 0) return true;
     await db.runAsync(`UPDATE planned_payments SET ${cols.join(', ')} WHERE id = ?`, [...vals, id]);
@@ -170,19 +178,24 @@ export const paymentService = {
   },
 
   async recordPlannedPaymentNow(item) {
-    const db      = getDb();
-    const dueDate = item.next_date || formatLocalDate(new Date());
+    const db        = getDb();
+    const dueDate   = item.next_date || formatLocalDate(new Date());
+    const accountId = item.account_id ?? null;
 
     await db.runAsync(
-      `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at, account_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         generateId(), item.user_id, item.category_id ?? null, Number(item.amount),
         item.type || 'expense', item.title,
         item.description || `Recorded from planned payment (${getFrequencyLabel(item.frequency)})`,
-        toTransactionTimestamp(dueDate), new Date().toISOString(),
+        toTransactionTimestamp(dueDate), new Date().toISOString(), accountId,
       ]
     );
+    if (accountId) {
+      const delta = (item.type || 'expense') === 'expense' ? -Number(item.amount) : Number(item.amount);
+      await accountService.adjustBalance(accountId, delta).catch(() => {});
+    }
 
     const datePart       = dueDate.split('T')[0];
     const nextOccurrence = getNextOccurrence(datePart, item.frequency);
