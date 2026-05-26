@@ -1,5 +1,12 @@
 import { getDb } from '../lib/db';
 
+async function ensureColumn(db, table, column, definition) {
+  const cols = await db.getAllAsync(`PRAGMA table_info(${table})`);
+  if (!cols?.some?.(col => col.name === column)) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 function uuid() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
@@ -44,11 +51,11 @@ export const khumsService = {
   },
 
   async createYear(userId, dueDateISO) {
-    const db        = getDb();
-    const id        = uuid();
-    const now       = new Date().toISOString();
+    const db = getDb();
+    const id = uuid();
+    const now = new Date().toISOString();
     const yearStart = yearStartFromDue(dueDateISO);
-    const yearEnd   = yearEndFromDue(dueDateISO);
+    const yearEnd = yearEndFromDue(dueDateISO);
     const yearLabel = makeYearLabel(yearStart);
 
     await db.runAsync(
@@ -66,10 +73,10 @@ export const khumsService = {
     const db = getDb();
     const sets = [];
     const vals = [];
-    if (data.income_extra       !== undefined) { sets.push('income_extra = ?');       vals.push(Number(data.income_extra)); }
-    if (data.income_exempt      !== undefined) { sets.push('income_exempt = ?');      vals.push(Number(data.income_exempt)); }
-    if (data.income_receivable  !== undefined) { sets.push('income_receivable = ?');  vals.push(Number(data.income_receivable)); }
-    if (data.notes              !== undefined) { sets.push('notes = ?');              vals.push(data.notes); }
+    if (data.income_extra !== undefined) { sets.push('income_extra = ?'); vals.push(Number(data.income_extra)); }
+    if (data.income_exempt !== undefined) { sets.push('income_exempt = ?'); vals.push(Number(data.income_exempt)); }
+    if (data.income_receivable !== undefined) { sets.push('income_receivable = ?'); vals.push(Number(data.income_receivable)); }
+    if (data.notes !== undefined) { sets.push('notes = ?'); vals.push(data.notes); }
     if (!sets.length) return;
     vals.push(id);
     await db.runAsync(`UPDATE khums_years SET ${sets.join(', ')} WHERE id = ?`, vals);
@@ -77,7 +84,7 @@ export const khumsService = {
   },
 
   async recalculate(id) {
-    const db  = getDb();
+    const db = getDb();
     const row = await db.getFirstAsync('SELECT * FROM khums_years WHERE id = ?', [id]);
     if (!row) return;
 
@@ -85,15 +92,15 @@ export const khumsService = {
     const manualExpRow = await db.getFirstAsync(
       'SELECT COALESCE(SUM(amount),0) as total FROM khums_expenses WHERE khums_year_id = ?', [id]
     );
-    const manualExp  = Number(manualExpRow?.total ?? 0);
+    const manualExp = Number(manualExpRow?.total ?? 0);
     const expAutoVal = Number(row.expenses_auto ?? 0);
-    const expTotal   = expAutoVal + manualExp;
+    const expTotal = expAutoVal + manualExp;
 
-    const surplus  = Math.max(0,
+    const surplus = Math.max(0,
       (Number(row.income_auto) + Number(row.income_extra) + Number(row.income_receivable ?? 0) - Number(row.income_exempt)) - expTotal
     );
-    const khumsDue  = surplus * 0.20;
-    const sahmImam  = khumsDue / 2;
+    const khumsDue = surplus * 0.20;
+    const sahmImam = khumsDue / 2;
     const sahmSadat = khumsDue / 2;
 
     const paidImamRow = await db.getFirstAsync(
@@ -103,13 +110,13 @@ export const khumsService = {
       "SELECT COALESCE(SUM(amount),0) as total FROM khums_payments WHERE khums_year_id = ? AND recipient_type = 'sahm_sadat'", [id]
     );
 
-    const paidImam  = Number(paidImamRow?.total  ?? 0);
+    const paidImam = Number(paidImamRow?.total ?? 0);
     const paidSadat = Number(paidSadatRow?.total ?? 0);
     const totalPaid = paidImam + paidSadat;
 
     let status = 'open';
-    if (khumsDue > 0 && totalPaid >= khumsDue)  status = 'settled';
-    else if (totalPaid > 0)                      status = 'partial';
+    if (khumsDue > 0 && totalPaid >= khumsDue) status = 'settled';
+    else if (totalPaid > 0) status = 'partial';
 
     await db.runAsync(
       `UPDATE khums_years
@@ -131,7 +138,7 @@ export const khumsService = {
   /* ── Auto sync from transactions (income + expenses) ────────────── */
 
   async pullIncomeFromTransactions(userId, yearStart, yearEnd) {
-    const db  = getDb();
+    const db = getDb();
     // Use date() to normalize both sides — handles ISO timestamps, date-only strings, and timezone offsets
     const row = await db.getFirstAsync(
       `SELECT COALESCE(SUM(amount), 0) as total
@@ -146,7 +153,7 @@ export const khumsService = {
   },
 
   async pullExpensesFromTransactions(userId, yearStart, yearEnd) {
-    const db  = getDb();
+    const db = getDb();
     const row = await db.getFirstAsync(
       `SELECT COALESCE(SUM(amount), 0) as total
          FROM transactions
@@ -161,12 +168,12 @@ export const khumsService = {
 
   // Syncs income_auto + expenses_auto from transactions, then fully recalculates in one UPDATE
   async refreshAutoData(khumsYearId) {
-    const db  = getDb();
-    const yr  = await db.getFirstAsync('SELECT * FROM khums_years WHERE id = ?', [khumsYearId]);
+    const db = getDb();
+    const yr = await db.getFirstAsync('SELECT * FROM khums_years WHERE id = ?', [khumsYearId]);
     if (!yr) return { income: 0, expenses: 0, yearStart: null, effectiveEnd: null, txCount: 0 };
 
     // Cap end at today for mid-year syncs
-    const today        = new Date().toISOString();
+    const today = new Date().toISOString();
     const effectiveEnd = yr.year_end < today ? yr.year_end : today;
 
     const [income, expensesAuto, countRow, manualExpRow, paidImamRow, paidSadatRow] =
@@ -194,34 +201,52 @@ export const khumsService = {
         ),
       ]);
 
-    const manualExp  = Number(manualExpRow?.total  ?? 0);
-    const paidImam   = Number(paidImamRow?.total   ?? 0);
-    const paidSadat  = Number(paidSadatRow?.total  ?? 0);
-    const expTotal   = expensesAuto + manualExp;
+    const manualExp = Number(manualExpRow?.total ?? 0);
+    const paidImam = Number(paidImamRow?.total ?? 0);
+    const paidSadat = Number(paidSadatRow?.total ?? 0);
+    const expTotal = expensesAuto + manualExp;
 
-    const surplus   = Math.max(0,
+    const surplus = Math.max(0,
       (income + Number(yr.income_extra) + Number(yr.income_receivable ?? 0) - Number(yr.income_exempt)) - expTotal
     );
-    const khumsDue  = surplus * 0.20;
-    const sahmImam  = khumsDue / 2;
+    const khumsDue = surplus * 0.20;
+    const sahmImam = khumsDue / 2;
     const sahmSadat = khumsDue / 2;
     const totalPaid = paidImam + paidSadat;
 
     let status = 'open';
     if (khumsDue > 0 && totalPaid >= khumsDue) status = 'settled';
-    else if (totalPaid > 0)                    status = 'partial';
+    else if (totalPaid > 0) status = 'partial';
 
     // Single UPDATE — no second read needed, avoids any stale-cache issues
-    await db.runAsync(
-      `UPDATE khums_years
-         SET income_auto = ?, expenses_auto = ?, expenses_total = ?,
-             surplus = ?, khums_due = ?,
-             sahm_imam = ?, sahm_sadat = ?,
-             paid_imam = ?, paid_sadat = ?, status = ?
-       WHERE id = ?`,
-      [income, expensesAuto, expTotal, surplus, khumsDue,
-       sahmImam, sahmSadat, paidImam, paidSadat, status, khumsYearId]
-    );
+    try {
+      await db.runAsync(
+        `UPDATE khums_years
+           SET income_auto = ?, expenses_auto = ?, expenses_total = ?,
+               surplus = ?, khums_due = ?,
+               sahm_imam = ?, sahm_sadat = ?,
+               paid_imam = ?, paid_sadat = ?, status = ?
+         WHERE id = ?`,
+        [income, expensesAuto, expTotal, surplus, khumsDue,
+          sahmImam, sahmSadat, paidImam, paidSadat, status, khumsYearId]
+      );
+    } catch (e) {
+      if (String(e.message).includes('no such column: expenses_auto')) {
+        await ensureColumn(db, 'khums_years', 'expenses_auto', 'REAL DEFAULT 0');
+        await db.runAsync(
+          `UPDATE khums_years
+             SET income_auto = ?, expenses_auto = ?, expenses_total = ?,
+                 surplus = ?, khums_due = ?,
+                 sahm_imam = ?, sahm_sadat = ?,
+                 paid_imam = ?, paid_sadat = ?, status = ?
+           WHERE id = ?`,
+          [income, expensesAuto, expTotal, surplus, khumsDue,
+            sahmImam, sahmSadat, paidImam, paidSadat, status, khumsYearId]
+        );
+      } else {
+        throw e;
+      }
+    }
 
     return {
       income,
@@ -243,8 +268,8 @@ export const khumsService = {
   },
 
   async addExpense(userId, khumsYearId, data) {
-    const db  = getDb();
-    const id  = uuid();
+    const db = getDb();
+    const id = uuid();
     const now = new Date().toISOString();
     await db.runAsync(
       'INSERT INTO khums_expenses (id, user_id, khums_year_id, category, amount, description, created_at) VALUES (?,?,?,?,?,?,?)',
@@ -271,13 +296,13 @@ export const khumsService = {
   },
 
   async addPayment(userId, khumsYearId, data) {
-    const db  = getDb();
-    const id  = uuid();
+    const db = getDb();
+    const id = uuid();
     const now = new Date().toISOString();
     await db.runAsync(
       'INSERT INTO khums_payments (id, user_id, khums_year_id, recipient_type, recipient_name, amount, date, notes, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
       [id, userId, khumsYearId, data.recipient_type, data.recipient_name ?? null,
-       Number(data.amount), data.date ?? now, data.notes ?? null, now]
+        Number(data.amount), data.date ?? now, data.notes ?? null, now]
     );
     await khumsService.recalculate(khumsYearId);
     return id;
@@ -300,8 +325,8 @@ export const khumsService = {
   },
 
   async addHistory(userId, data) {
-    const db  = getDb();
-    const id  = uuid();
+    const db = getDb();
+    const id = uuid();
     const now = new Date().toISOString();
     await db.runAsync(
       'INSERT INTO khums_history (id, user_id, payment_date, amount, notes, created_at) VALUES (?,?,?,?,?,?)',

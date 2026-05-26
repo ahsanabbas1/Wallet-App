@@ -1,3 +1,10 @@
+async function ensureColumn(db, table, column, definition) {
+  const columns = await db.getAllAsync(`PRAGMA table_info(${table})`);
+  if (!columns?.some?.(col => col.name === column)) {
+    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
 export async function runMigrations(db) {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS users (
@@ -178,26 +185,6 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id, is_active);
   `);
 
-  // Add account_id to transactions (idempotent)
-  try {
-    await db.execAsync('ALTER TABLE transactions ADD COLUMN account_id TEXT');
-  } catch (_) {}
-
-  // Add madhab to users (idempotent)
-  try {
-    await db.execAsync("ALTER TABLE users ADD COLUMN madhab TEXT DEFAULT 'sunni'");
-  } catch (_) {}
-
-  // Add expenses_auto to khums_years (idempotent)
-  try {
-    await db.execAsync('ALTER TABLE khums_years ADD COLUMN expenses_auto REAL DEFAULT 0');
-  } catch (_) {}
-
-  // Add income_receivable (loans given / outstanding receivables) to khums_years (idempotent)
-  try {
-    await db.execAsync('ALTER TABLE khums_years ADD COLUMN income_receivable REAL DEFAULT 0');
-  } catch (_) {}
-
   // Khums tables
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS khums_years (
@@ -209,6 +196,7 @@ export async function runMigrations(db) {
       income_auto    REAL DEFAULT 0,
       income_extra   REAL DEFAULT 0,
       income_exempt  REAL DEFAULT 0,
+      expenses_auto  REAL DEFAULT 0,
       expenses_total REAL DEFAULT 0,
       surplus        REAL DEFAULT 0,
       khums_due      REAL DEFAULT 0,
@@ -258,6 +246,26 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_khums_history_user ON khums_history(user_id, payment_date);
   `);
 
+  // Add account_id to transactions (idempotent)
+  try {
+    await ensureColumn(db, 'transactions', 'account_id', 'TEXT');
+  } catch (_) { }
+
+  // Add madhab to users (idempotent)
+  try {
+    await ensureColumn(db, 'users', 'madhab', "TEXT DEFAULT 'sunni'");
+  } catch (_) { }
+
+  // Add expenses_auto to khums_years (idempotent)
+  try {
+    await ensureColumn(db, 'khums_years', 'expenses_auto', 'REAL DEFAULT 0');
+  } catch (_) { }
+
+  // Add income_receivable (loans given / outstanding receivables) to khums_years (idempotent)
+  try {
+    await ensureColumn(db, 'khums_years', 'income_receivable', 'REAL DEFAULT 0');
+  } catch (_) { }
+
   await seedDefaultCategories(db);
   await seedMissingCategories(db);
 }
@@ -270,79 +278,101 @@ function uuid() {
 }
 
 const DEFAULT_CATEGORIES = [
-  { name: 'Food & Drink', color: '#FF5722', icon: 'Utensils', type: 'expense',
+  {
+    name: 'Food & Drink', color: '#FF5722', icon: 'Utensils', type: 'expense',
     subs: [
       { name: 'Groceries', icon: 'ShoppingCart' },
       { name: 'Restaurants & Fast Food', icon: 'Pizza' },
       { name: 'Bar & Cafe', icon: 'Coffee' },
       { name: 'Street Food', icon: 'Store' },
-    ]},
-  { name: 'Transportation', color: '#03A9F4', icon: 'Car', type: 'expense',
+    ]
+  },
+  {
+    name: 'Transportation', color: '#03A9F4', icon: 'Car', type: 'expense',
     subs: [
       { name: 'Public Transport', icon: 'Bus' },
       { name: 'Taxi & Ride-share', icon: 'Smartphone' },
       { name: 'Fuel', icon: 'Fuel' },
       { name: 'Car Maintenance', icon: 'Wrench' },
       { name: 'Parking & Tolls', icon: 'MapPin' },
-    ]},
-  { name: 'Housing & Utilities', color: '#FFC107', icon: 'Home', type: 'expense',
+    ]
+  },
+  {
+    name: 'Housing & Utilities', color: '#FFC107', icon: 'Home', type: 'expense',
     subs: [
       { name: 'Rent & Mortgage', icon: 'Key' },
       { name: 'Electricity & Gas', icon: 'Zap' },
       { name: 'Water', icon: 'Droplets' },
       { name: 'Internet & TV', icon: 'Wifi' },
       { name: 'Home Maintenance', icon: 'Hammer' },
-    ]},
-  { name: 'Entertainment', color: '#9C27B0', icon: 'Tv', type: 'expense',
+    ]
+  },
+  {
+    name: 'Entertainment', color: '#9C27B0', icon: 'Tv', type: 'expense',
     subs: [
       { name: 'Movies & Concerts', icon: 'Ticket' },
       { name: 'Streaming Services', icon: 'PlayCircle' },
       { name: 'Gaming', icon: 'Gamepad2' },
       { name: 'Hobbies', icon: 'Palette' },
-    ]},
-  { name: 'Shopping', color: '#795548', icon: 'ShoppingBag', type: 'expense',
+    ]
+  },
+  {
+    name: 'Shopping', color: '#795548', icon: 'ShoppingBag', type: 'expense',
     subs: [
       { name: 'Clothing & Shoes', icon: 'Shirt' },
       { name: 'Electronics', icon: 'Cpu' },
       { name: 'Home & Garden', icon: 'Leaf' },
       { name: 'Gifts & Donations', icon: 'Gift' },
-    ]},
-  { name: 'Health & Personal', color: '#E91E63', icon: 'HeartPulse', type: 'expense',
+    ]
+  },
+  {
+    name: 'Health & Personal', color: '#E91E63', icon: 'HeartPulse', type: 'expense',
     subs: [
       { name: 'Medical & Pharmacy', icon: 'Pill' },
       { name: 'Personal Care', icon: 'Sparkles' },
       { name: 'Fitness & Sports', icon: 'Dumbbell' },
-    ]},
-  { name: 'Financial', color: '#607D8B', icon: 'Banknote', type: 'expense',
+    ]
+  },
+  {
+    name: 'Financial', color: '#607D8B', icon: 'Banknote', type: 'expense',
     subs: [
       { name: 'Insurance', icon: 'ShieldCheck' },
       { name: 'Taxes', icon: 'FileText' },
       { name: 'Bank Fees & Interest', icon: 'CreditCard' },
-    ]},
-  { name: 'Employment', color: '#4CAF50', icon: 'Briefcase', type: 'income',
+    ]
+  },
+  {
+    name: 'Employment', color: '#4CAF50', icon: 'Briefcase', type: 'income',
     subs: [
       { name: 'Salary', icon: 'Wallet' },
       { name: 'Bonus', icon: 'TrendingUp' },
       { name: 'Overtime', icon: 'Clock' },
-    ]},
-  { name: 'Business & Freelance', color: '#8BC34A', icon: 'Monitor', type: 'income',
+    ]
+  },
+  {
+    name: 'Business & Freelance', color: '#8BC34A', icon: 'Monitor', type: 'income',
     subs: [
       { name: 'Sales', icon: 'Tag' },
       { name: 'Service Revenue', icon: 'UserCheck' },
       { name: 'Consulting', icon: 'MessageCircle' },
-    ]},
-  { name: 'Investments', color: '#009688', icon: 'LineChart', type: 'income',
+    ]
+  },
+  {
+    name: 'Investments', color: '#009688', icon: 'LineChart', type: 'income',
     subs: [
       { name: 'Dividends', icon: 'PieChart' },
       { name: 'Interest', icon: 'Percent' },
       { name: 'Rental Income', icon: 'Home' },
-    ]},
-  { name: 'Other Income', color: '#CDDC39', icon: 'PlusCircle', type: 'income',
+    ]
+  },
+  {
+    name: 'Other Income', color: '#CDDC39', icon: 'PlusCircle', type: 'income',
     subs: [
       { name: 'Gifts', icon: 'Gift' },
       { name: 'Refunds', icon: 'Undo' },
       { name: 'Selling Assets', icon: 'DollarSign' },
-    ]},
+    ]
+  },
 ];
 
 async function seedMissingCategories(db) {
@@ -350,22 +380,38 @@ async function seedMissingCategories(db) {
   const sql = 'INSERT INTO categories (id, user_id, parent_id, name, icon, color, type, created_at) VALUES (?, NULL, ?, ?, ?, ?, ?, ?)';
 
   const newParents = [
-    { name: 'Education', color: '#8B5CF6', icon: 'GraduationCap', type: 'expense',
-      subs: ['Tuition', 'Books & Stationery', 'Online Courses', 'School Fees', 'Exam Fees'] },
-    { name: 'Travel', color: '#0EA5E9', icon: 'Plane', type: 'expense',
-      subs: ['Flights', 'Hotels & Stays', 'Travel Insurance', 'Visa & Passport', 'Travel Meals'] },
-    { name: 'Personal Care', color: '#EC4899', icon: 'Sparkles', type: 'expense',
-      subs: ['Haircut & Salon', 'Cosmetics', 'Skincare', 'Spa & Massage'] },
-    { name: 'Kids & Family', color: '#F97316', icon: 'Baby', type: 'expense',
-      subs: ['Childcare', 'Baby Supplies', 'School Activities', 'Toys & Games'] },
-    { name: 'Subscriptions', color: '#6366F1', icon: 'Repeat', type: 'expense',
-      subs: ['Apps & Software', 'Newspapers & Magazines', 'Cloud Storage', 'Membership Fees'] },
-    { name: 'Charity & Zakat', color: '#10B981', icon: 'Heart', type: 'expense',
-      subs: ['Zakat', 'Sadaqah', 'NGO Donations', 'Food Aid'] },
-    { name: 'Rental Income', color: '#14B8A6', icon: 'Building2', type: 'income',
-      subs: ['Residential Rent', 'Commercial Rent', 'Shop Rent'] },
-    { name: 'Side Income', color: '#F59E0B', icon: 'Zap', type: 'income',
-      subs: ['Reselling', 'Content Creation', 'Tutoring', 'Commission'] },
+    {
+      name: 'Education', color: '#8B5CF6', icon: 'GraduationCap', type: 'expense',
+      subs: ['Tuition', 'Books & Stationery', 'Online Courses', 'School Fees', 'Exam Fees']
+    },
+    {
+      name: 'Travel', color: '#0EA5E9', icon: 'Plane', type: 'expense',
+      subs: ['Flights', 'Hotels & Stays', 'Travel Insurance', 'Visa & Passport', 'Travel Meals']
+    },
+    {
+      name: 'Personal Care', color: '#EC4899', icon: 'Sparkles', type: 'expense',
+      subs: ['Haircut & Salon', 'Cosmetics', 'Skincare', 'Spa & Massage']
+    },
+    {
+      name: 'Kids & Family', color: '#F97316', icon: 'Baby', type: 'expense',
+      subs: ['Childcare', 'Baby Supplies', 'School Activities', 'Toys & Games']
+    },
+    {
+      name: 'Subscriptions', color: '#6366F1', icon: 'Repeat', type: 'expense',
+      subs: ['Apps & Software', 'Newspapers & Magazines', 'Cloud Storage', 'Membership Fees']
+    },
+    {
+      name: 'Charity & Zakat', color: '#10B981', icon: 'Heart', type: 'expense',
+      subs: ['Zakat', 'Sadaqah', 'NGO Donations', 'Food Aid']
+    },
+    {
+      name: 'Rental Income', color: '#14B8A6', icon: 'Building2', type: 'income',
+      subs: ['Residential Rent', 'Commercial Rent', 'Shop Rent']
+    },
+    {
+      name: 'Side Income', color: '#F59E0B', icon: 'Zap', type: 'income',
+      subs: ['Reselling', 'Content Creation', 'Tutoring', 'Commission']
+    },
   ];
 
   for (const cat of newParents) {
@@ -381,15 +427,15 @@ async function seedMissingCategories(db) {
   }
 
   const extraSubs = [
-    { parentName: 'Food & Drink',       subs: ['Takeaway', 'Bakery', 'Coffee & Tea', 'Home Cooking'] },
-    { parentName: 'Transportation',     subs: ['Car Wash', 'Driving License', 'Vehicle Tax'] },
+    { parentName: 'Food & Drink', subs: ['Takeaway', 'Bakery', 'Coffee & Tea', 'Home Cooking'] },
+    { parentName: 'Transportation', subs: ['Car Wash', 'Driving License', 'Vehicle Tax'] },
     { parentName: 'Housing & Utilities', subs: ['Mobile Phone Bill', 'Security & CCTV', 'Furniture'] },
-    { parentName: 'Entertainment',      subs: ['Sports Events', 'Books & Reading', 'Board Games'] },
-    { parentName: 'Shopping',           subs: ['Accessories', 'Luxury Items', 'Stationery', 'Toys'] },
-    { parentName: 'Health & Personal',  subs: ['Dental', 'Eye Care', 'Mental Health', 'Vitamins'] },
-    { parentName: 'Financial',          subs: ['Loan Payment', 'Investment', 'Savings Transfer', 'Credit Card'] },
-    { parentName: 'Employment',         subs: ['Part-time Job', 'Freelance Payment'] },
-    { parentName: 'Other Income',       subs: ['Cashback', 'Government Benefits', 'Insurance Claim', 'Prize Money'] },
+    { parentName: 'Entertainment', subs: ['Sports Events', 'Books & Reading', 'Board Games'] },
+    { parentName: 'Shopping', subs: ['Accessories', 'Luxury Items', 'Stationery', 'Toys'] },
+    { parentName: 'Health & Personal', subs: ['Dental', 'Eye Care', 'Mental Health', 'Vitamins'] },
+    { parentName: 'Financial', subs: ['Loan Payment', 'Investment', 'Savings Transfer', 'Credit Card'] },
+    { parentName: 'Employment', subs: ['Part-time Job', 'Freelance Payment'] },
+    { parentName: 'Other Income', subs: ['Cashback', 'Government Benefits', 'Insurance Claim', 'Prize Money'] },
   ];
 
   for (const { parentName, subs } of extraSubs) {
