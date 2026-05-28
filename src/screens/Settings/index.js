@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -12,6 +12,7 @@ import { useProfile } from '../../context/ProfileContext';
 import { SIZES } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import WhatsNewModal from '../../components/WhatsNewModal';
 
 const CURRENCIES = [
   { code: 'PKR', symbol: 'Rs', label: 'Pakistani Rupee' },
@@ -114,6 +115,9 @@ export default function Settings() {
     ]);
   };
 
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const showPageInfo = () => Alert.alert('About This Page', 'Customize currency, theme, notifications, and other app preferences.');
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -133,7 +137,10 @@ export default function Settings() {
           >
             <Menu color={COLORS.text} size={24} />
           </Pressable>
-          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={[styles.headerTitle, { flex: 1 }]}>Settings</Text>
+          <Pressable onPress={showPageInfo} style={{ padding: 8 }}>
+            <Info color={COLORS.textSecondary} size={20} />
+          </Pressable>
         </View>
 
         {/* Avatar / Profile card */}
@@ -308,6 +315,12 @@ export default function Settings() {
         <SectionHeader title="About" />
         <View style={styles.card}>
           <SettingRow
+            icon={Sparkles}
+            label="What's New"
+            value="See the latest features"
+            onPress={() => setShowWhatsNew(true)}
+          />
+          <SettingRow
             icon={Info}
             label="App Version"
             value="2.0.0"
@@ -332,6 +345,7 @@ export default function Settings() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      <WhatsNewModal visible={showWhatsNew} onDismiss={() => setShowWhatsNew(false)} />
     </SafeAreaView>
   );
 }

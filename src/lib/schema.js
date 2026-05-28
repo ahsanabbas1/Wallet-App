@@ -276,6 +276,17 @@ export async function runMigrations(db) {
     await ensureColumn(db, 'transactions', 'is_loan', 'INTEGER DEFAULT 0');
   } catch (_) { }
 
+  // Savings Goals: archive support + notes field
+  try { await ensureColumn(db, 'savings_goals', 'is_archived', 'INTEGER DEFAULT 0'); } catch (_) { }
+  try { await ensureColumn(db, 'savings_goals', 'notes', 'TEXT'); } catch (_) { }
+
+  // Warranties: archive support + 7-day notification tracking
+  try { await ensureColumn(db, 'warranties', 'is_archived', 'INTEGER DEFAULT 0'); } catch (_) { }
+  try { await ensureColumn(db, 'warranties', 'is_notified_7day', 'INTEGER DEFAULT 0'); } catch (_) { }
+
+  // What's New: track the last app version the user has seen
+  try { await ensureColumn(db, 'users', 'last_seen_version', 'TEXT'); } catch (_) { }
+
   await seedDefaultCategories(db);
   await seedMissingCategories(db);
 }

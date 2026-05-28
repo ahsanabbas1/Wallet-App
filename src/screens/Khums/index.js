@@ -230,12 +230,24 @@ const Khums = () => {
       });
       setShowPayment(false);
       setPayAmount(''); setPayRecipient(''); setPayNotes('');
+
       const [freshYears, pays] = await Promise.all([
         khumsService.getYears(userId),
         khumsService.getPayments(currentYear.id),
       ]);
       setYears(freshYears);
       setPayments(pays);
+
+      // Check if a new year was auto-created after payment settled the year
+      const prevYearEnd = currentYear.year_end;
+      const newYearAutoCreated = freshYears.some(y => new Date(y.year_start) > new Date(prevYearEnd));
+      if (newYearAutoCreated) {
+        Alert.alert(
+          'Khums Fully Paid!',
+          'All Khums for this year has been paid. A new Khums year has been automatically started — it will begin tracking from the next day.',
+          [{ text: 'View New Year', onPress: () => setYearIdx(0) }, { text: 'OK' }]
+        );
+      }
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -873,8 +885,8 @@ const Khums = () => {
 
       {/* ══ MODAL: New Khums Year ══ */}
       <Modal visible={showNewYear} transparent animationType="slide" onRequestClose={() => setShowNewYear(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New Khums Year</Text>
@@ -919,8 +931,8 @@ const Khums = () => {
 
       {/* ══ MODAL: Add Previous Khums Record ══ */}
       <Modal visible={showAddHistory} transparent animationType="slide" onRequestClose={() => setShowAddHistory(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Previous Khums Record</Text>
@@ -979,8 +991,8 @@ const Khums = () => {
 
       {/* ══ MODAL: Wealth Inputs ══ */}
       <Modal visible={showIncome} transparent animationType="slide" onRequestClose={() => setShowIncome(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Wealth Inputs</Text>
@@ -1037,8 +1049,8 @@ const Khums = () => {
 
       {/* ══ MODAL: Record Payment ══ */}
       <Modal visible={showPayment} transparent animationType="slide" onRequestClose={() => setShowPayment(false)}>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.modalSheet}>
+        <KeyboardAvoidingView style={[styles.modalOverlay, { justifyContent: 'flex-end' }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={[styles.modalSheet, { maxHeight: '85%' }]}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Record Payment</Text>

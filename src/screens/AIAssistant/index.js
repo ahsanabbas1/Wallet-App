@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingVi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
-import { Send, Bot, User, Sparkles, Menu, TrendingUp, PieChart, ShoppingCart, Target } from 'lucide-react-native';
+import { Send, Bot, User, Sparkles, Menu, TrendingUp, PieChart, ShoppingCart, Target, Info } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
@@ -247,6 +247,8 @@ const AIAssistant = () => {
     { label: 'Shopping lists', icon: ShoppingCart, prompt: 'What items do I have on my active shopping lists?' },
   ];
 
+  const showPageInfo = () => Alert.alert('About This Page', 'Ask questions about your finances. The AI analyzes your data and answers in plain language.');
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -266,6 +268,9 @@ const AIAssistant = () => {
               <Text style={styles.statusText}>{usageCount}/{DAILY_LIMIT} Requests · {userCurrency}</Text>
             </View>
           </View>
+          <TouchableOpacity onPress={showPageInfo} style={{ padding: 8 }}>
+            <Info color={COLORS.textSecondary} size={20} />
+          </TouchableOpacity>
         </View>
 
         <ScrollView

@@ -18,6 +18,7 @@ import {
   RefreshCcw,
   Eye,
   EyeOff,
+  Info,
 } from 'lucide-react-native';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -36,6 +37,9 @@ import { formatAmount } from '../../utils/formatters';
 import { dashboardService } from '../../services/dashboardService';
 import { transactionService } from '../../services/transactionService';
 import { generateNotifications, getUnreadCount } from '../../services/notificationService';
+import WhatsNewModal from '../../components/WhatsNewModal';
+import { APP_VERSION } from '../../constants/changelog';
+import { getDb } from '../../lib/db';
 
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -69,6 +73,7 @@ const DashboardOverview = () => {
   const [savingsProgress, setSavingsProgress] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
   const [balanceVisible, setBalanceVisible] = useState(false);
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
 
   const mv = (formatted) => balanceVisible ? formatted : '••••••';
 
@@ -107,6 +112,21 @@ const DashboardOverview = () => {
     }, [userId, dbReady])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId || !dbReady) return;
+      const checkVersion = async () => {
+        try {
+          const db = getDb();
+          const row = await db.getFirstAsync('SELECT last_seen_version FROM users WHERE id = ?', [userId]);
+          if (!row || row.last_seen_version !== APP_VERSION) {
+            setShowWhatsNew(true);
+          }
+        } catch (_) {}
+      };
+      checkVersion();
+    }, [userId, dbReady])
+  );
 
   // Idle refresh: reload when app comes back from background after > 5 mins
   useEffect(() => {
@@ -147,6 +167,16 @@ const DashboardOverview = () => {
     );
   }, [userId]);
 
+
+  const showPageInfo = () => Alert.alert('About This Page', 'Overview of your finances: total balance, recent transactions, spending summary, and quick actions.');
+
+  const handleDismissWhatsNew = async () => {
+    setShowWhatsNew(false);
+    try {
+      const db = getDb();
+      await db.runAsync('UPDATE users SET last_seen_version = ? WHERE id = ?', [APP_VERSION, userId]);
+    } catch (_) {}
+  };
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -205,6 +235,9 @@ const DashboardOverview = () => {
                   </Text>
                 </View>
               )}
+            </Pressable>
+            <Pressable style={styles.iconButton} onPress={showPageInfo}>
+              <Info color={COLORS.textSecondary} size={20} />
             </Pressable>
             <Pressable style={styles.iconButton} onPress={handleSignOut}>
               <LogOut color={COLORS.error} size={22} />
@@ -534,6 +567,7 @@ const DashboardOverview = () => {
           </View>
         </View>
       </ScrollView>
+      <WhatsNewModal visible={showWhatsNew} onDismiss={handleDismissWhatsNew} />
     </SafeAreaView>
   );
 };

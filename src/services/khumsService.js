@@ -198,6 +198,46 @@ export const khumsService = {
         id,
       ]
     );
+
+    // Auto-start next Khums year when current year becomes fully settled
+    let autoCreatedYear = false;
+    if (status === 'settled') {
+      const nextExists = await db.getFirstAsync(
+        'SELECT id FROM khums_years WHERE user_id = ? AND year_start > ?',
+        [row.user_id, row.year_end]
+      );
+
+      if (!nextExists) {
+        const newStart = new Date(row.year_end);
+        newStart.setDate(newStart.getDate() + 1);
+        const newEnd = new Date(newStart);
+        newEnd.setFullYear(newEnd.getFullYear() + 1);
+        newEnd.setDate(newEnd.getDate() - 1);
+
+        const newId    = uuid();
+        const now      = new Date().toISOString();
+        const newLabel = makeYearLabel(newStart.toISOString());
+
+        await db.runAsync(
+          `INSERT INTO khums_years
+             (id, user_id, year_label, year_start, year_end,
+              income_auto, income_extra, income_exempt, income_receivable,
+              last_khums_paid, current_wealth,
+              expenses_auto, expenses_total, surplus, khums_due, sahm_imam, sahm_sadat,
+              paid_imam, paid_sadat, status, notes, created_at)
+           VALUES (?,?,?,?,?, 0,0,0,0, ?,0, 0,0,0,0,0,0, 0,0,'open',NULL,?)`,
+          [
+            newId, row.user_id, newLabel,
+            newStart.toISOString(), newEnd.toISOString(),
+            calc.khumsDue, // last_khums_paid seeds the new year's cleared threshold
+            now,
+          ]
+        );
+        autoCreatedYear = true;
+      }
+    }
+
+    return { autoCreatedYear };
   },
 
   /* ── Sync live account balance, then recalculate ────────────────────── */

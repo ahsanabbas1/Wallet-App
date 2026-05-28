@@ -8,7 +8,8 @@ export const useDrawer = () => useContext(DrawerContext);
 export const DrawerProvider = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
   
-  const drawerWidth = Dimensions.get('window').width * 0.75;
+  // Content-fit width: "Planned Payments" (16 chars) + icon 24px + margin 15px + padding 32px ≈ 215px; add breathing room
+  const drawerWidth = Math.min(270, Dimensions.get('window').width * 0.72);
   const slideAnim = useRef(new Animated.Value(-drawerWidth)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
 

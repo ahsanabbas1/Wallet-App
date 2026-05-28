@@ -8,7 +8,7 @@ import {
   Menu, CalendarDays, X, Download, FileSpreadsheet, FileText,
   TrendingUp, TrendingDown, ArrowUp, ArrowDown,
   AlertTriangle, Lightbulb, BarChart3,
-  Table2, List as ListIcon, Activity,
+  Table2, List as ListIcon, Activity, Info,
 } from 'lucide-react-native';
 import { exportToExcel, exportToPDF } from '../../services/reportExportService';
 import { useDrawer }       from '../../context/DrawerContext';
@@ -451,6 +451,8 @@ const Reports = () => {
     );
   }
 
+  const showPageInfo = () => Alert.alert('About This Page', 'View charts and summaries of your income vs expenses over time. Filter by month or category.');
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -461,6 +463,9 @@ const Reports = () => {
             <Menu color={COLORS.text} size={22} />
           </Pressable>
           <Text style={styles.headerTitle}>Reports</Text>
+          <Pressable style={styles.calendarBtn} onPress={showPageInfo}>
+            <Info color={COLORS.textSecondary} size={18} />
+          </Pressable>
           <Pressable
             style={[styles.calendarBtn, { marginRight: 6 }, exporting && { opacity: 0.5 }]}
             onPress={() => setExportMenuVisible(true)}

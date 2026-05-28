@@ -107,10 +107,27 @@ export const shoppingService = {
   async getWarranties(userId) {
     const db   = getDb();
     const rows = await db.getAllAsync(
-      'SELECT * FROM warranties WHERE user_id = ?',
+      'SELECT * FROM warranties WHERE user_id = ? AND (is_archived = 0 OR is_archived IS NULL) ORDER BY expiry_date ASC',
       [userId]
     );
-    return rows.map(w => ({ ...w, is_notified: w.is_notified === 1 }));
+    return rows.map(w => ({
+      ...w,
+      is_notified:     w.is_notified === 1,
+      is_notified_7day: w.is_notified_7day === 1,
+    }));
+  },
+
+  async getArchivedWarranties(userId) {
+    const db   = getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM warranties WHERE user_id = ? AND is_archived = 1 ORDER BY expiry_date DESC',
+      [userId]
+    );
+    return rows.map(w => ({
+      ...w,
+      is_notified:     w.is_notified === 1,
+      is_notified_7day: w.is_notified_7day === 1,
+    }));
   },
 
   async saveWarranty(userId, warrantyData) {
@@ -142,10 +159,27 @@ export const shoppingService = {
     return {};
   },
 
+  async archiveWarranty(userId, id) {
+    const db = getDb();
+    await db.runAsync('UPDATE warranties SET is_archived = 1 WHERE id = ?', [id]);
+  },
+
+  async unarchiveWarranty(userId, id) {
+    const db = getDb();
+    await db.runAsync('UPDATE warranties SET is_archived = 0 WHERE id = ?', [id]);
+  },
+
   async updateWarrantyNotified(id) {
     try {
       const db = getDb();
       await db.runAsync('UPDATE warranties SET is_notified = 1 WHERE id = ?', [id]);
+    } catch {}
+  },
+
+  async updateWarrantyNotified7Day(id) {
+    try {
+      const db = getDb();
+      await db.runAsync('UPDATE warranties SET is_notified_7day = 1 WHERE id = ?', [id]);
     } catch {}
   },
 };

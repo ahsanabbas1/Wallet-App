@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
 import { SIZES } from '../constants/theme';
@@ -8,7 +9,7 @@ import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, La
 import { useNavigation } from '@react-navigation/native';
 import { useProfile } from '../context/ProfileContext';
 
-const { height, width } = Dimensions.get('window');
+const { height: screenHeight } = Dimensions.get('screen');
 
 const DrawerItem = ({ icon: Icon, label, onPress }) => {
   const { colors: COLORS } = useTheme();
@@ -30,6 +31,7 @@ const GlobalDrawer = () => {
   const { colors: COLORS } = useTheme();
   const { madhab } = useProfile();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const insets = useSafeAreaInsets();
 
   if (!isOpen) {
      return null;
@@ -68,22 +70,32 @@ const GlobalDrawer = () => {
         </View>
 
         <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false}>
-          <DrawerItem icon={Home}      label="Dashboard" onPress={() => handleNavigate('Dashboard')} />
-          <DrawerItem icon={Building2} label="Accounts"  onPress={() => handleNavigate('Accounts')} />
-          <DrawerItem icon={List} label="Expenses" onPress={() => handleNavigate('Expenses')} />
-          <DrawerItem icon={Target} label="Savings Goals" onPress={() => handleNavigate('Savings Goals')} />
-          <DrawerItem icon={BarChart3} label="Reports" onPress={() => handleNavigate('Reports')} />
-          <DrawerItem icon={CalendarClock} label="Planned Payments" onPress={() => handleNavigate('Planned')} />
-          <DrawerItem icon={LayoutDashboard} label="Budgeting" onPress={() => handleNavigate('Budgeting')} />
-          <DrawerItem icon={MessageSquare} label="AI Assistant" onPress={() => handleNavigate('AI Assistant')} />
-          {/* <DrawerItem icon={CreditCard} label="Loyalty Cards" onPress={() => handleNavigate('Loyalty')} /> */}
-          <DrawerItem icon={ShoppingBag} label="Shopping List" onPress={() => handleNavigate('Shopping')} />
-          <DrawerItem icon={Banknote}   label="Loan Management" onPress={() => handleNavigate('Loans')} />
+          {/* ── Overview ── */}
+          <DrawerItem icon={Home}          label="Dashboard"       onPress={() => handleNavigate('Dashboard')} />
+          <DrawerItem icon={Building2}     label="Accounts"        onPress={() => handleNavigate('Accounts')} />
+          <DrawerItem icon={List}          label="Expenses"        onPress={() => handleNavigate('Expenses')} />
+
+          <View style={styles.sectionDivider} />
+          <Text style={styles.sectionLabel}>PLANNING</Text>
+          <DrawerItem icon={LayoutDashboard} label="Budgeting"       onPress={() => handleNavigate('Budgeting')} />
+          <DrawerItem icon={Target}          label="Savings Goals"   onPress={() => handleNavigate('Savings Goals')} />
+          <DrawerItem icon={CalendarClock}   label="Planned Payments" onPress={() => handleNavigate('Planned')} />
+
+          <View style={styles.sectionDivider} />
+          <Text style={styles.sectionLabel}>INSIGHTS</Text>
+          <DrawerItem icon={BarChart3}     label="Reports"         onPress={() => handleNavigate('Reports')} />
+          <DrawerItem icon={MessageSquare} label="AI Assistant"    onPress={() => handleNavigate('AI Assistant')} />
+
+          <View style={styles.sectionDivider} />
+          <Text style={styles.sectionLabel}>TOOLS</Text>
+          <DrawerItem icon={Banknote}      label="Loan Management" onPress={() => handleNavigate('Loans')} />
+          <DrawerItem icon={ShoppingBag}   label="Shopping List"   onPress={() => handleNavigate('Shopping')} />
           {madhab === 'shia' && (
-            <DrawerItem icon={Landmark} label="Khums" onPress={() => handleNavigate('Khums')} />
+            <DrawerItem icon={Landmark}    label="Khums"           onPress={() => handleNavigate('Khums')} />
           )}
-          {/* <DrawerItem icon={Users} label="Shared Budgets" onPress={() => handleNavigate('Shared')} /> */}
-          {/* <DrawerItem icon={PieChart} label="Financial Suite" onPress={() => handleNavigate('Financial Suite')} /> */}
+
+          <View style={styles.sectionDivider} />
+          <Text style={styles.sectionLabel}>SYSTEM</Text>
           <DrawerItem icon={Bell}     label="Notifications" onPress={() => handleNavigate('Notifications')} />
           <DrawerItem icon={Settings} label="Settings"      onPress={() => handleNavigate('Settings')} />
           
@@ -97,7 +109,7 @@ const GlobalDrawer = () => {
             <Text style={[styles.drawerItemText, { color: COLORS.error }]}>Logout</Text>
           </Pressable>
           
-          <View style={{ height: 40 }} />
+          <View style={{ height: Math.max(40, insets.bottom + 24) }} />
         </ScrollView>
       </Animated.View>
     </View>
@@ -114,9 +126,12 @@ const makeStyles = (COLORS) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
   drawer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    height: screenHeight,
     backgroundColor: COLORS.card,
-    height: height,
     shadowColor: '#000',
     shadowOffset: { width: 5, height: 0 },
     shadowOpacity: 0.3,
@@ -158,6 +173,22 @@ const makeStyles = (COLORS) => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.05)',
     marginVertical: 10,
     marginHorizontal: SIZES.padding,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginTop: 8,
+    marginHorizontal: SIZES.padding,
+  },
+  sectionLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    opacity: 0.6,
+    paddingHorizontal: SIZES.padding,
+    paddingTop: 10,
+    paddingBottom: 2,
   },
   logoutItem: {
     marginTop: 5,

@@ -9,7 +9,7 @@ import {
   Menu, Bell, BellOff, CheckCheck, Trash2,
   CalendarClock, PieChart, Target, TrendingUp,
   AlertTriangle, AlertOctagon, ArrowUpRight, Clock,
-  ChevronDown, ChevronUp, Settings, RefreshCw, Check,
+  ChevronDown, ChevronUp, Settings, RefreshCw, Check, Info,
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth }   from '../../context/AuthContext';
@@ -153,6 +153,8 @@ export default function Notifications() {
   const unread = useMemo(() => notifications.filter(n => !n.is_read).length, [notifications]);
 
   /* ── Render ──────────────────────────────────────────────────────────── */
+  const showPageInfo = () => Alert.alert('About This Page', 'View alerts for goals reached, warranties expiring, and budget limits.');
+
   return (
     <SafeAreaView style={s.container}>
 
@@ -166,6 +168,9 @@ export default function Notifications() {
           {unread > 0 && <View style={s.badge}><Text style={s.badgeText}>{unread > 99 ? '99+' : unread}</Text></View>}
           <Pressable style={s.menuBtn} onPress={() => load(false)}>
             <RefreshCw color={COLORS.textSecondary} size={18} />
+          </Pressable>
+          <Pressable style={s.menuBtn} onPress={showPageInfo}>
+            <Info color={COLORS.textSecondary} size={20} />
           </Pressable>
         </View>
       </View>

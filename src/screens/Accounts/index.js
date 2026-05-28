@@ -4,10 +4,10 @@ import {
   ActivityIndicator, TextInput, Modal, KeyboardAvoidingView,
   Platform, Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Icons from 'lucide-react-native';
 import {
-  Menu, Plus, X, Pencil, Trash2, Wallet,
+  Menu, Plus, X, Pencil, Trash2, Wallet, Info,
   Building2, CreditCard, Smartphone, Coins, PiggyBank,
 } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -55,6 +55,7 @@ const Accounts = () => {
   const { currency }       = useProfile();
   const { colors: COLORS } = useTheme();
   const styles             = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const insets             = useSafeAreaInsets();
 
   /* ── data ──────────────────────────────────────────────────────────── */
   const [accounts, setAccounts] = useState([]);
@@ -86,6 +87,8 @@ const Accounts = () => {
   }, [userId]);
 
   useFocusEffect(useCallback(() => { fetchAccounts(); }, [fetchAccounts]));
+
+  const showPageInfo = () => Alert.alert('About This Page', 'Manage your bank accounts and wallets. Track balances, add new accounts, and see monthly activity per account.');
 
   /* ── computed ───────────────────────────────────────────────────────── */
   const totalBalance       = useMemo(() => accounts.reduce((s, a) => s + (Number(a.balance)          || 0), 0), [accounts]);
@@ -185,9 +188,12 @@ const Accounts = () => {
         >
           <Plus color={COLORS.primary} size={20} />
         </TouchableOpacity>
+        <TouchableOpacity style={styles.headerBtn} onPress={showPageInfo}>
+          <Info color={COLORS.textSecondary} size={20} />
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Total balance card ── */}
         <View style={styles.totalCard}>
@@ -320,7 +326,7 @@ const Accounts = () => {
       </ScrollView>
 
       {/* ── FAB ── */}
-      <TouchableOpacity style={styles.fab} onPress={openAdd}>
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 24 }]} onPress={openAdd}>
         <Plus color="#fff" size={26} />
       </TouchableOpacity>
 

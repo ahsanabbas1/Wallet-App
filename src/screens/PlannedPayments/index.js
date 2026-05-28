@@ -23,6 +23,7 @@ import {
   Calendar as CalendarIcon,
   Repeat,
   X,
+  Info,
 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -352,6 +353,8 @@ const PlannedPayments = () => {
     : paymentService.getFrequencyLabel(form.frequency);
 
   /* ── Render ─────────────────────────────────────────────────────── */
+  const showPageInfo = () => Alert.alert('About This Page', 'Schedule recurring payments like rent or subscriptions. The app reminds you before due dates.');
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -359,9 +362,14 @@ const PlannedPayments = () => {
           <Menu color={COLORS.text} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>Planned Payments</Text>
-        <Pressable onPress={() => setShowAddModal(true)} style={styles.addButton}>
-          <Plus color={COLORS.primary} size={24} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable onPress={showPageInfo} style={styles.addButton}>
+            <Info color={COLORS.textSecondary} size={20} />
+          </Pressable>
+          <Pressable onPress={() => setShowAddModal(true)} style={styles.addButton}>
+            <Plus color={COLORS.primary} size={24} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>

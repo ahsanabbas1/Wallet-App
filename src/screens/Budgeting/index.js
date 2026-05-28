@@ -7,7 +7,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Wallet, Target, Plus, Menu, X, Pencil, Trash2,
-  AlertTriangle, CheckCircle, TrendingUp, RefreshCw, CalendarClock
+  AlertTriangle, CheckCircle, TrendingUp, RefreshCw, CalendarClock, Info
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -235,6 +235,8 @@ const Budgeting = ({ navigation }) => {
     );
   }
 
+  const showPageInfo = () => Alert.alert('About This Page', 'Set spending limits per category and monitor how much of your budget you have used.');
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -252,6 +254,9 @@ const Budgeting = ({ navigation }) => {
           </View>
           <TouchableOpacity onPress={fetchData} style={{ padding: 8 }}>
             <RefreshCw color={COLORS.textSecondary} size={18} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={showPageInfo} style={{ padding: 8 }}>
+            <Info color={COLORS.textSecondary} size={20} />
           </TouchableOpacity>
         </View>
 

@@ -4,12 +4,12 @@ import {
   ActivityIndicator, TextInput, Modal, Platform,
   KeyboardAvoidingView, Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   Menu, Plus, X, Calendar, TrendingUp, TrendingDown,
   Wallet, Pencil, Trash2, ChevronDown, ChevronUp,
-  CheckCircle, History, ArrowDownLeft, ArrowUpRight, RefreshCw,
+  CheckCircle, History, ArrowDownLeft, ArrowUpRight, RefreshCw, Info,
 } from 'lucide-react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
@@ -56,6 +56,7 @@ const LoanManagement = () => {
   const { currency }            = useProfile();
   const { colors: COLORS }      = useTheme();
   const styles                  = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const insets                  = useSafeAreaInsets();
 
   /* ── Data ───────────────────────────────────────────────────────── */
   const [loans,      setLoans]      = useState([]);
@@ -269,6 +270,8 @@ const LoanManagement = () => {
   const typeColor = (type) => type === GIVEN ? COLORS.error : COLORS.success;
   const pctColor  = (pct)  => pct >= 100 ? COLORS.success : pct >= 60 ? COLORS.warning : COLORS.primary;
 
+  const showPageInfo = () => Alert.alert('About This Page', "Track money you've lent or borrowed. Record repayments and mark loans as settled.");
+
   /* ─────────────────────────────────────────────────────────────────
      RENDER
   ───────────────────────────────────────────────────────────────── */
@@ -281,6 +284,9 @@ const LoanManagement = () => {
           <Menu color={COLORS.text} size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loans</Text>
+        <TouchableOpacity style={styles.headerBtn} onPress={showPageInfo}>
+          <Info color={COLORS.textSecondary} size={20} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.headerBtn} onPress={fetchLoans}>
           <RefreshCw color={COLORS.textSecondary} size={18} />
         </TouchableOpacity>
@@ -290,7 +296,7 @@ const LoanManagement = () => {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Summary cards ── */}
@@ -555,7 +561,7 @@ const LoanManagement = () => {
       </ScrollView>
 
       {/* ── FAB ── */}
-      <TouchableOpacity style={styles.fab} onPress={() => openAddLoan()}>
+      <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 24 }]} onPress={() => openAddLoan()}>
         <Plus color="#fff" size={26} />
       </TouchableOpacity>
 

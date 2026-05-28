@@ -1,11 +1,12 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Modal, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import {
   ShoppingCart, ShieldCheck, Plus, Menu, CheckCircle2, Circle,
-  Trash2, Edit2, Archive, CalendarDays, Tag, Package
+  Trash2, Edit2, Archive, CalendarDays, Tag, Package, Info
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
@@ -20,6 +21,7 @@ const ShoppingList = () => {
   const { currency: userCurrency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const insets = useSafeAreaInsets();
 
   // Inline style map — recomputes only when COLORS changes (theme switch)
   const S = useMemo(() => ({
@@ -57,6 +59,7 @@ const ShoppingList = () => {
   const [lists, setLists] = useState([]);
   const [archivedLists, setArchivedLists] = useState([]);
   const [warranties, setWarranties] = useState([]);
+  const [archivedWarranties, setArchivedWarranties] = useState([]);
 
   // Modal states
   const [showListModal, setShowListModal] = useState(false);
@@ -84,9 +87,10 @@ const ShoppingList = () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const [allLists, allWarranties] = await Promise.all([
+      const [allLists, allWarranties, archivedWars] = await Promise.all([
         shoppingService.getLists(userId),
         shoppingService.getWarranties(userId),
+        shoppingService.getArchivedWarranties(userId),
       ]);
 
       const processed = allLists.map(l => ({
@@ -97,6 +101,7 @@ const ShoppingList = () => {
       setLists(processed.filter(l => !l.is_archived));
       setArchivedLists(processed.filter(l => l.is_archived));
       setWarranties(allWarranties);
+      setArchivedWarranties(archivedWars);
       checkWarrantyNotifications(allWarranties);
     } catch (e) {
       Alert.alert('Error', e.message);
@@ -110,16 +115,41 @@ const ShoppingList = () => {
   // ── Warranty notifications ────────────────────────────────────────────────────
 
   const checkWarrantyNotifications = async (wars) => {
+    let notifGranted = false;
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      notifGranted = status === 'granted';
+    } catch {}
+
     const today = new Date();
-    const thirtyDays = new Date();
-    thirtyDays.setDate(today.getDate() + 30);
     for (const w of wars) {
-      if (!w.is_notified && w.expiry_date) {
-        const exp = new Date(w.expiry_date);
-        if (exp < today) {
+      if (!w.expiry_date) continue;
+      const exp = new Date(w.expiry_date);
+      const daysLeft = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+
+      // 7-day push notification (system notification outside the app)
+      if (!w.is_notified_7day && daysLeft <= 7 && notifGranted) {
+        try {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: daysLeft <= 0 ? 'Warranty Expired' : 'Warranty Expiring Soon',
+              body: daysLeft <= 0
+                ? `"${w.name}" warranty has expired.`
+                : `"${w.name}" expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`,
+              sound: true,
+            },
+            trigger: null,
+          });
+        } catch {}
+        shoppingService.updateWarrantyNotified7Day(w.id).catch(() => {});
+      }
+
+      // 30-day in-app alert (existing behaviour)
+      if (!w.is_notified) {
+        if (daysLeft < 0) {
           Alert.alert('Warranty Expired', `"${w.name}" warranty has expired.`);
           shoppingService.updateWarrantyNotified(w.id).catch(() => {});
-        } else if (exp <= thirtyDays) {
+        } else if (daysLeft <= 30) {
           Alert.alert('Warranty Expiring Soon', `"${w.name}" expires on ${exp.toLocaleDateString()}.`);
           shoppingService.updateWarrantyNotified(w.id).catch(() => {});
         }
@@ -248,6 +278,20 @@ const ShoppingList = () => {
     ]);
   };
 
+  const archiveWarranty = async (id) => {
+    try {
+      await shoppingService.archiveWarranty(userId, id);
+      loadData();
+    } catch (e) { Alert.alert('Error', e.message); }
+  };
+
+  const unarchiveWarranty = async (id) => {
+    try {
+      await shoppingService.unarchiveWarranty(userId, id);
+      loadData();
+    } catch (e) { Alert.alert('Error', e.message); }
+  };
+
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
   const openItemModal = (listId, item = null) => {
@@ -277,6 +321,8 @@ const ShoppingList = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────────
 
+  const showPageInfo = () => Alert.alert('About This Page', 'Manage shopping lists and product warranties. Archive completed lists and get expiry alerts.');
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -286,16 +332,34 @@ const ShoppingList = () => {
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.headerTitle}>Shopping List</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {activeTab === 'warranty' && (
+            <TouchableOpacity
+              style={{ width: 36, alignItems: 'center' }}
+              onPress={() => {
+                setEditingId(null);
+                setWarName('');
+                setWarPurchase(new Date());
+                setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
+                setShowWarrantyModal(true);
+              }}
+            >
+              <Plus color={COLORS.primary} size={22} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={{ width: 40, alignItems: 'center' }} onPress={showPageInfo}>
+            <Info color={COLORS.textSecondary} size={20} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabContainer}>
-        {renderTab('active', <ShoppingCart size={18} />, 'Lists')}
-        {renderTab('archive', <Archive size={18} />, 'Archive')}
-        {renderTab('warranty', <ShieldCheck size={18} />, 'Warranties')}
+        {renderTab('active',   <ShoppingCart size={18} />, 'Lists')}
+        {renderTab('warranty', <ShieldCheck size={18} />,  'Warranties')}
+        {renderTab('archive',  <Archive size={18} />,      'Archive')}
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}>
         {loading ? (
           <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: 50 }} />
         ) : (
@@ -376,49 +440,76 @@ const ShoppingList = () => {
               )
             )}
 
-            {/* Archive */}
+            {/* Archive — two sections */}
             {activeTab === 'archive' && (
-              archivedLists.length > 0 ? archivedLists.map(list => (
-                <View key={list.id} style={[S.listCard, { opacity: 0.85 }]}>
-                  <View style={S.listHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={S.listTitle}>{list.title}</Text>
-                      <Text style={S.listMeta}>{list.shopping_items.length} items · Archived</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 12 }}>
-                      <TouchableOpacity onPress={() => unarchiveList(list.id)}>
-                        <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>Restore</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => deleteList(list.id)}>
-                        <Trash2 color={COLORS.error} size={18} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                  {list.shopping_items.map(item => (
-                    <View key={item.id} style={S.itemRow}>
-                      <CheckCircle2 color={COLORS.success} size={22} />
-                      <View style={S.itemInfo}>
-                        <Text style={[S.itemName, S.itemDone]}>{item.name}</Text>
-                        {item.quantity > 1 && <Text style={S.itemMeta}>Qty: {item.quantity}</Text>}
+              <>
+                {/* Shopping Lists section */}
+                <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
+                  Shopping Lists
+                </Text>
+                {archivedLists.length > 0 ? archivedLists.map(list => (
+                  <View key={list.id} style={[S.listCard, { opacity: 0.85 }]}>
+                    <View style={S.listHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={S.listTitle}>{list.title}</Text>
+                        <Text style={S.listMeta}>{list.shopping_items.length} items · Archived</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 12 }}>
+                        <TouchableOpacity onPress={() => unarchiveList(list.id)}>
+                          <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>Restore</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => deleteList(list.id)}>
+                          <Trash2 color={COLORS.error} size={18} />
+                        </TouchableOpacity>
                       </View>
                     </View>
-                  ))}
-                </View>
-              )) : (
-                <View style={S.emptyState}>
-                  <Archive color={COLORS.textSecondary} size={48} style={{ marginBottom: 12 }} />
-                  <Text style={S.emptyTitle}>No Archived Lists</Text>
-                  <Text style={S.emptyText}>Completed lists appear here</Text>
-                </View>
-              )
+                    {list.shopping_items.map(item => (
+                      <View key={item.id} style={S.itemRow}>
+                        <CheckCircle2 color={COLORS.success} size={22} />
+                        <View style={S.itemInfo}>
+                          <Text style={[S.itemName, S.itemDone]}>{item.name}</Text>
+                          {item.quantity > 1 && <Text style={S.itemMeta}>Qty: {item.quantity}</Text>}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )) : (
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginBottom: 20 }}>No archived lists</Text>
+                )}
+
+                {/* Warranties section */}
+                <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10, marginTop: 8 }}>
+                  Archived Warranties
+                </Text>
+                {archivedWarranties.length > 0 ? archivedWarranties.map(war => (
+                  <View key={war.id} style={[S.warrantyCard, { borderLeftColor: COLORS.textSecondary, opacity: 0.8 }]}>
+                    <View style={S.warHeader}>
+                      <Text style={S.warName}>{war.name}</Text>
+                      <TouchableOpacity onPress={() => unarchiveWarranty(war.id)}>
+                        <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>Restore</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={S.warDate}>Purchased: {new Date(war.purchase_date).toLocaleDateString()}</Text>
+                    <Text style={S.warDate}>Expires: {new Date(war.expiry_date).toLocaleDateString()}</Text>
+                  </View>
+                )) : (
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>No archived warranties</Text>
+                )}
+              </>
             )}
 
             {/* Warranties */}
             {activeTab === 'warranty' && (
               warranties.length > 0 ? warranties.map(war => {
-                const isExpired = new Date(war.expiry_date) < new Date();
-                const expiringSoon = !isExpired && (new Date(war.expiry_date) - new Date()) < 30 * 24 * 60 * 60 * 1000;
+                const daysLeft = Math.ceil((new Date(war.expiry_date) - new Date()) / (1000 * 60 * 60 * 24));
+                const isExpired = daysLeft < 0;
+                const expiringSoon = !isExpired && daysLeft <= 30;
                 const warColor = isExpired ? COLORS.error : expiringSoon ? COLORS.warning : COLORS.success;
+                const daysText = isExpired
+                  ? `Expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? '' : 's'} ago`
+                  : daysLeft === 0
+                  ? 'Expires today'
+                  : `${daysLeft} day${daysLeft === 1 ? '' : 's'} remaining`;
                 return (
                   <View key={war.id} style={[S.warrantyCard, { borderLeftColor: warColor }]}>
                     <View style={S.warHeader}>
@@ -433,16 +524,17 @@ const ShoppingList = () => {
                         }}>
                           <Edit2 color={COLORS.textSecondary} size={18} />
                         </TouchableOpacity>
+                        <TouchableOpacity onPress={() => archiveWarranty(war.id)}>
+                          <Archive color={COLORS.textSecondary} size={18} />
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => deleteWarranty(war.id)}>
                           <Trash2 color={COLORS.error} size={18} />
                         </TouchableOpacity>
                       </View>
                     </View>
                     <Text style={S.warDate}>Purchased: {new Date(war.purchase_date).toLocaleDateString()}</Text>
-                    <Text style={[S.warDate, { color: warColor }]}>
-                      {isExpired ? '⚠️ Expired: ' : expiringSoon ? '⚡ Expiring: ' : 'Expires: '}
-                      {new Date(war.expiry_date).toLocaleDateString()}
-                    </Text>
+                    <Text style={S.warDate}>Expires: {new Date(war.expiry_date).toLocaleDateString()}</Text>
+                    <Text style={[S.warDate, { color: warColor, fontWeight: '600', marginBottom: 0 }]}>{daysText}</Text>
                   </View>
                 );
               }) : (
@@ -457,24 +549,26 @@ const ShoppingList = () => {
         )}
       </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => {
-          setEditingId(null);
-          if (activeTab === 'warranty') {
-            setWarName('');
-            setWarPurchase(new Date());
-            setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
-            setShowWarrantyModal(true);
-          } else {
-            setListTitle('');
-            setShowListModal(true);
-          }
-        }}
-      >
-        <Plus color={COLORS.text} size={24} />
-      </TouchableOpacity>
+      {/* FAB — hidden on archive tab */}
+      {activeTab !== 'archive' && (
+        <TouchableOpacity
+          style={[styles.fab, { bottom: insets.bottom + 24 }]}
+          onPress={() => {
+            setEditingId(null);
+            if (activeTab === 'warranty') {
+              setWarName('');
+              setWarPurchase(new Date());
+              setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
+              setShowWarrantyModal(true);
+            } else {
+              setListTitle('');
+              setShowListModal(true);
+            }
+          }}
+        >
+          <Plus color={COLORS.text} size={24} />
+        </TouchableOpacity>
+      )}
 
       {/* List Modal */}
       <Modal visible={showListModal} animationType="slide" transparent>

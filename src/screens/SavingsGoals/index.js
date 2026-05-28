@@ -3,9 +3,9 @@ import {
   View, Text, ScrollView, TouchableOpacity, ActivityIndicator,
   Alert, Modal, TextInput, Platform, KeyboardAvoidingView
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Target, Plus, Menu, Pencil, Trash2, Calendar, X, Clock, PiggyBank, RefreshCw } from 'lucide-react-native';
+import { Target, Plus, Menu, Pencil, Trash2, Calendar, X, Clock, PiggyBank, RefreshCw, Archive, Info } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
@@ -24,7 +24,10 @@ const SavingsGoals = () => {
   const labelStyle = { color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginBottom: 8 };
   const inputStyle = { backgroundColor: COLORS.inputBg, color: COLORS.text, padding: 14, borderRadius: 12, marginBottom: 16, fontSize: 15, borderWidth: 1, borderColor: COLORS.border };
   const dateBtnStyle = { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.inputBg, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.border };
+  const insets = useSafeAreaInsets();
+  const [activeTab, setActiveTab] = useState('active');
   const [goals, setGoals] = useState([]);
+  const [archivedGoals, setArchivedGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userCurrency, setUserCurrency] = useState('PKR');
 
@@ -34,6 +37,7 @@ const SavingsGoals = () => {
   const [currentGoal, setCurrentGoal] = useState(null);
   const [title, setTitle] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
+  const [notes, setNotes] = useState('');
   const [startDate, setStartDate] = useState(new Date());
   const [targetDate, setTargetDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
   const [showStartPicker, setShowStartPicker] = useState(false);
@@ -53,8 +57,12 @@ const SavingsGoals = () => {
     try {
       setLoading(true);
       if (!userId) return;
-      const { data } = await savingsGoalService.getSavingsGoals(userId);
-      setGoals(data || []);
+      const [activeResult, archiveResult] = await Promise.all([
+        savingsGoalService.getSavingsGoals(userId, false),
+        savingsGoalService.getSavingsGoals(userId, true),
+      ]);
+      setGoals(activeResult.data || []);
+      setArchivedGoals(archiveResult.data || []);
       setUserCurrency(currency || 'PKR');
     } catch (error) {
       console.error('Error fetching goals:', error.message);
@@ -72,6 +80,7 @@ const SavingsGoals = () => {
     setCurrentGoal(null);
     setTitle('');
     setTargetAmount('');
+    setNotes('');
     setStartDate(new Date());
     setTargetDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
     setRepeatBasis('none');
@@ -83,6 +92,7 @@ const SavingsGoals = () => {
     setCurrentGoal(goal);
     setTitle(goal.title);
     setTargetAmount(goal.target_amount.toString());
+    setNotes(goal.notes || '');
     setStartDate(goal.start_date ? new Date(goal.start_date) : new Date());
     setTargetDate(goal.target_date ? new Date(goal.target_date) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
     setRepeatBasis(goal.repeat_basis || 'none');
@@ -101,6 +111,7 @@ const SavingsGoals = () => {
         user_id: userId,
         title: title.trim(),
         target_amount: parseFloat(targetAmount),
+        notes: notes.trim() || null,
         start_date: startDate.toISOString(),
         target_date: targetDate.toISOString(),
         repeat_basis: repeatBasis,
@@ -136,6 +147,27 @@ const SavingsGoals = () => {
     ]);
   };
 
+  const handleArchiveGoal = (goal) => {
+    Alert.alert('Archive Goal', `Archive "${goal.title}"? You can restore it from the Archive tab.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Archive', onPress: async () => {
+          try {
+            await savingsGoalService.archiveGoal(userId, goal.id);
+            fetchGoals();
+          } catch (error) { Alert.alert('Error', error.message); }
+        }
+      }
+    ]);
+  };
+
+  const handleUnarchiveGoal = async (goal) => {
+    try {
+      await savingsGoalService.unarchiveGoal(userId, goal.id);
+      fetchGoals();
+    } catch (error) { Alert.alert('Error', error.message); }
+  };
+
   // ── Contribution (add to saved_amount) ────────────────────────────────────
 
   const openContribModal = (goal) => {
@@ -164,7 +196,21 @@ const SavingsGoals = () => {
       generateNotifications(userId).catch(() => {});
 
       if (isComplete) {
-        Alert.alert('🎉 Goal Reached!', `Congratulations! You've reached your "${contribGoal.title}" goal!`);
+        Alert.alert(
+          '🎉 Goal Reached!',
+          `Congratulations! You've reached your "${contribGoal.title}" goal! Would you like to archive it?`,
+          [
+            { text: 'Keep Active', style: 'cancel' },
+            {
+              text: 'Archive', onPress: async () => {
+                try {
+                  await savingsGoalService.archiveGoal(userId, contribGoal.id);
+                  fetchGoals();
+                } catch {}
+              }
+            }
+          ]
+        );
       }
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -191,6 +237,8 @@ const SavingsGoals = () => {
     return (remaining / days).toFixed(0);
   };
 
+  const showPageInfo = () => Alert.alert('About This Page', 'Set savings targets and track your progress. Add contributions and archive completed goals.');
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -201,6 +249,9 @@ const SavingsGoals = () => {
           <Text style={styles.headerTitle}>Savings Goals</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity style={styles.iconButton} onPress={showPageInfo}>
+            <Info color={COLORS.textSecondary} size={20} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton} onPress={fetchGoals}>
             <RefreshCw color={COLORS.text} size={18} />
           </TouchableOpacity>
@@ -210,11 +261,29 @@ const SavingsGoals = () => {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      {/* Active / Archive tab strip */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 12, gap: 8 }}>
+        {[{ key: 'active', label: `Active (${goals.length})` }, { key: 'archive', label: `Archived (${archivedGoals.length})` }].map(tab => (
+          <TouchableOpacity
+            key={tab.key}
+            onPress={() => setActiveTab(tab.key)}
+            style={{
+              flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center',
+              backgroundColor: activeTab === tab.key ? COLORS.primary : COLORS.surface,
+            }}
+          >
+            <Text style={{ color: activeTab === tab.key ? '#fff' : COLORS.textSecondary, fontWeight: '700', fontSize: 13 }}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 80 }]}>
         {loading ? (
           <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
-        ) : goals.length > 0 ? (
-          goals.map((goal) => {
+        ) : activeTab === 'active' ? (
+          goals.length > 0 ? goals.map((goal) => {
             const saved = parseFloat(goal.saved_amount || 0);
             const target = parseFloat(goal.target_amount);
             const pct = target > 0 ? Math.min((saved / target) * 100, 100) : 0;
@@ -235,6 +304,9 @@ const SavingsGoals = () => {
                       <View style={{ flexDirection: 'row', gap: 10 }}>
                         <TouchableOpacity onPress={() => openEditModal(goal)}>
                           <Pencil color={COLORS.textSecondary} size={17} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleArchiveGoal(goal)}>
+                          <Archive color={COLORS.textSecondary} size={17} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => handleDeleteGoal(goal)}>
                           <Trash2 color={COLORS.error} size={17} />
@@ -283,6 +355,10 @@ const SavingsGoals = () => {
                   )}
                 </View>
 
+                {goal.notes ? (
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>{goal.notes}</Text>
+                ) : null}
+
                 {/* Add Contribution Button */}
                 {pct < 100 && (
                   <TouchableOpacity
@@ -307,19 +383,62 @@ const SavingsGoals = () => {
                 )}
 
                 {pct >= 100 && (
-                  <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                     <Text style={{ color: COLORS.success, fontWeight: '700', fontSize: 14 }}>🎉 Goal Reached!</Text>
+                    <TouchableOpacity onPress={() => handleArchiveGoal(goal)}>
+                      <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>Archive</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
             );
-          })
+          }) : (
+            <View style={styles.emptyState}>
+              <Target color={COLORS.textSecondary} size={48} style={{ marginBottom: 16 }} />
+              <Text style={styles.emptyStateTitle}>No Active Goals</Text>
+              <Text style={styles.emptyStateText}>Tap + to create your first saving goal.</Text>
+            </View>
+          )
         ) : (
-          <View style={styles.emptyState}>
-            <Target color={COLORS.textSecondary} size={48} style={{ marginBottom: 16 }} />
-            <Text style={styles.emptyStateTitle}>No Goals Yet</Text>
-            <Text style={styles.emptyStateText}>Tap + to create your first saving goal.</Text>
-          </View>
+          archivedGoals.length > 0 ? archivedGoals.map((goal) => {
+            const saved = parseFloat(goal.saved_amount || 0);
+            const target = parseFloat(goal.target_amount);
+            const pct = target > 0 ? Math.min((saved / target) * 100, 100) : 0;
+            return (
+              <View key={goal.id} style={[styles.goalCard, { opacity: 0.75 }]}>
+                <View style={styles.goalHeader}>
+                  <View style={[styles.goalIconContainer, { backgroundColor: COLORS.textSecondary + '22' }]}>
+                    <Target color={COLORS.textSecondary} size={24} />
+                  </View>
+                  <View style={styles.goalInfo}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <Text style={[styles.goalTitle, { flex: 1, marginRight: 8, color: COLORS.textSecondary }]}>{goal.title}</Text>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <TouchableOpacity onPress={() => handleUnarchiveGoal(goal)}>
+                          <Text style={{ color: COLORS.primary, fontWeight: '700', fontSize: 13 }}>Restore</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteGoal(goal)}>
+                          <Trash2 color={COLORS.error} size={17} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                    <Text style={[styles.goalAmount, { color: COLORS.textSecondary }]}>
+                      {userCurrency} {saved.toLocaleString()} / {userCurrency} {target.toLocaleString()} · {pct.toFixed(0)}%
+                    </Text>
+                  </View>
+                </View>
+                {goal.notes ? (
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>{goal.notes}</Text>
+                ) : null}
+              </View>
+            );
+          }) : (
+            <View style={styles.emptyState}>
+              <Archive color={COLORS.textSecondary} size={48} style={{ marginBottom: 16 }} />
+              <Text style={styles.emptyStateTitle}>No Archived Goals</Text>
+              <Text style={styles.emptyStateText}>Goals you archive will appear here.</Text>
+            </View>
+          )
         )}
       </ScrollView>
 
@@ -391,6 +510,16 @@ const SavingsGoals = () => {
                   <TextInput style={inputStyle} placeholder="e.g. 3" placeholderTextColor="rgba(255,255,255,0.25)" keyboardType="number-pad" value={repeatValue} onChangeText={setRepeatValue} />
                 </>
               )}
+
+              <Text style={labelStyle}>Notes (optional)</Text>
+              <TextInput
+                style={[inputStyle, { minHeight: 72, textAlignVertical: 'top' }]}
+                placeholder="Any notes about this goal..."
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                multiline
+                value={notes}
+                onChangeText={setNotes}
+              />
 
               <TouchableOpacity
                 style={{ backgroundColor: COLORS.accent, padding: 16, borderRadius: 14, alignItems: 'center', marginTop: 8, opacity: saving ? 0.7 : 1 }}

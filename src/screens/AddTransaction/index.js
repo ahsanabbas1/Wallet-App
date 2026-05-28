@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Icons from 'lucide-react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
@@ -216,6 +216,7 @@ const AddTransaction = ({ navigation, route }) => {
   const { userId } = useAuth();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const insets = useSafeAreaInsets();
   const editTransaction = route.params?.transaction;
   const isEdit = !!editTransaction;
 
@@ -354,11 +355,18 @@ const AddTransaction = ({ navigation, route }) => {
     setCategoryModalParent(null);
   }, [form.type]);
 
+  const showPageInfo = () => Alert.alert('About This Page', 'Record a new expense or income. Choose a category, account, and date — your balance updates automatically.');
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <ScrollView contentContainerStyle={styles.scrollContent}>
+
+            {/* Info */}
+            <TouchableOpacity onPress={showPageInfo} style={{ alignSelf: 'flex-end', padding: 8, marginBottom: 4 }}>
+              <Icons.Info color={COLORS.textSecondary} size={20} />
+            </TouchableOpacity>
 
             {/* Type Selector */}
             <View style={styles.typeContainer}>
@@ -497,7 +505,7 @@ const AddTransaction = ({ navigation, route }) => {
               style={styles.textArea}
             />
 
-            <AppButton title={isEdit ? 'Update Record' : 'Save Transaction'} onPress={handleSave} loading={loading} style={{ marginTop: 20, marginBottom: 20 }} />
+            <AppButton title={isEdit ? 'Update Record' : 'Save Transaction'} onPress={handleSave} loading={loading} style={{ marginTop: 20, marginBottom: insets.bottom + 20 }} />
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

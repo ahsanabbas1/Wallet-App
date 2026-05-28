@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowUpRight, ArrowDownLeft, Calendar, Filter, Plus, ReceiptText, Pencil, Trash2, Menu, Search, X } from 'lucide-react-native';
+import { ArrowUpRight, ArrowDownLeft, Calendar, Filter, Plus, ReceiptText, Pencil, Trash2, Menu, Search, X, Info } from 'lucide-react-native';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
@@ -140,11 +140,13 @@ const ExpenseTracker = ({ navigation }) => {
     return rows;
   }, [groupedTransactions, loading, transactions.length]);
 
+  const showPageInfo = () => Alert.alert('About This Page', 'View and filter all your transactions. Search by date, type, or category.');
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.iconButton, { marginRight: 16 }]}
             onPress={openDrawer}
           >
@@ -153,7 +155,10 @@ const ExpenseTracker = ({ navigation }) => {
           <Text style={styles.headerTitle}>Financial Ledger</Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity 
+          <TouchableOpacity style={styles.iconButton} onPress={showPageInfo}>
+            <Info color={COLORS.textSecondary} size={20} />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.iconButton}
             onPress={() => navigation.navigate('AddTransaction')}
           >
