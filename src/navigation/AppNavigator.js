@@ -15,6 +15,8 @@ import AddTransaction     from '../screens/AddTransaction/index';
 import LoanManagement    from '../screens/LoanManagement/index';
 import Accounts           from '../screens/Accounts/index';
 import Khums              from '../screens/Khums/index';
+import FinancialCalendar  from '../screens/FinancialCalendar/index';
+import Zakat              from '../screens/Zakat/index';
 import { useTheme }       from '../context/ThemeContext';
 
 const Stack = createNativeStackNavigator();
@@ -34,7 +36,9 @@ const MainStack = () => (
     <Stack.Screen name="About"         component={About}             />
     <Stack.Screen name="Loans"         component={LoanManagement}    />
     <Stack.Screen name="Accounts"      component={Accounts}          />
-    <Stack.Screen name="Khums"         component={Khums}             />
+    <Stack.Screen name="Khums"             component={Khums}             />
+    <Stack.Screen name="FinancialCalendar" component={FinancialCalendar} />
+    <Stack.Screen name="Zakat"             component={Zakat}             />
   </Stack.Navigator>
 );
 

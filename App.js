@@ -7,7 +7,9 @@ import { DrawerProvider } from './src/context/DrawerContext'
 import { AuthProvider, useAuth } from './src/context/AuthContext'
 import { ProfileProvider } from './src/context/ProfileContext'
 import { ThemeProvider, useTheme } from './src/context/ThemeContext'
+import { LockProvider, useLock } from './src/context/LockContext'
 import GlobalDrawer from './src/components/GlobalDrawer'
+import LockScreen from './src/screens/LockScreen/index'
 import { StatusBar } from 'expo-status-bar'
 import { supabase } from './src/lib/supabase'
 import Auth from './src/components/Auth/index'
@@ -41,6 +43,17 @@ const ThemedShell = ({ children }) => {
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </>
   );
+};
+
+const LockGate = ({ children }) => {
+  const { isLocked, ready } = useLock();
+  if (!ready) return (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0f1117' }}>
+      <ActivityIndicator size="large" color="#4f5ff7" />
+    </View>
+  );
+  if (isLocked) return <LockScreen />;
+  return children;
 };
 
 const AppContent = () => {
@@ -77,14 +90,18 @@ const AppContent = () => {
   return (
     <ThemeProvider userId={session.user.id}>
       <ProfileProvider>
-        <DrawerProvider>
-          <NavigationContainer>
-            <ThemedShell>
-              <AppNavigator />
-              <GlobalDrawer />
-            </ThemedShell>
-          </NavigationContainer>
-        </DrawerProvider>
+        <LockProvider>
+          <LockGate>
+            <DrawerProvider>
+              <NavigationContainer>
+                <ThemedShell>
+                  <AppNavigator />
+                  <GlobalDrawer />
+                </ThemedShell>
+              </NavigationContainer>
+            </DrawerProvider>
+          </LockGate>
+        </LockProvider>
       </ProfileProvider>
     </ThemeProvider>
   );

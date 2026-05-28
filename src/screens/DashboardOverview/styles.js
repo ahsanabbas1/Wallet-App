@@ -26,7 +26,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     fontWeight: 'bold',
   },
   iconButton: {
-    padding: 8,
+    padding: 7,
     backgroundColor: COLORS.card,
     borderRadius: 12,
   },

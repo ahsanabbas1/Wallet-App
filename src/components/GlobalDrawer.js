@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
 import { SIZES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
-import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Settings, Bell, LogOut, Banknote, Building2, Landmark } from 'lucide-react-native';
+import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Calendar, Settings, Bell, LogOut, Banknote, Building2, Landmark, Coins } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useProfile } from '../context/ProfileContext';
 
@@ -62,18 +62,19 @@ const GlobalDrawer = () => {
 
       {/* Drawer Panel */}
       <Animated.View style={[styles.drawer, { width: drawerWidth, transform: [{ translateX: slideAnim }] }]}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(SIZES.padding, insets.top + 12) }]}>
           <Text style={styles.headerTitle}>Menu</Text>
           <Pressable onPress={closeDrawer} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
             <X color={COLORS.textSecondary} size={24} />
           </Pressable>
         </View>
 
-        <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.menuItems} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Math.max(24, insets.bottom + 16) }}>
           {/* ── Overview ── */}
           <DrawerItem icon={Home}          label="Dashboard"       onPress={() => handleNavigate('Dashboard')} />
           <DrawerItem icon={Building2}     label="Accounts"        onPress={() => handleNavigate('Accounts')} />
           <DrawerItem icon={List}          label="Expenses"        onPress={() => handleNavigate('Expenses')} />
+          <DrawerItem icon={Calendar}      label="Calendar"        onPress={() => handleNavigate('FinancialCalendar')} />
 
           <View style={styles.sectionDivider} />
           <Text style={styles.sectionLabel}>PLANNING</Text>
@@ -90,8 +91,11 @@ const GlobalDrawer = () => {
           <Text style={styles.sectionLabel}>TOOLS</Text>
           <DrawerItem icon={Banknote}      label="Loan Management" onPress={() => handleNavigate('Loans')} />
           <DrawerItem icon={ShoppingBag}   label="Shopping List"   onPress={() => handleNavigate('Shopping')} />
-          {madhab === 'shia' && (
+          {madhab === 'shia'  && (
             <DrawerItem icon={Landmark}    label="Khums"           onPress={() => handleNavigate('Khums')} />
+          )}
+          {madhab === 'sunni' && (
+            <DrawerItem icon={Coins}       label="Zakat"           onPress={() => handleNavigate('Zakat')} />
           )}
 
           <View style={styles.sectionDivider} />
@@ -109,7 +113,6 @@ const GlobalDrawer = () => {
             <Text style={[styles.drawerItemText, { color: COLORS.error }]}>Logout</Text>
           </Pressable>
           
-          <View style={{ height: Math.max(40, insets.bottom + 24) }} />
         </ScrollView>
       </Animated.View>
     </View>
@@ -130,7 +133,6 @@ const makeStyles = (COLORS) => StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    height: screenHeight,
     backgroundColor: COLORS.card,
     shadowColor: '#000',
     shadowOffset: { width: 5, height: 0 },
@@ -143,7 +145,6 @@ const makeStyles = (COLORS) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: SIZES.padding,
-    paddingTop: 60, // approximate safe area
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
@@ -153,7 +154,8 @@ const makeStyles = (COLORS) => StyleSheet.create({
     fontWeight: 'bold',
   },
   menuItems: {
-    paddingVertical: 20,
+    flex: 1,
+    paddingTop: 12,
   },
   drawerItem: {
     flexDirection: 'row',

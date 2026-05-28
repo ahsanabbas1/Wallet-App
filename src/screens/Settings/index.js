@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, TextInput,
-  ActivityIndicator, Alert, StyleSheet
+  ActivityIndicator, Alert, StyleSheet, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -13,6 +13,8 @@ import { SIZES } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import WhatsNewModal from '../../components/WhatsNewModal';
+import PinSetupModal from '../../components/PinSetupModal';
+import { useLock } from '../../context/LockContext';
 
 const CURRENCIES = [
   { code: 'PKR', symbol: 'Rs', label: 'Pakistani Rupee' },
@@ -42,10 +44,8 @@ const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) 
       <View style={[styles.rowIcon, { backgroundColor: (color || COLORS.primary) + '22' }]}>
         <Icon color={color || COLORS.primary} size={18} />
       </View>
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {value ? <Text style={styles.rowValue}>{value}</Text> : null}
-      </View>
+      <Text style={styles.rowLabel}>{label}</Text>
+      {value ? <Text style={styles.rowValue} numberOfLines={1}>{value}</Text> : null}
       {rightElement || <ChevronRight color={COLORS.textSecondary} size={18} />}
     </Pressable>
   );
@@ -113,6 +113,38 @@ export default function Settings() {
         }
       }
     ]);
+  };
+
+  const {
+    isPinEnabled, isBiometricEnabled, hasBiometricHW, lockAfter,
+    savePin, removePin, setBiometric, setLockAfter, verifyPin,
+  } = useLock();
+
+  const [pinModal,     setPinModal]     = useState(null); // null | 'setup' | 'change'
+  const [showLockPicker, setShowLockPicker] = useState(false);
+  const LOCK_OPTIONS = [
+    { label: 'Immediately', value: 0 },
+    { label: '1 minute',    value: 1 },
+    { label: '5 minutes',   value: 5 },
+    { label: '15 minutes',  value: 15 },
+    { label: '30 minutes',  value: 30 },
+  ];
+
+  const handleTogglePin = () => {
+    if (isPinEnabled) {
+      Alert.alert('Disable PIN', 'Are you sure you want to remove the PIN lock?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disable', style: 'destructive', onPress: removePin },
+      ]);
+    } else {
+      setPinModal('setup');
+    }
+  };
+
+  const handlePinSuccess = async (pin) => {
+    await savePin(pin);
+    setPinModal(null);
+    Alert.alert('PIN Set', 'Your app is now protected with a PIN.');
   };
 
   const [showWhatsNew, setShowWhatsNew] = useState(false);
@@ -226,7 +258,7 @@ export default function Settings() {
           <SettingRow
             icon={BookOpen}
             label="School of Thought"
-            value={madhab === 'shia' ? 'Shia (Ithna-Ashari)' : 'Sunni'}
+            value={madhab === 'shia' ? 'Shia — Ithna-Ashari' : 'Sunni'}
             onPress={() => setShowMadhabPicker(v => !v)}
           />
           {showMadhabPicker && (
@@ -241,7 +273,7 @@ export default function Settings() {
                   ]}
                   onPress={() => { updateMadhab(m.key); setShowMadhabPicker(false); }}
                 >
-                  <Text style={[styles.pickerCode, madhab === m.key && { color: COLORS.primary }]}>
+                  <Text style={[styles.pickerLabel, madhab === m.key && { color: COLORS.primary }]}>
                     {m.label}
                   </Text>
                 </Pressable>
@@ -297,6 +329,87 @@ export default function Settings() {
               onPress={() => navigation.navigate('Khums')}
             />
           )}
+          {madhab === 'sunni' && (
+            <SettingRow
+              icon={Coins}
+              label="Zakat"
+              value="Annual wealth purification calculator"
+              color="#16a34a"
+              onPress={() => navigation.navigate('Zakat')}
+            />
+          )}
+        </View>
+
+        {/* Security */}
+        <SectionHeader title="Security" />
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <View style={[styles.rowIcon, { backgroundColor: COLORS.primary + '22' }]}>
+              <Lock color={COLORS.primary} size={18} />
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>PIN Lock</Text>
+              <Text style={styles.rowValue}>{isPinEnabled ? 'Enabled' : 'Disabled'}</Text>
+            </View>
+            <Switch
+              value={isPinEnabled}
+              onValueChange={handleTogglePin}
+              trackColor={{ false: COLORS.border, true: COLORS.primary + '88' }}
+              thumbColor={isPinEnabled ? COLORS.primary : COLORS.textSecondary}
+            />
+          </View>
+
+          {isPinEnabled && (
+            <>
+              <SettingRow
+                icon={Lock}
+                label="Change PIN"
+                onPress={() => setPinModal('change')}
+              />
+              {hasBiometricHW && (
+                <View style={styles.row}>
+                  <View style={[styles.rowIcon, { backgroundColor: COLORS.primary + '22' }]}>
+                    <Fingerprint color={COLORS.primary} size={18} />
+                  </View>
+                  <View style={styles.rowContent}>
+                    <Text style={styles.rowLabel}>Biometric Unlock</Text>
+                    <Text style={styles.rowValue}>{isBiometricEnabled ? 'Enabled' : 'Disabled'}</Text>
+                  </View>
+                  <Switch
+                    value={isBiometricEnabled}
+                    onValueChange={(v) => setBiometric(v)}
+                    trackColor={{ false: COLORS.border, true: COLORS.primary + '88' }}
+                    thumbColor={isBiometricEnabled ? COLORS.primary : COLORS.textSecondary}
+                  />
+                </View>
+              )}
+              <SettingRow
+                icon={Clock}
+                label="Lock After"
+                value={LOCK_OPTIONS.find(o => o.value === lockAfter)?.label ?? '1 minute'}
+                onPress={() => setShowLockPicker(v => !v)}
+              />
+              {showLockPicker && (
+                <View style={styles.picker}>
+                  {LOCK_OPTIONS.map(opt => (
+                    <Pressable
+                      key={opt.value}
+                      style={({ pressed }) => [
+                        styles.pickerRow,
+                        lockAfter === opt.value && styles.pickerRowActive,
+                        pressed && { opacity: 0.6 },
+                      ]}
+                      onPress={() => { setLockAfter(opt.value); setShowLockPicker(false); }}
+                    >
+                      <Text style={[styles.pickerLabel, lockAfter === opt.value && { color: COLORS.primary }]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         {/* Account */}
@@ -346,6 +459,13 @@ export default function Settings() {
         <View style={{ height: 40 }} />
       </ScrollView>
       <WhatsNewModal visible={showWhatsNew} onDismiss={() => setShowWhatsNew(false)} />
+      <PinSetupModal
+        visible={pinModal !== null}
+        mode={pinModal || 'setup'}
+        verifyFn={verifyPin}
+        onSuccess={handlePinSuccess}
+        onCancel={() => setPinModal(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -441,14 +561,16 @@ const makeStyles = (COLORS) => StyleSheet.create({
     flex: 1,
   },
   rowLabel: {
+    flex: 1,
     color: COLORS.text,
     fontSize: 14,
     fontWeight: '500',
   },
   rowValue: {
     color: COLORS.textSecondary,
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
+    marginHorizontal: 8,
+    flexShrink: 1,
   },
   editRow: {
     flexDirection: 'row',

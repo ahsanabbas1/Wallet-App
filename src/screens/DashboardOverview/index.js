@@ -18,8 +18,10 @@ import {
   RefreshCcw,
   Eye,
   EyeOff,
-  Info,
+  ArrowLeftRight,
 } from 'lucide-react-native';
+import CurrencyConverterModal from '../../components/CurrencyConverterModal';
+import CashFlowForecastCard from '../../components/CashFlowForecastCard';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
@@ -74,6 +76,7 @@ const DashboardOverview = () => {
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
   const [balanceVisible, setBalanceVisible] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showConverter, setShowConverter] = useState(false);
 
   const mv = (formatted) => balanceVisible ? formatted : '••••••';
 
@@ -168,7 +171,6 @@ const DashboardOverview = () => {
   }, [userId]);
 
 
-  const showPageInfo = () => Alert.alert('About This Page', 'Overview of your finances: total balance, recent transactions, spending summary, and quick actions.');
 
   const handleDismissWhatsNew = async () => {
     setShowWhatsNew(false);
@@ -188,21 +190,21 @@ const DashboardOverview = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
             <Pressable
-              style={[styles.iconButton, { marginRight: 16 }]}
+              style={[styles.iconButton, { marginRight: 12 }]}
               onPress={openDrawer}
             >
               <Menu color={COLORS.text} size={24} />
             </Pressable>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.welcomeText}>Welcome back</Text>
-              <Text style={styles.userName}>
+              <Text style={styles.userName} numberOfLines={1}>
                 {profileLoading ? '...' : (name || 'User')}
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
             <Pressable
               style={styles.iconButton}
               onPress={loadDashboardData}
@@ -216,6 +218,12 @@ const DashboardOverview = () => {
               {balanceVisible
                 ? <Eye color={COLORS.text} size={20} />
                 : <EyeOff color={COLORS.textSecondary} size={20} />}
+            </Pressable>
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => setShowConverter(true)}
+            >
+              <ArrowLeftRight color={COLORS.text} size={20} />
             </Pressable>
             <Pressable
               style={styles.iconButton}
@@ -235,9 +243,6 @@ const DashboardOverview = () => {
                   </Text>
                 </View>
               )}
-            </Pressable>
-            <Pressable style={styles.iconButton} onPress={showPageInfo}>
-              <Info color={COLORS.textSecondary} size={20} />
             </Pressable>
             <Pressable style={styles.iconButton} onPress={handleSignOut}>
               <LogOut color={COLORS.error} size={22} />
@@ -401,6 +406,9 @@ const DashboardOverview = () => {
             </Pressable>
           )}
         </View>
+
+        {/* Cash Flow Forecast */}
+        <CashFlowForecastCard userId={userId} />
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -568,6 +576,7 @@ const DashboardOverview = () => {
         </View>
       </ScrollView>
       <WhatsNewModal visible={showWhatsNew} onDismiss={handleDismissWhatsNew} />
+      <CurrencyConverterModal visible={showConverter} onClose={() => setShowConverter(false)} />
     </SafeAreaView>
   );
 };
