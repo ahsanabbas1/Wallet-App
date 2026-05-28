@@ -17,6 +17,7 @@ import { useProfile } from '../../context/ProfileContext';
 import { useTheme }   from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { accountService } from '../../services/accountService';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
 
 /* ─── constants ────────────────────────────────────────────────────────── */
 
@@ -182,12 +183,7 @@ const Accounts = () => {
           <Menu color={COLORS.text} size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Accounts</Text>
-        <TouchableOpacity
-          style={[styles.headerBtn, { backgroundColor: COLORS.primary + '22' }]}
-          onPress={openAdd}
-        >
-          <Plus color={COLORS.primary} size={20} />
-        </TouchableOpacity>
+        <HeaderPlusButton onPress={openAdd} />
         <TouchableOpacity style={styles.headerBtn} onPress={showPageInfo}>
           <Info color={COLORS.textSecondary} size={20} />
         </TouchableOpacity>

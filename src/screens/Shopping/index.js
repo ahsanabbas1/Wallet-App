@@ -14,6 +14,7 @@ import { useProfile } from '../../context/ProfileContext';
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { shoppingService } from '../../services/shoppingService';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
 
 const ShoppingList = () => {
   const { openDrawer } = useDrawer();
@@ -334,18 +335,13 @@ const ShoppingList = () => {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {activeTab === 'warranty' && (
-            <TouchableOpacity
-              style={{ width: 36, alignItems: 'center' }}
-              onPress={() => {
-                setEditingId(null);
-                setWarName('');
-                setWarPurchase(new Date());
-                setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
-                setShowWarrantyModal(true);
-              }}
-            >
-              <Plus color={COLORS.primary} size={22} />
-            </TouchableOpacity>
+            <HeaderPlusButton onPress={() => {
+              setEditingId(null);
+              setWarName('');
+              setWarPurchase(new Date());
+              setWarExpiry(new Date(new Date().setFullYear(new Date().getFullYear() + 1)));
+              setShowWarrantyModal(true);
+            }} />
           )}
           <TouchableOpacity style={{ width: 40, alignItems: 'center' }} onPress={showPageInfo}>
             <Info color={COLORS.textSecondary} size={20} />

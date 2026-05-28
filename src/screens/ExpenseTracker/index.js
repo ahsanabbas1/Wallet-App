@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowUpRight, ArrowDownLeft, Calendar, Filter, Plus, ReceiptText, Pencil, Trash2, Menu, Search, X, Info } from 'lucide-react-native';
+import HeaderMenu from '../../components/HeaderMenu';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
@@ -155,34 +157,20 @@ const ExpenseTracker = ({ navigation }) => {
           <Text style={styles.headerTitle}>Financial Ledger</Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.iconButton} onPress={showPageInfo}>
-            <Info color={COLORS.textSecondary} size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.navigate('AddTransaction')}
-          >
-            <Plus color={COLORS.text} size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => setShowSearch(!showSearch)}
-          >
-            {showSearch ? <X color={COLORS.text} size={20} /> : <Search color={COLORS.text} size={20} />}
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={() => setShowFilterModal(true)}
-          >
-            <Filter color={COLORS.text} size={20} />
-          </TouchableOpacity>
+          <HeaderPlusButton onPress={() => navigation.navigate('AddTransaction')} />
+          <HeaderMenu items={[
+            { icon: Search, label: 'Search',          onPress: () => { setShowSearch(true); } },
+            { icon: Filter, label: 'Filter',          onPress: () => setShowFilterModal(true) },
+            { icon: Info,   label: 'About This Page', onPress: showPageInfo },
+          ]} />
         </View>
       </View>
 
       {showSearch && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 10 }}>
+        <View style={{ paddingHorizontal: 16, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TextInput
             style={{
+              flex: 1,
               backgroundColor: COLORS.card,
               borderRadius: 8,
               padding: 10,
@@ -196,6 +184,9 @@ const ExpenseTracker = ({ navigation }) => {
             onChangeText={setSearchText}
             autoFocus
           />
+          <TouchableOpacity onPress={() => { setShowSearch(false); setSearchText(''); }} style={{ padding: 6 }}>
+            <X color={COLORS.textSecondary} size={18} />
+          </TouchableOpacity>
         </View>
       )}
 

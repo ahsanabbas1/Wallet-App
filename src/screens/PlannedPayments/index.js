@@ -39,6 +39,8 @@ import { transactionService } from '../../services/transactionService';
 import { accountService } from '../../services/accountService';
 import { makeStyles } from './styles';
 import * as Icons from 'lucide-react-native';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
+import HeaderMenu from '../../components/HeaderMenu';
 
 const CASH_ACCOUNT = {
   id: '__cash__',
@@ -362,13 +364,11 @@ const PlannedPayments = () => {
           <Menu color={COLORS.text} size={24} />
         </Pressable>
         <Text style={styles.headerTitle}>Planned Payments</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable onPress={showPageInfo} style={styles.addButton}>
-            <Info color={COLORS.textSecondary} size={20} />
-          </Pressable>
-          <Pressable onPress={() => setShowAddModal(true)} style={styles.addButton}>
-            <Plus color={COLORS.primary} size={24} />
-          </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <HeaderPlusButton onPress={() => setShowAddModal(true)} />
+          <HeaderMenu items={[
+            { icon: Info, label: 'About This Page', onPress: showPageInfo },
+          ]} />
         </View>
       </View>
 

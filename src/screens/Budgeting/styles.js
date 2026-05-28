@@ -9,11 +9,27 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   scrollContent: {
     padding: SIZES.padding,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 16,
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  menuBtn: {
+    marginRight: 14,
+    padding: 4,
+  },
   headerTitle: {
     color: COLORS.text,
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 24,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  headerSubtitle: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
   },
   remainingCard: {
     backgroundColor: COLORS.card,
@@ -77,7 +93,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   iconContainer: {
     width: 40,

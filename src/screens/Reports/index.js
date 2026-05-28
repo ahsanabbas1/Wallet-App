@@ -10,6 +10,7 @@ import {
   AlertTriangle, Lightbulb, BarChart3,
   Table2, List as ListIcon, Activity, Info,
 } from 'lucide-react-native';
+import HeaderMenu from '../../components/HeaderMenu';
 import { exportToExcel, exportToPDF } from '../../services/reportExportService';
 import { useDrawer }       from '../../context/DrawerContext';
 import { useAuth }         from '../../context/AuthContext';
@@ -463,11 +464,8 @@ const Reports = () => {
             <Menu color={COLORS.text} size={22} />
           </Pressable>
           <Text style={styles.headerTitle}>Reports</Text>
-          <Pressable style={styles.calendarBtn} onPress={showPageInfo}>
-            <Info color={COLORS.textSecondary} size={18} />
-          </Pressable>
           <Pressable
-            style={[styles.calendarBtn, { marginRight: 6 }, exporting && { opacity: 0.5 }]}
+            style={[styles.calendarBtn, exporting && { opacity: 0.5 }]}
             onPress={() => setExportMenuVisible(true)}
             disabled={exporting}
           >
@@ -476,6 +474,9 @@ const Reports = () => {
           <Pressable style={[styles.calendarBtn, isCustomActive && styles.calendarBtnActive]} onPress={openPicker}>
             <CalendarDays color={isCustomActive ? '#fff' : COLORS.textSecondary} size={18} />
           </Pressable>
+          <HeaderMenu items={[
+            { icon: Info, label: 'About This Page', onPress: showPageInfo },
+          ]} />
         </View>
 
         {/* ── Export menu modal ───────────────────────────────────── */}

@@ -9,6 +9,8 @@ import {
   Wallet, Target, Plus, Menu, X, Pencil, Trash2,
   AlertTriangle, CheckCircle, TrendingUp, RefreshCw, CalendarClock, Info
 } from 'lucide-react-native';
+import HeaderMenu from '../../components/HeaderMenu';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
 import { useDrawer } from '../../context/DrawerContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -242,22 +244,20 @@ const Budgeting = ({ navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
 
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
-          <TouchableOpacity style={{ marginRight: 16 }} onPress={openDrawer}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.menuBtn} onPress={openDrawer}>
             <Menu color={COLORS.text} size={24} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Monthly Budget</Text>
-            <Text style={{ color: COLORS.textSecondary, fontSize: 13, marginTop: 2 }}>
+            <Text style={styles.headerSubtitle}>
               {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
             </Text>
           </View>
-          <TouchableOpacity onPress={fetchData} style={{ padding: 8 }}>
-            <RefreshCw color={COLORS.textSecondary} size={18} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={showPageInfo} style={{ padding: 8 }}>
-            <Info color={COLORS.textSecondary} size={20} />
-          </TouchableOpacity>
+          <HeaderMenu items={[
+            { icon: RefreshCw, label: 'Refresh',         onPress: fetchData },
+            { icon: Info,      label: 'About This Page', onPress: showPageInfo },
+          ]} />
         </View>
 
         {/* Overall Budget Summary Card */}
@@ -296,12 +296,7 @@ const Budgeting = ({ navigation }) => {
         {/* Category Budgets Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Category Budgets</Text>
-          <TouchableOpacity
-            style={{ backgroundColor: COLORS.primary + '22', borderRadius: 8, padding: 6 }}
-            onPress={() => openAddModal()}
-          >
-            <Plus color={COLORS.primary} size={20} />
-          </TouchableOpacity>
+          <HeaderPlusButton onPress={() => openAddModal()} />
         </View>
 
         <View style={styles.budgetList}>
@@ -319,7 +314,9 @@ const Budgeting = ({ navigation }) => {
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle}>{b.categories?.name || 'Uncategorized'}</Text>
                     <Text style={styles.cardValue}>
-                      {userCurrency} {b.used.toLocaleString(undefined, { maximumFractionDigits: 0 })} spent of {userCurrency} {parseFloat(b.total_amount).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      Spent {userCurrency} {b.used.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      {' / '}
+                      {userCurrency} {parseFloat(b.total_amount).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -381,7 +378,9 @@ const Budgeting = ({ navigation }) => {
                   <View style={styles.cardInfo}>
                     <Text style={styles.cardTitle}>{g.title}</Text>
                     <Text style={styles.cardValue}>
-                      {userCurrency} {saved.toLocaleString()} saved of {userCurrency} {target.toLocaleString()}
+                      {userCurrency} {saved.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      {' / '}
+                      {userCurrency} {target.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </Text>
                   </View>
                   {pct >= 100 && <CheckCircle color={COLORS.success} size={20} />}

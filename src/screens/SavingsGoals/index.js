@@ -6,6 +6,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Target, Plus, Menu, Pencil, Trash2, Calendar, X, Clock, PiggyBank, RefreshCw, Archive, Info } from 'lucide-react-native';
+import HeaderMenu from '../../components/HeaderMenu';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { useFocusEffect } from '@react-navigation/native';
@@ -248,16 +250,12 @@ const SavingsGoals = () => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Savings Goals</Text>
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity style={styles.iconButton} onPress={showPageInfo}>
-            <Info color={COLORS.textSecondary} size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton} onPress={fetchGoals}>
-            <RefreshCw color={COLORS.text} size={18} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton} onPress={openAddModal}>
-            <Plus color={COLORS.text} size={20} />
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          <HeaderPlusButton onPress={openAddModal} />
+          <HeaderMenu items={[
+            { icon: RefreshCw, label: 'Refresh', onPress: fetchGoals },
+            { icon: Info,      label: 'About This Page', onPress: showPageInfo },
+          ]} />
         </View>
       </View>
 

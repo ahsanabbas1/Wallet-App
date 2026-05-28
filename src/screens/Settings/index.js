@@ -54,7 +54,7 @@ const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) 
 export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
-  const { userId, user } = useAuth();
+  const { userId, user, signOut } = useAuth();
   const { currency: profileCurrency, name: profileName, updateCurrency, updateName: updateProfileName, madhab, updateMadhab } = useProfile();
   const { colors: COLORS, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -105,13 +105,7 @@ export default function Settings() {
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: async () => {
-          await supabase.auth.signOut();
-        }
-      }
+      { text: 'Sign Out', style: 'destructive', onPress: signOut },
     ]);
   };
 

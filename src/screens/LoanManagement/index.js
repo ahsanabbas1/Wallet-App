@@ -11,6 +11,8 @@ import {
   Wallet, Pencil, Trash2, ChevronDown, ChevronUp,
   CheckCircle, History, ArrowDownLeft, ArrowUpRight, RefreshCw, Info,
 } from 'lucide-react-native';
+import HeaderMenu from '../../components/HeaderMenu';
+import HeaderPlusButton from '../../components/HeaderPlusButton';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth }   from '../../context/AuthContext';
@@ -284,15 +286,11 @@ const LoanManagement = () => {
           <Menu color={COLORS.text} size={24} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Loans</Text>
-        <TouchableOpacity style={styles.headerBtn} onPress={showPageInfo}>
-          <Info color={COLORS.textSecondary} size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerBtn} onPress={fetchLoans}>
-          <RefreshCw color={COLORS.textSecondary} size={18} />
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.headerBtn, { backgroundColor: COLORS.primary + '22' }]} onPress={() => openAddLoan()}>
-          <Plus color={COLORS.primary} size={20} />
-        </TouchableOpacity>
+        <HeaderPlusButton onPress={() => openAddLoan()} />
+        <HeaderMenu items={[
+          { icon: RefreshCw, label: 'Refresh',        onPress: fetchLoans },
+          { icon: Info,      label: 'About This Page', onPress: showPageInfo },
+        ]} />
       </View>
 
       <ScrollView

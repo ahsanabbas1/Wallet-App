@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated, TouchableWithoutFeedback, Dimensions, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { supabase } from '../lib/supabase';
 import { useDrawer } from '../context/DrawerContext';
+import { useAuth } from '../context/AuthContext';
 import { SIZES } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import { Home, List, PieChart, MessageSquare, CreditCard, ShoppingBag, Users, LayoutDashboard, BarChart3, Target, X, CalendarClock, Calendar, Settings, Bell, LogOut, Banknote, Building2, Landmark, Coins } from 'lucide-react-native';
@@ -30,6 +30,7 @@ const GlobalDrawer = () => {
   const navigation = useNavigation();
   const { colors: COLORS } = useTheme();
   const { madhab } = useProfile();
+  const { signOut } = useAuth();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const insets = useSafeAreaInsets();
 
@@ -47,10 +48,7 @@ const GlobalDrawer = () => {
 
   const handleLogout = async () => {
     closeDrawer();
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error('Error signing out:', error.message);
-    }
+    await signOut();
   };
 
   return (

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react-native';
 import CurrencyConverterModal from '../../components/CurrencyConverterModal';
 import CashFlowForecastCard from '../../components/CashFlowForecastCard';
+import HeaderMenu from '../../components/HeaderMenu';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
@@ -49,7 +50,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DashboardOverview = () => {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
-  const { userId, dbReady } = useAuth();
+  const { userId, dbReady, signOut } = useAuth();
   const { currency, name, loading: profileLoading } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -180,10 +181,7 @@ const DashboardOverview = () => {
     } catch (_) {}
   };
 
-  const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Error', error.message);
-  };
+  const handleSignOut = () => signOut();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -204,13 +202,7 @@ const DashboardOverview = () => {
               </Text>
             </View>
           </View>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Pressable
-              style={styles.iconButton}
-              onPress={loadDashboardData}
-            >
-              <RefreshCcw color={COLORS.text} size={20} />
-            </Pressable>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
             <Pressable
               style={styles.iconButton}
               onPress={() => setBalanceVisible(v => !v)}
@@ -218,12 +210,6 @@ const DashboardOverview = () => {
               {balanceVisible
                 ? <Eye color={COLORS.text} size={20} />
                 : <EyeOff color={COLORS.textSecondary} size={20} />}
-            </Pressable>
-            <Pressable
-              style={styles.iconButton}
-              onPress={() => setShowConverter(true)}
-            >
-              <ArrowLeftRight color={COLORS.text} size={20} />
             </Pressable>
             <Pressable
               style={styles.iconButton}
@@ -244,9 +230,13 @@ const DashboardOverview = () => {
                 </View>
               )}
             </Pressable>
-            <Pressable style={styles.iconButton} onPress={handleSignOut}>
-              <LogOut color={COLORS.error} size={22} />
-            </Pressable>
+            <HeaderMenu
+              items={[
+                { icon: RefreshCcw,    label: 'Refresh',            onPress: loadDashboardData },
+                { icon: ArrowLeftRight,label: 'Currency Converter',  onPress: () => setShowConverter(true) },
+                { icon: LogOut,        label: 'Sign Out',            onPress: handleSignOut, danger: true },
+              ]}
+            />
           </View>
         </View>
 
