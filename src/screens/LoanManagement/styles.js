@@ -571,4 +571,31 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     fontWeight: '800',
     textTransform: 'uppercase',
   },
+
+  /* ── Loan info section (expanded) ─────────────────────────────────── */
+  infoSection: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.divider,
+    paddingTop: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  infoLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  infoValue: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'right',
+    flex: 1,
+    paddingLeft: 12,
+  },
 });

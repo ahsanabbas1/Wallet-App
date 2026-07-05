@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Menu, Plus, X, Calendar, TrendingUp, TrendingDown,
   Wallet, Pencil, Trash2, ChevronDown, ChevronUp,
@@ -30,6 +31,18 @@ const fmtDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric
 
 const GIVEN = 'given';
 const RECEIVED = 'received';
+
+const getDurationLabel = (count, interval) => {
+  if (!count || count <= 0) return '';
+  const monthsPer = { weekly: 0.23, biweekly: 0.46, monthly: 1, quarterly: 3, yearly: 12 };
+  const totalMonths = count * (monthsPer[interval] || 1);
+  const years = Math.floor(totalMonths / 12);
+  const months = Math.round(totalMonths % 12);
+  if (years > 0 && months > 0) return `~${years}yr ${months}mo`;
+  if (years > 0) return `~${years}yr`;
+  if (months > 0) return `~${months}mo`;
+  return '<1mo';
+};
 
 /* ─── Progress bar ────────────────────────────────────────────────────── */
 const ProgressBar = ({ paid, total, color, styles, COLORS }) => {
@@ -99,20 +112,24 @@ const LoanManagement = () => {
   const [savingPayment, setSavingPayment] = useState(false);
   const [paymentAccount, setPaymentAccount] = useState(null);
   const [defaultPaymentAccountId, setDefaultPaymentAccountId] = useState(null);
+  const [saveAsDefaultAmount, setSaveAsDefaultAmount] = useState(false);
+  const [loanDefaultPayments, setLoanDefaultPayments] = useState({});
 
   /* ── Fetch ──────────────────────────────────────────────────────── */
   const fetchLoans = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const [enriched, accts, defaultAcct] = await Promise.all([
+      const [enriched, accts, defaultAcct, storedDefaults] = await Promise.all([
         loanService.getLoans(userId),
         accountService.getAccounts(userId).catch(() => []),
         loanService.getDefaultPaymentAccount(userId),
+        AsyncStorage.getItem(`loan_pay_defaults_${userId}`).then(r => r ? JSON.parse(r) : {}).catch(() => ({})),
       ]);
       setLoans(enriched);
       setAccounts(accts);
       setDefaultPaymentAccountId(defaultAcct?.id || null);
+      setLoanDefaultPayments(storedDefaults);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -160,7 +177,7 @@ const LoanManagement = () => {
     const instAmt = parseFloat(installmentAmount);
     if (!amt || !instAmt || instAmt <= 0) return null;
     return Math.ceil(amt / instAmt);
-  }, [loanAmount, installmentAmount, repaymentType, defineBy]);
+  }, [loanAmount, installmentAmount, repaymentType, defineBy, installmentInterval]);
 
   const calcRemainingCount = useMemo(() => {
     if (repaymentType !== 'multi') return null;
@@ -260,12 +277,62 @@ const LoanManagement = () => {
   };
 
   const handleMarkSettled = async (loan) => {
-    try {
-      await loanService.markSettled(userId, loan.id, !loan.is_settled);
-      fetchLoans();
-    } catch (e) {
-      Alert.alert('Error', e.message);
+    // Reactivate: just un-settle
+    if (loan.is_settled) {
+      try {
+        await loanService.markSettled(userId, loan.id, false);
+        fetchLoans();
+      } catch (e) {
+        Alert.alert('Error', e.message);
+      }
+      return;
     }
+
+    // Already fully paid — just settle
+    if (loan.remaining <= 0) {
+      try {
+        await loanService.markSettled(userId, loan.id, true);
+        fetchLoans();
+      } catch (e) {
+        Alert.alert('Error', e.message);
+      }
+      return;
+    }
+
+    // Has remaining balance — ask user
+    const settleAcct = accounts.find(a => a.id === (defaultPaymentAccountId || loan.account_id));
+    const acctName = settleAcct
+      ? `${settleAcct.account_name}${settleAcct.bank_name ? ` (${settleAcct.bank_name})` : ''}`
+      : null;
+
+    Alert.alert(
+      'Settle Loan',
+      `This loan still has ${fmt(loan.remaining, currency)} remaining.\n\nThe remaining amount will be recorded in your ledger to adjust the account balance.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Just Settle', onPress: async () => {
+            try {
+              await loanService.markSettled(userId, loan.id, true);
+              fetchLoans();
+            } catch (e) {
+              Alert.alert('Error', e.message);
+            }
+          }
+        },
+        { text: settleAcct ? `Record in ${acctName} & Settle` : 'Record & Settle', onPress: async () => {
+            try {
+              await loanService.settleLoan(userId, loan, settleAcct?.id || loan.account_id);
+              Alert.alert('Settled',
+                `Remaining ${fmt(loan.remaining, currency)} was recorded in the selected account.`
+              );
+              fetchLoans();
+            } catch (e) {
+              Alert.alert('Error', e.message);
+            }
+          }
+        },
+      ]
+    );
   };
 
   /* ══ PAYMENT CRUD ═══════════════════════════════════════════════════ */
@@ -273,7 +340,10 @@ const LoanManagement = () => {
   const openAddPayment = (loan) => {
     setPaymentLoan(loan);
     setEditingPaymentItem(null);
-    setPaymentAmount('');
+    const savedDefault = loanDefaultPayments[loan.id];
+    const defaultAmt = savedDefault || loan.installment_amount || '';
+    setPaymentAmount(String(defaultAmt));
+    setSaveAsDefaultAmount(false);
     setPaymentDate(new Date());
     setPaymentNotes('');
     // Pre-select: default payment account > loan's original account > null
@@ -288,6 +358,7 @@ const LoanManagement = () => {
     setPaymentLoan(loan);
     setEditingPaymentItem(pay);
     setPaymentAmount(String(pay.amount));
+    setSaveAsDefaultAmount(false);
     setPaymentDate(pay.date ? new Date(pay.date) : (pay.due_date ? new Date(pay.due_date) : new Date()));
     setPaymentNotes(pay.notes || '');
     setShowAddPayment(true);
@@ -319,8 +390,15 @@ const LoanManagement = () => {
           paymentAccount?.id || null
         );
         if (isSettling) {
-          Alert.alert('🎉 Fully Settled!', `The loan with ${paymentLoan.person_name} is now fully settled.`);
+          Alert.alert('Fully Settled!', `The loan with ${paymentLoan.person_name} is now fully settled.`);
         }
+      }
+
+      // Persist default payment amount if toggle is on
+      if (saveAsDefaultAmount && paymentLoan) {
+        const updated = { ...loanDefaultPayments, [paymentLoan.id]: amt };
+        setLoanDefaultPayments(updated);
+        await AsyncStorage.setItem(`loan_pay_defaults_${userId}`, JSON.stringify(updated));
       }
 
       setShowAddPayment(false);
@@ -587,6 +665,70 @@ const LoanManagement = () => {
                   <Text style={[styles.paymentItemDate, { marginTop: 8 }]}>📝 {loan.notes}</Text>
                 ) : null}
 
+                {/* ── Comprehensive info (visible when expanded) ───── */}
+                {isOpen && (
+                  <View style={styles.infoSection}>
+                    {loan.due_date && (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Due Date</Text>
+                        <Text style={styles.infoValue}>{fmtDate(loan.due_date)}</Text>
+                      </View>
+                    )}
+                    {(() => {
+                      const linkedAcct = loan.account_id ? accounts.find(a => a.id === loan.account_id) : null;
+                      return linkedAcct ? (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Linked Account</Text>
+                          <Text style={styles.infoValue}>
+                            {linkedAcct.account_name}{linkedAcct.bank_name ? ` · ${linkedAcct.bank_name}` : ''}
+                          </Text>
+                        </View>
+                      ) : null;
+                    })()}
+                    {loan.is_multi_installment && (
+                      <>
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Installment Plan</Text>
+                          <Text style={styles.infoValue}>
+                            {loan.installment_interval?.charAt(0).toUpperCase() + loan.installment_interval?.slice(1) || '—'}
+                          </Text>
+                        </View>
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Installments</Text>
+                          <Text style={styles.infoValue}>
+                            {loan.paid_installments} paid of {loan.total_installments}
+                          </Text>
+                        </View>
+                        {loan.installment_amount > 0 && (
+                          <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Per Installment</Text>
+                            <Text style={styles.infoValue}>{fmt(loan.installment_amount, currency)}</Text>
+                          </View>
+                        )}
+                        {loan.next_due_date && (
+                          <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Next Due</Text>
+                            <Text style={[styles.infoValue, loan.isOverdue && { color: COLORS.error }]}>
+                              {fmtDate(loan.next_due_date)}
+                              {loan.isOverdue
+                                ? ` (${Math.floor((new Date() - new Date(loan.next_due_date)) / (1000 * 60 * 60 * 24))}d overdue)`
+                                : ` (${Math.floor((new Date(loan.next_due_date) - new Date()) / (1000 * 60 * 60 * 24))}d left)`
+                              }
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                    {/* Show define-by info for non-installment loans */}
+                    {!loan.is_multi_installment && (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Payment Type</Text>
+                        <Text style={styles.infoValue}>Single Payment</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 {/* Add payment / settle / reactivate buttons */}
                 {loan.is_settled ? (
                   <TouchableOpacity
@@ -637,7 +779,11 @@ const LoanManagement = () => {
                               + {fmt(pay.amount, currency)}
                             </Text>
                             <Text style={styles.paymentItemDate}>
-                              {fmtDate(pay.date || pay.due_date)}{pay.notes ? `  ·  ${pay.notes}` : ''}
+                              {fmtDate(pay.date || pay.due_date)}
+                              {pay.notes === 'Settlement'
+                                ? '  ·  Settlement'
+                                : pay.notes ? `  ·  ${pay.notes}` : ''
+                              }
                             </Text>
                           </View>
                           <TouchableOpacity
@@ -903,7 +1049,9 @@ const LoanManagement = () => {
                       {calculatedInstallmentAmount !== null && (
                         <View style={styles.calcRow}>
                           <Text style={styles.calcLabel}>Each installment:</Text>
-                          <Text style={styles.calcValue}>{fmt(calculatedInstallmentAmount, currency)}</Text>
+                          <Text style={styles.calcValue}>
+                            {fmt(calculatedInstallmentAmount, currency)}  ·  {getDurationLabel(parseInt(numInstallments), installmentInterval)}
+                          </Text>
                         </View>
                       )}
                     </>
@@ -919,10 +1067,21 @@ const LoanManagement = () => {
                         onChangeText={setInstallmentAmount}
                       />
                       {calculatedInstallmentCount !== null && (
-                        <View style={styles.calcRow}>
-                          <Text style={styles.calcLabel}>Total installments:</Text>
-                          <Text style={styles.calcValue}>{calculatedInstallmentCount}</Text>
-                        </View>
+                        <>
+                          <View style={styles.calcRow}>
+                            <Text style={styles.calcLabel}>Total installments:</Text>
+                            <Text style={styles.calcValue}>
+                              {calculatedInstallmentCount}  ·  {getDurationLabel(calculatedInstallmentCount, installmentInterval)}
+                            </Text>
+                          </View>
+                          {calculatedInstallmentCount > 36 && (
+                            <View style={[styles.calcRow, { backgroundColor: COLORS.warning + '18', borderColor: COLORS.warning + '40', marginTop: 4 }]}>
+                              <Text style={[styles.calcLabel, { color: COLORS.warning }]}>
+                                ⚠ Long duration — consider increasing the installment amount
+                              </Text>
+                            </View>
+                          )}
+                        </>
                       )}
                     </>
                   )}
@@ -1001,6 +1160,15 @@ const LoanManagement = () => {
                 <Text style={[styles.paymentItemDate, { marginTop: 2 }]}>
                   {paymentLoan?.person_name}  ·  {fmt(paymentLoan?.remaining, currency)} remaining
                 </Text>
+                {paymentLoan?.is_multi_installment && paymentLoan?.total_installments > 0 && (
+                  <Text style={[styles.paymentItemDate, { marginTop: 2, color: COLORS.primary }]}>
+                    {paymentLoan?.paid_installments >= paymentLoan?.total_installments
+                      ? `All ${paymentLoan?.total_installments} installments paid`
+                      : `Installment ${Math.min(paymentLoan?.paid_installments + 1, paymentLoan?.total_installments)} of ${paymentLoan?.total_installments}`
+                    }
+                    {'  ·  '}{paymentLoan?.paid_installments} paid, {paymentLoan?.remaining_installments} remaining
+                  </Text>
+                )}
               </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => { setShowAddPayment(false); setEditingPaymentItem(null); }}>
                 <X color={COLORS.text} size={18} />
@@ -1049,6 +1217,29 @@ const LoanManagement = () => {
                       : fmt(paymentLoan?.remaining - parseFloat(paymentAmount), currency)}
                   </Text>
                 </View>
+              )}
+
+              {/* Save as default amount toggle */}
+              {!editingPaymentItem && paymentLoan?.installment_amount && (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, paddingVertical: 8 }}
+                  onPress={() => setSaveAsDefaultAmount(!saveAsDefaultAmount)}
+                >
+                  <View style={{
+                    width: 20, height: 20, borderRadius: 4,
+                    borderWidth: 2,
+                    borderColor: saveAsDefaultAmount ? COLORS.primary : COLORS.border,
+                    backgroundColor: saveAsDefaultAmount ? COLORS.primary + '22' : 'transparent',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {saveAsDefaultAmount && (
+                      <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '800' }}>✓</Text>
+                    )}
+                  </View>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', flex: 1 }}>
+                    Set {paymentAmount ? fmt(parseFloat(paymentAmount), currency) : 'amount'} as default for this loan
+                  </Text>
+                </TouchableOpacity>
               )}
 
               {/* Account selector (only for new payments, not edit) */}

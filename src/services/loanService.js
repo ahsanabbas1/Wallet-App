@@ -22,6 +22,8 @@ function enrichLoan(loan, payments) {
   const nextDuePayment = unpaidInstallments.length > 0 ? unpaidInstallments[0] : null;
   const isOverdue = nextDuePayment && new Date(nextDuePayment.due_date) < new Date();
   const remainingInstallments = unpaidInstallments.length;
+  const paidInstallments = paidPayments.length;
+  const totalInstallments = loanPayments.length;
 
   return {
     ...loan,
@@ -34,6 +36,8 @@ function enrichLoan(loan, payments) {
     nextDuePayment,
     isOverdue,
     remaining_installments: remainingInstallments,
+    paid_installments: paidInstallments,
+    total_installments: totalInstallments,
     next_due_date: nextDuePayment ? nextDuePayment.due_date : null,
   };
 }
@@ -198,6 +202,48 @@ export const loanService = {
   async markSettled(userId, id, isSettled) {
     const db = getDb();
     await db.runAsync('UPDATE loans SET is_settled = ? WHERE id = ?', [isSettled ? 1 : 0, id]);
+  },
+
+  async settleLoan(userId, loan, accountId) {
+    const db = getDb();
+    const remaining = loan.remaining;
+    const now = new Date().toISOString();
+    const paymentId = generateId();
+
+    const paidRows = await db.getAllAsync(
+      'SELECT COALESCE(SUM(amount), 0) as paid FROM loan_payments WHERE loan_id = ? AND is_paid = 1',
+      [loan.id]
+    );
+    const paidSoFar = paidRows[0]?.paid || 0;
+    if (paidSoFar >= parseFloat(loan.total_amount || 0)) {
+      await db.runAsync('UPDATE loans SET is_settled = 1 WHERE id = ?', [loan.id]);
+      return {};
+    }
+
+    await db.runAsync(
+      `INSERT INTO loan_payments (id, loan_id, amount, date, is_paid, notes, created_at)
+       VALUES (?, ?, ?, ?, 1, 'Settlement', ?)`,
+      [paymentId, loan.id, remaining, now, now]
+    );
+
+    const isGiven = loan.type === 'given';
+    const { id: txnId } = await transactionService.addTransaction({
+      user_id: userId,
+      amount: remaining,
+      type: isGiven ? 'expense' : 'income',
+      title: isGiven ? `Loan settlement - ${loan.person_name}` : `Loan settlement - ${loan.person_name}`,
+      description: 'Settlement of remaining balance',
+      date: now,
+      account_id: accountId || loan.account_id || null,
+      is_loan: 1,
+    });
+
+    if (txnId) {
+      await db.runAsync('UPDATE loan_payments SET transaction_id = ? WHERE id = ?', [txnId, paymentId]);
+    }
+
+    await db.runAsync('UPDATE loans SET is_settled = 1 WHERE id = ?', [loan.id]);
+    return {};
   },
 
   async savePayment(paymentData, loan, accountId) {
