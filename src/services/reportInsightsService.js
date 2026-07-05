@@ -213,7 +213,7 @@ export const getLedgerData = async (userId, period = 'MONTH', customDates = null
     const catMap = Object.fromEntries(cats.map(c => [c.id, c]));
 
     const rows = await db.getAllAsync(
-      'SELECT * FROM transactions WHERE user_id = ? AND date >= ? AND date <= ? ORDER BY date DESC',
+      "SELECT * FROM transactions WHERE user_id = ? AND date >= ? AND date <= ? AND type != 'transfer' ORDER BY date DESC",
       [userId, startDate.toISOString(), endDate.toISOString()]
     );
 

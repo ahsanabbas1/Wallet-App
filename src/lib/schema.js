@@ -76,24 +76,32 @@ export async function runMigrations(db) {
     );
 
     CREATE TABLE IF NOT EXISTS loans (
-      id           TEXT PRIMARY KEY,
-      user_id      TEXT NOT NULL,
-      type         TEXT,
-      person_name  TEXT,
-      total_amount REAL,
-      date         TEXT,
-      notes        TEXT,
-      is_settled   INTEGER DEFAULT 0,
-      created_at   TEXT
+      id                    TEXT PRIMARY KEY,
+      user_id               TEXT NOT NULL,
+      account_id            TEXT,
+      type                  TEXT,
+      person_name           TEXT,
+      total_amount          REAL,
+      date                  TEXT,
+      notes                 TEXT,
+      is_settled            INTEGER DEFAULT 0,
+      is_multi_installment  INTEGER DEFAULT 0,
+      repayment_type        TEXT DEFAULT 'single',
+      due_date              TEXT,
+      num_installments      INTEGER,
+      installment_interval  TEXT,
+      created_at            TEXT
     );
 
     CREATE TABLE IF NOT EXISTS loan_payments (
-      id         TEXT PRIMARY KEY,
-      loan_id    TEXT NOT NULL,
-      amount     REAL,
-      date       TEXT,
-      notes      TEXT,
-      created_at TEXT
+      id          TEXT PRIMARY KEY,
+      loan_id     TEXT NOT NULL,
+      amount      REAL,
+      date        TEXT,
+      due_date    TEXT,
+      notes       TEXT,
+      is_paid     INTEGER DEFAULT 0,
+      created_at  TEXT
     );
 
     CREATE TABLE IF NOT EXISTS planned_payments (
@@ -167,6 +175,9 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_items_list        ON shopping_items(list_id);
     CREATE INDEX IF NOT EXISTS idx_warranties_user   ON warranties(user_id);
   `);
+
+  // Notifications: add is_archived column (existing databases)
+  await ensureColumn(db, 'notifications', 'is_archived', 'INTEGER DEFAULT 0');
 
   // Accounts table (Feature 4 — bank/wallet account management)
   await db.execAsync(`
@@ -276,6 +287,18 @@ export async function runMigrations(db) {
     await ensureColumn(db, 'transactions', 'is_loan', 'INTEGER DEFAULT 0');
   } catch (_) { }
 
+  // Loan enhancements: account selection, multi-installment, due dates
+  try { await ensureColumn(db, 'loans', 'account_id', 'TEXT'); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'due_date', 'TEXT'); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'is_multi_installment', 'INTEGER DEFAULT 0'); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'repayment_type', "TEXT DEFAULT 'single'"); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'num_installments', 'INTEGER'); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'installment_interval', 'TEXT'); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'installment_amount', 'REAL'); } catch (_) { }
+  try { await ensureColumn(db, 'loans', 'define_by', "TEXT DEFAULT 'count'"); } catch (_) { }
+  try { await ensureColumn(db, 'loan_payments', 'due_date', 'TEXT'); } catch (_) { }
+  try { await ensureColumn(db, 'loan_payments', 'is_paid', 'INTEGER DEFAULT 0'); } catch (_) { }
+
   // Savings Goals: archive support + notes field
   try { await ensureColumn(db, 'savings_goals', 'is_archived', 'INTEGER DEFAULT 0'); } catch (_) { }
   try { await ensureColumn(db, 'savings_goals', 'notes', 'TEXT'); } catch (_) { }
@@ -383,7 +406,6 @@ const DEFAULT_CATEGORIES = [
     subs: [
       { name: 'Dividends', icon: 'PieChart' },
       { name: 'Interest', icon: 'Percent' },
-      { name: 'Rental Income', icon: 'Home' },
     ]
   },
   {
@@ -403,47 +425,58 @@ async function seedMissingCategories(db) {
   const newParents = [
     {
       name: 'Education', color: '#8B5CF6', icon: 'GraduationCap', type: 'expense',
-      subs: ['Tuition', 'Books & Stationery', 'Online Courses', 'School Fees', 'Exam Fees']
+      subs: ['Tuition', 'Books & Stationery', 'Online Courses', 'School Fees', 'Exam Fees', 'University Semester Fee', 'Skill Development']
     },
     {
       name: 'Travel', color: '#0EA5E9', icon: 'Plane', type: 'expense',
-      subs: ['Flights', 'Hotels & Stays', 'Travel Insurance', 'Visa & Passport', 'Travel Meals']
+      subs: ['Flights', 'Hotels & Stays', 'Travel Insurance', 'Visa & Passport', 'Travel Meals', 'Local Sightseeing', 'Car Rental']
     },
     {
       name: 'Personal Care', color: '#EC4899', icon: 'Sparkles', type: 'expense',
-      subs: ['Haircut & Salon', 'Cosmetics', 'Skincare', 'Spa & Massage']
+      subs: [
+        'Haircut & Salon', 'Cosmetics & Makeup', 'Skincare & Creams', 'Spa & Massage', 
+        'Toiletries & Hygiene', 'Shaving & Grooming', 'Perfumes & Deodorants', 'Nail Care', 
+        'Oral Care', 'Soaps & Body Wash', 'Shampoo & Conditioner', 'Waxing & Threading'
+      ]
     },
     {
       name: 'Kids & Family', color: '#F97316', icon: 'Baby', type: 'expense',
-      subs: ['Childcare', 'Baby Supplies', 'School Activities', 'Toys & Games']
+      subs: [
+        'Childcare & Daycare', 'Baby Supplies & Formula', 'School Activities', 'Toys & Games', 
+        'Baby Food', 'Diapers & Wipes', 'Pocket Money', 'Kids Clothing', 'School Uniform', 
+        'School Bus Fare', 'Kids Vaccinations', 'Birthday Parties'
+      ]
     },
     {
       name: 'Subscriptions', color: '#6366F1', icon: 'Repeat', type: 'expense',
-      subs: ['Apps & Software', 'Newspapers & Magazines', 'Cloud Storage', 'Membership Fees']
+      subs: ['Apps & Software', 'Newspapers & Magazines', 'Cloud Storage', 'Membership Fees', 'Streaming (Netflix/Spotify)', 'SaaS Subscriptions']
     },
     {
       name: 'Charity & Zakat', color: '#10B981', icon: 'Heart', type: 'expense',
-      subs: ['Zakat', 'Sadaqah', 'NGO Donations', 'Food Aid']
+      subs: ['Zakat', 'Sadaqah', 'NGO Donations', 'Food Aid', 'Mosque Donation', 'Fitrana', 'Kafarah', 'Helping the Needy']
     },
     {
       name: 'Rental Income', color: '#14B8A6', icon: 'Building2', type: 'income',
-      subs: ['Residential Rent', 'Commercial Rent', 'Shop Rent']
+      subs: ['Residential Rent', 'Commercial Rent', 'Shop Rent', 'Parking Space Rent', 'Equipment Lease']
     },
     {
       name: 'Side Income', color: '#F59E0B', icon: 'Zap', type: 'income',
-      subs: ['Reselling', 'Content Creation', 'Tutoring', 'Commission']
+      subs: ['Reselling', 'Content Creation', 'Tutoring', 'Commission', 'Affiliate Marketing', 'Ad Revenue']
     },
     {
       name: 'Pets', color: '#F97316', icon: 'PawPrint', type: 'expense',
-      subs: ['Vet & Medicine', 'Pet Food', 'Pet Accessories', 'Pet Grooming']
+      subs: [
+        'Vet & Medicine', 'Pet Food & Treats', 'Pet Accessories', 'Pet Grooming', 
+        'Pet Toys', 'Pet Training', 'Pet Boarding & Sitting', 'Litter & Cleaning', 'Pet Adoption'
+      ]
     },
     {
       name: 'Events & Celebrations', color: '#EC4899', icon: 'PartyPopper', type: 'expense',
-      subs: ['Wedding', 'Birthday Party', 'Religious Event', 'Anniversary', 'Graduation']
+      subs: ['Wedding', 'Birthday Party', 'Religious Event', 'Anniversary', 'Graduation', 'Holiday Gifts', 'Family Get-together']
     },
     {
       name: 'Repairs & Maintenance', color: '#78716C', icon: 'Wrench', type: 'expense',
-      subs: ['Home Repair', 'Appliance Repair', 'Plumbing', 'Electrical Work']
+      subs: ['Home Repair', 'Appliance Repair', 'Plumbing', 'Electrical Work', 'AC Service / Repair', 'Painting & Renovation', 'Carpenter Services']
     },
   ];
 
@@ -460,18 +493,15 @@ async function seedMissingCategories(db) {
   }
 
   const extraSubs = [
-    { parentName: 'Food & Drink', subs: ['Takeaway', 'Bakery', 'Coffee & Tea', 'Home Cooking'] },
-    { parentName: 'Transportation', subs: ['Car Wash', 'Driving License', 'Vehicle Tax'] },
-    { parentName: 'Housing & Utilities', subs: ['Mobile Phone Bill', 'Security & CCTV', 'Furniture'] },
-    { parentName: 'Entertainment', subs: ['Sports Events', 'Books & Reading', 'Board Games'] },
-    { parentName: 'Shopping', subs: ['Accessories', 'Luxury Items', 'Stationery', 'Toys'] },
-    { parentName: 'Health & Personal', subs: ['Dental', 'Eye Care', 'Mental Health', 'Vitamins'] },
-    { parentName: 'Financial', subs: ['Loan Payment', 'Investment', 'Savings Transfer', 'Credit Card'] },
-    { parentName: 'Employment', subs: ['Part-time Job', 'Freelance Payment'] },
-    { parentName: 'Other Income', subs: ['Cashback', 'Government Benefits', 'Insurance Claim', 'Prize Money'] },
-    { parentName: 'Transportation', subs: ['Bike & Motorcycle', 'Flight Ticket'] },
-    { parentName: 'Shopping', subs: ['Online Shopping', 'Books'] },
-    { parentName: 'Health & Personal', subs: ['Blood Tests', 'Hospital Visit'] },
+    { parentName: 'Food & Drink', subs: ['Takeaway', 'Bakery', 'Coffee & Tea', 'Home Cooking', 'Juice Bar', 'Snacks', 'Ice Cream', 'Protein Shakes', 'Fruits & Vegetables', 'Milk & Dairy', 'Meat & Seafood', 'Mineral Water', 'Spices & Condiments', 'Food Delivery Apps'] },
+    { parentName: 'Transportation', subs: ['Car Wash', 'Driving License', 'Vehicle Tax', 'Bike & Motorcycle', 'Rickshaw / Local Transport', 'Tyre Repair / Puncher', 'Bike Maintenance'] },
+    { parentName: 'Housing & Utilities', subs: ['Mobile Phone Bill', 'Security & CCTV', 'Furniture', 'Pest Control', 'Cleaning Supplies', 'Maid / Cook Salary', 'LPG Gas Cylinder', 'Garbage Collection Fee', 'Society Maintenance', 'Generator Fuel', 'Laundry & Dry Cleaning'] },
+    { parentName: 'Entertainment', subs: ['Sports Events', 'Books & Reading', 'Board Games', 'Amusement Park', 'Theme Park', 'Photography', 'Arcade', 'Weekend Outing', 'Movie Tickets', 'Video Games'] },
+    { parentName: 'Shopping', subs: ['Accessories', 'Luxury Items', 'Online Shopping', 'Bags & Wallets', 'Clothing & Apparel', 'Kitchenware & Utensils', 'Gifts & Souvenirs', 'Superstore Shopping'] },
+    { parentName: 'Health & Personal', subs: ['Dental', 'Eye Care', 'Mental Health', 'Vitamins', 'Blood Tests', 'Hospital Visit', 'Vaccination', 'Lab Tests', 'Doctor Consultation'] },
+    { parentName: 'Financial', subs: ['Investment', 'Savings Transfer', 'Credit Card', 'Bank Charges', 'ATM Withdrawal', 'Money Transfer', 'Taxes & Duties', 'Mobile Wallet Transfer', 'Crypto Purchases'] },
+    { parentName: 'Employment', subs: ['Part-time Job', 'Freelance Payment', 'Salary Bonus', 'Overtime Allowance'] },
+    { parentName: 'Other Income', subs: ['Cashback', 'Government Benefits', 'Insurance Claim', 'Prize Money', 'Refund', 'Interest', 'Crypto Earnings', 'Gifts & Eidi'] },
   ];
 
   for (const { parentName, subs } of extraSubs) {

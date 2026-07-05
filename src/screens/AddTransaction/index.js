@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform,
   TouchableWithoutFeedback, Keyboard, ActivityIndicator, Pressable,
-  Modal, TouchableOpacity
+  Modal, TouchableOpacity, TextInput
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Icons from 'lucide-react-native';
@@ -241,6 +241,7 @@ const AddTransaction = ({ navigation, route }) => {
   const [date, setDate] = useState(editTransaction?.date ? new Date(editTransaction.date) : new Date());
   const [showPicker, setShowPicker] = useState(false);
   const [pickerMode, setPickerMode] = useState('date');
+  const [categorySearch, setCategorySearch] = useState('');
 
   useEffect(() => {
     navigation.setOptions({ title: isEdit ? 'Edit Record' : 'Add Record' });
@@ -305,6 +306,10 @@ const AddTransaction = ({ navigation, route }) => {
       Alert.alert('No Category', 'Please select a category.');
       return;
     }
+    if (insufficientFunds) {
+      Alert.alert('Insufficient Balance', `This account only has ${Number(accountBalance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}. Reduce the amount or select a different account.`);
+      return;
+    }
     setLoading(true);
     try {
       if (!userId) { Alert.alert('Error', 'You must be logged in.'); return; }
@@ -325,7 +330,7 @@ const AddTransaction = ({ navigation, route }) => {
         result = await transactionService.addTransaction(transactionData);
       }
       // Fire-and-forget: generate notifications after every save (budget alerts, spending spikes, etc.)
-      generateNotifications(userId).catch(() => {});
+      generateNotifications(userId).catch(() => { });
       if (result?.queued) {
         Alert.alert('Saved Offline', 'Your record was saved locally and will sync when internet returns.');
       }
@@ -357,11 +362,19 @@ const AddTransaction = ({ navigation, route }) => {
 
   const showPageInfo = () => Alert.alert('About This Page', 'Record a new expense or income. Choose a category, account, and date — your balance updates automatically.');
 
+  /* ── balance validation ─────────────────────────────────────────── */
+  const parsedAmount = parseFloat(form.amount) || 0;
+  const isExpense = form.type === 'expense';
+  const hasRealAccount = selectedAccount?.id && selectedAccount.id !== '__cash__';
+  const accountBalance = selectedAccount?.balance != null ? Number(selectedAccount.balance) : null;
+  const insufficientFunds = isExpense && hasRealAccount && accountBalance !== null && parsedAmount > accountBalance;
+  const projectedBalance = accountBalance !== null ? accountBalance - parsedAmount : null;
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
+          <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}>
 
             {/* Info */}
             <TouchableOpacity onPress={showPageInfo} style={{ alignSelf: 'flex-end', padding: 8, marginBottom: 4 }}>
@@ -393,6 +406,18 @@ const AddTransaction = ({ navigation, route }) => {
                 onChangeText={(val) => updateFormField('amount', val)}
               />
             </View>
+
+            {insufficientFunds && (
+              <View style={{ backgroundColor: COLORS.error + '18', borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: COLORS.error + '44', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Icons.AlertTriangle color={COLORS.error} size={18} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: COLORS.error, fontSize: 12, fontWeight: '700' }}>Insufficient balance</Text>
+                  <Text style={{ color: COLORS.error, fontSize: 11, marginTop: 2 }}>
+                    Available: {Number(accountBalance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} · Required: {parsedAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </Text>
+                </View>
+              </View>
+            )}
 
             {/* Title */}
             <AppInput label="Title" placeholder="e.g. Grocery Shop" value={form.title} onChangeText={(val) => updateFormField('title', val)} />
@@ -436,9 +461,16 @@ const AddTransaction = ({ navigation, route }) => {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                 <Text style={styles.label}>Payment Source</Text>
                 {selectedAccount && selectedAccount.id !== '__cash__' && selectedAccount.balance != null && (
-                  <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>
-                    Bal: {Number(selectedAccount.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </Text>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>
+                      Bal: {Number(selectedAccount.balance || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </Text>
+                    {isExpense && parsedAmount > 0 && accountBalance !== null && (
+                      <Text style={{ color: insufficientFunds ? COLORS.error : COLORS.accent, fontSize: 11, fontWeight: '700', marginTop: 2 }}>
+                        After: {projectedBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </Text>
+                    )}
+                  </View>
                 )}
               </View>
               <Pressable
@@ -505,7 +537,7 @@ const AddTransaction = ({ navigation, route }) => {
               style={styles.textArea}
             />
 
-            <AppButton title={isEdit ? 'Update Record' : 'Save Transaction'} onPress={handleSave} loading={loading} style={{ marginTop: 20, marginBottom: insets.bottom + 20 }} />
+            <AppButton title={isEdit ? 'Update Record' : 'Save Transaction'} onPress={handleSave} loading={loading} disabled={insufficientFunds} style={{ marginTop: 20, marginBottom: insets.bottom + 20 }} />
           </ScrollView>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
@@ -513,7 +545,7 @@ const AddTransaction = ({ navigation, route }) => {
       {/* Account Picker Modal */}
       <Modal visible={showAccountPicker} transparent animationType="slide" onRequestClose={() => setShowAccountPicker(false)}>
         <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={() => setShowAccountPicker(false)}>
-          <Pressable style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28 }} onPress={() => {}}>
+          <Pressable style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28 }} onPress={() => { }}>
             {/* Handle */}
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 }} />
 
@@ -574,9 +606,9 @@ const AddTransaction = ({ navigation, route }) => {
       </Modal>
 
       {/* Category Picker Modal */}
-      <Modal visible={showCategoryModal} transparent animationType="slide" onRequestClose={() => setShowCategoryModal(false)}>
-        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={() => setShowCategoryModal(false)}>
-          <Pressable style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '85%' }} onPress={() => {}}>
+      <Modal visible={showCategoryModal} transparent animationType="slide" onRequestClose={() => { setShowCategoryModal(false); setCategorySearch(''); }}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={() => { setShowCategoryModal(false); setCategorySearch(''); }}>
+          <Pressable style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '85%' }} onPress={() => { }}>
             {/* Handle */}
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 }} />
 
@@ -596,39 +628,134 @@ const AddTransaction = ({ navigation, route }) => {
                     <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '600' }}>← Groups</Text>
                   </Pressable>
                 )}
-                <Pressable onPress={() => setShowCategoryModal(false)} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <Pressable onPress={() => { setShowCategoryModal(false); setCategorySearch(''); }} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' }}>
                   <Icons.X color={COLORS.textSecondary} size={16} />
                 </Pressable>
               </View>
             </View>
 
+            {/* Search Input (for sub-categories only) — visible only for universal search */}
+            {!categoryModalParent && (
+              <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.inputBg, borderRadius: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: COLORS.border }}>
+                  <Icons.Search color={COLORS.textSecondary} size={18} />
+                  <TextInput
+                    placeholder="Search sub-categories..."
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={categorySearch}
+                    onChangeText={setCategorySearch}
+                    style={{ flex: 1, marginLeft: 8, paddingVertical: 10, color: COLORS.text }}
+                  />
+                  {categorySearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setCategorySearch('')}>
+                      <Icons.X color={COLORS.textSecondary} size={16} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+
             <ScrollView contentContainerStyle={{ padding: 16 }}>
               {!categoryModalParent ? (
-                // Step 1: parent grid
-                <View style={styles.broadGrid}>
-                  {filteredCategories.filter(c => !c.parent_id).map(parent => (
-                    <Pressable key={parent.id} style={[styles.broadCard, { borderBottomColor: parent.color }]} onPress={() => setCategoryModalParent(parent)}>
-                      <View style={[styles.broadIconBox, { backgroundColor: parent.color + '10' }]}>
-                        {(() => { const IC = Icons[parent.icon] || Icons.Circle; return <IC size={24} color={parent.color} />; })()}
-                      </View>
-                      <Text style={styles.broadName}>{parent.name}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+                categorySearch ? (
+                  // Search results across ALL sub-categories when parent is not selected
+                  <View style={styles.categoryList}>
+                    {(() => {
+                      const filtered = filteredCategories
+                        .filter(c => c.parent_id) // Must be a sub-category
+                        .filter(c => c.name.toLowerCase().includes(categorySearch.toLowerCase()));
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <View style={{ flex: 1, width: '100%', alignItems: 'center', padding: 24 }}>
+                            <Icons.AlertCircle color={COLORS.textSecondary} size={28} style={{ marginBottom: 8 }} />
+                            <Text style={{ color: COLORS.textSecondary, fontSize: 14 }}>No matching sub-categories found</Text>
+                          </View>
+                        );
+                      }
+                      
+                      return filtered.map(cat => {
+                        // Find parent category to get its color
+                        const parent = categories.find(p => p.id === cat.parent_id) || {};
+                        return (
+                          <Pressable
+                            key={cat.id}
+                            style={[
+                              styles.categoryChip,
+                              selectedCategory?.id === cat.id && {
+                                backgroundColor: (parent.color || COLORS.primary) + '40',
+                                borderColor: parent.color || COLORS.primary,
+                              },
+                            ]}
+                            onPress={() => {
+                              setSelectedCategory(cat);
+                              setShowCategoryModal(false);
+                              setCategoryModalParent(null);
+                              setCategorySearch('');
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.categoryChipText,
+                                selectedCategory?.id === cat.id && {
+                                  color: parent.color || COLORS.primary,
+                                  fontWeight: 'bold',
+                                },
+                              ]}
+                            >
+                              {cat.name}
+                              <Text style={{ fontSize: 10, color: COLORS.textSecondary, fontWeight: 'normal' }}>
+                                {' '}
+                                ({parent.name || 'Other'})
+                              </Text>
+                            </Text>
+                          </Pressable>
+                        );
+                      });
+                    })()}
+                  </View>
+                ) : (
+                  // Step 1: parent grid (no search)
+                  <View style={styles.broadGrid}>
+                    {filteredCategories
+                      .filter(c => !c.parent_id)
+                      .map(parent => (
+                        <Pressable key={parent.id} style={[styles.broadCard, { borderBottomColor: parent.color }]} onPress={() => { setCategoryModalParent(parent); setCategorySearch(''); }}>
+                          <View style={[styles.broadIconBox, { backgroundColor: parent.color + '10' }]}>
+                            {(() => { const IC = Icons[parent.icon] || Icons.Circle; return <IC size={24} color={parent.color} />; })()}
+                          </View>
+                          <Text style={styles.broadName}>{parent.name}</Text>
+                        </Pressable>
+                      ))}
+                  </View>
+                )
               ) : (
-                // Step 2: sub-category chips
+                // Step 2: sub-category chips (no search filter inside)
                 <View style={styles.categoryList}>
-                  {filteredCategories.filter(c => c.parent_id === categoryModalParent.id).map(cat => (
-                    <Pressable
-                      key={cat.id}
-                      style={[styles.categoryChip, selectedCategory?.id === cat.id && { backgroundColor: categoryModalParent.color + '40', borderColor: categoryModalParent.color }]}
-                      onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); setCategoryModalParent(null); }}
-                    >
-                      <Text style={[styles.categoryChipText, selectedCategory?.id === cat.id && { color: categoryModalParent.color, fontWeight: 'bold' }]}>
-                        {cat.name}
-                      </Text>
-                    </Pressable>
-                  ))}
+                  {(() => {
+                    const subs = filteredCategories.filter(c => c.parent_id === categoryModalParent.id);
+                    
+                    if (subs.length === 0) {
+                      return (
+                        <View style={{ flex: 1, width: '100%', alignItems: 'center', padding: 24 }}>
+                          <Icons.AlertCircle color={COLORS.textSecondary} size={28} style={{ marginBottom: 8 }} />
+                          <Text style={{ color: COLORS.textSecondary, fontSize: 14 }}>No sub-categories available</Text>
+                        </View>
+                      );
+                    }
+                    
+                    return subs.map(cat => (
+                      <Pressable
+                        key={cat.id}
+                        style={[styles.categoryChip, selectedCategory?.id === cat.id && { backgroundColor: categoryModalParent.color + '40', borderColor: categoryModalParent.color }]}
+                        onPress={() => { setSelectedCategory(cat); setShowCategoryModal(false); setCategoryModalParent(null); setCategorySearch(''); }}
+                      >
+                        <Text style={[styles.categoryChipText, selectedCategory?.id === cat.id && { color: categoryModalParent.color, fontWeight: 'bold' }]}>
+                          {cat.name}
+                        </Text>
+                      </Pressable>
+                    ));
+                  })()}
                 </View>
               )}
             </ScrollView>

@@ -474,6 +474,58 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     fontWeight: '700',
   },
 
+  /* ── Installment info row (on card) ──────────────────────────────── */
+  installmentInfoRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  installmentInfoBlock: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+  },
+  installmentInfoLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 2,
+  },
+  installmentInfoValue: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  /* ── Real-time calc row (in modal) ───────────────────────────────── */
+  calcRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary + '12',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  calcLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  calcValue: {
+    color: COLORS.primary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
   /* ── Save button ────────────────────────────────────────────────── */
   saveBtn: {
     borderRadius: 14,

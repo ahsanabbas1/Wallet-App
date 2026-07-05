@@ -58,7 +58,7 @@ const ExpenseTracker = ({ navigation }) => {
         customStartDate,
         customEndDate,
       });
-      setTransactions(trans);
+      setTransactions(trans.filter(t => t.type !== 'transfer'));
 
       // Calculate totals
       const income = trans

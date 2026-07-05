@@ -139,7 +139,7 @@ export const dashboardService = {
     });
 
     return {
-      recentTransactions: transactions.filter(t => !isLoan(t)).slice(0, 5),
+      recentTransactions: transactions.filter(t => !isLoan(t) && t.type !== 'transfer').slice(0, 5),
       recentLoans:        allLoans.filter(l => l.remaining > 0).slice(0, 3),
       recentPlanned:      plannedData,
       totals: {

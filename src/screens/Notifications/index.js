@@ -6,9 +6,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Menu, Bell, BellOff, CheckCheck, Trash2,
+  Menu, Bell, BellOff, CheckCheck, Trash2, Archive,
   CalendarClock, PieChart, Target, TrendingUp,
-  AlertTriangle, AlertOctagon, ArrowUpRight, Clock,
+  AlertTriangle, AlertOctagon, AlertCircle, ArrowUpRight, Clock,
   ChevronDown, ChevronUp, Settings, RefreshCw, Check, Info,
 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
@@ -20,7 +20,7 @@ import {
   NOTIFICATION_TYPES, NOTIFICATION_META, DEFAULT_PREFERENCES,
   getNotifications, getPreferences, savePreferences,
   markAsRead, markAllAsRead, deleteNotification, clearAllNotifications,
-  generateNotifications,
+  generateNotifications, getArchivedNotifications, archiveOldNotifications,
 } from '../../services/notificationService';
 
 /* ─── Icon map ───────────────────────────────────────────────────────────── */
@@ -34,6 +34,8 @@ const TYPE_ICONS = {
   [NOTIFICATION_TYPES.SPENDING_SPIKE]:    TrendingUp,
   [NOTIFICATION_TYPES.NEGATIVE_BALANCE]:  AlertOctagon,
   [NOTIFICATION_TYPES.LARGE_TRANSACTION]: ArrowUpRight,
+  [NOTIFICATION_TYPES.LOAN_DUE]:          AlertCircle,
+  [NOTIFICATION_TYPES.LOAN_OVERDUE]:      AlertOctagon,
 };
 
 /* ─── Relative time formatter ────────────────────────────────────────────── */
@@ -71,6 +73,8 @@ export default function Notifications() {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [archived,      setArchived]      = useState([]);
+  const [archivedCount, setArchivedCount] = useState(0);
   const [prefs,         setPrefs]         = useState(DEFAULT_PREFERENCES);
   const [saving,        setSaving]        = useState(false);
   const [expandedPref,  setExpandedPref]  = useState(null);
@@ -82,11 +86,14 @@ export default function Notifications() {
     try {
       // Generate fresh notifications first, then fetch
       await generateNotifications(userId);
-      const [notifs, userPrefs] = await Promise.all([
+      const [notifs, archivedNotifs, userPrefs] = await Promise.all([
         getNotifications(userId),
+        getArchivedNotifications(userId, 100),
         getPreferences(userId),
       ]);
       setNotifications(notifs);
+      setArchived(archivedNotifs);
+      setArchivedCount(archivedNotifs.length);
       setPrefs(userPrefs);
     } catch (e) {
       console.error('Notification load error:', e);
@@ -124,13 +131,14 @@ export default function Notifications() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 
-  const handleClearAll = () => {
-    Alert.alert('Clear All', 'Delete all notifications?', [
+  const handleArchiveAll = () => {
+    Alert.alert('Archive All', 'Move all notifications to archive?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Clear All', style: 'destructive',
+        text: 'Archive All', style: 'destructive',
         onPress: async () => {
           await clearAllNotifications(userId);
+          setArchivedCount(prev => prev + notifications.length);
           setNotifications([]);
         },
       },
@@ -183,8 +191,13 @@ export default function Notifications() {
           {unread > 0 && <View style={s.tabBadge}><Text style={s.tabBadgeText}>{unread}</Text></View>}
         </Pressable>
         <Pressable style={[s.tab, activeTab === 1 && s.tabActive]} onPress={() => setActiveTab(1)}>
-          <Settings color={activeTab === 1 ? COLORS.primary : COLORS.textSecondary} size={16} />
-          <Text style={[s.tabText, activeTab === 1 && s.tabTextActive]}>Preferences</Text>
+          <Archive color={activeTab === 1 ? COLORS.primary : COLORS.textSecondary} size={16} />
+          <Text style={[s.tabText, activeTab === 1 && s.tabTextActive]}>Archive</Text>
+          {archivedCount > 0 && <View style={[s.tabBadge, { backgroundColor: COLORS.textSecondary }]}><Text style={s.tabBadgeText}>{archivedCount}</Text></View>}
+        </Pressable>
+        <Pressable style={[s.tab, activeTab === 2 && s.tabActive]} onPress={() => setActiveTab(2)}>
+          <Settings color={activeTab === 2 ? COLORS.primary : COLORS.textSecondary} size={16} />
+          <Text style={[s.tabText, activeTab === 2 && s.tabTextActive]}>Preferences</Text>
         </Pressable>
       </View>
 
@@ -215,9 +228,9 @@ export default function Notifications() {
                       <Text style={s.actionBtnText}>Mark all read</Text>
                     </Pressable>
                   )}
-                  <Pressable style={[s.actionBtn, { marginLeft: 'auto', borderColor: COLORS.error + '40' }]} onPress={handleClearAll}>
-                    <Trash2 color={COLORS.error} size={14} />
-                    <Text style={[s.actionBtnText, { color: COLORS.error }]}>Clear all</Text>
+                  <Pressable style={[s.actionBtn, { marginLeft: 'auto', borderColor: COLORS.textSecondary + '40' }]} onPress={handleArchiveAll}>
+                    <Archive color={COLORS.textSecondary} size={14} />
+                    <Text style={[s.actionBtnText, { color: COLORS.textSecondary }]}>Archive all</Text>
                   </Pressable>
                 </View>
               )}
@@ -257,8 +270,34 @@ export default function Notifications() {
             </ScrollView>
           )}
 
-          {/* ── PREFERENCES TAB ────────────────────────────────────────── */}
+          {/* ── ARCHIVE TAB ───────────────────────────────────────────── */}
           {activeTab === 1 && (
+            <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+              <View style={s.liveRow}>
+                <Archive color={COLORS.textSecondary} size={14} />
+                <Text style={s.liveText}>{archivedCount} archived notification{archivedCount !== 1 ? 's' : ''}</Text>
+              </View>
+
+              {archived.length === 0 ? (
+                <View style={s.emptyState}>
+                  <View style={s.emptyIconWrap}>
+                    <Archive color={COLORS.textSecondary} size={40} />
+                  </View>
+                  <Text style={s.emptyTitle}>Archive is empty</Text>
+                  <Text style={s.emptyBody}>
+                    Old notifications are automatically moved here after 30 days. You can also manually archive notifications.
+                  </Text>
+                </View>
+              ) : (
+                archived.map(n => (
+                  <NotificationCard key={n.id} notification={n} onRead={() => {}} onDelete={() => {}} archived />
+                ))
+              )}
+            </ScrollView>
+          )}
+
+          {/* ── PREFERENCES TAB ────────────────────────────────────────── */}
+          {activeTab === 2 && (
             <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
               <Text style={s.prefHint}>
                 Configure which alerts you receive. Changes apply the next time notifications are generated.
@@ -357,7 +396,7 @@ export default function Notifications() {
 
 /* ─── NotificationCard ───────────────────────────────────────────────────── */
 
-function NotificationCard({ notification: n, onRead, onDelete }) {
+function NotificationCard({ notification: n, onRead, onDelete, archived: isArchived }) {
   const { colors: COLORS } = useTheme();
   const s = useMemo(() => makeS(COLORS), [COLORS]);
   const meta = NOTIFICATION_META[n.type] || { color: COLORS.primary };
@@ -365,30 +404,32 @@ function NotificationCard({ notification: n, onRead, onDelete }) {
 
   return (
     <Pressable
-      style={[s.card, !n.is_read && { borderLeftWidth: 3, borderLeftColor: meta.color, backgroundColor: meta.color + '12' }]}
-      onPress={() => !n.is_read && onRead(n.id)}
+      style={[s.card, !n.is_read && !isArchived && { borderLeftWidth: 3, borderLeftColor: meta.color, backgroundColor: meta.color + '12' }]}
+      onPress={() => !n.is_read && !isArchived && onRead(n.id)}
     >
       <View style={[s.cardIcon, { backgroundColor: meta.color + '20' }]}>
         <Icon color={meta.color} size={20} />
-        {!n.is_read && <View style={[s.cardDot, { backgroundColor: meta.color }]} />}
+        {!n.is_read && !isArchived && <View style={[s.cardDot, { backgroundColor: meta.color }]} />}
       </View>
 
       <View style={s.cardBody}>
         <View style={s.cardTitleRow}>
-          <Text style={[s.cardTitle, !n.is_read && { color: COLORS.text, fontWeight: '700' }]} numberOfLines={1}>
+          <Text style={[s.cardTitle, !n.is_read && !isArchived && { color: COLORS.text, fontWeight: '700' }]} numberOfLines={1}>
             {n.title}
           </Text>
           <Text style={s.cardTime}>{relativeTime(n.created_at)}</Text>
         </View>
         <Text style={s.cardText} numberOfLines={3}>{n.body}</Text>
-        {!n.is_read && (
+        {!n.is_read && !isArchived && (
           <Text style={[s.tapHint, { color: meta.color }]}>Tap to mark as read</Text>
         )}
       </View>
 
-      <Pressable style={s.deleteBtn} onPress={() => onDelete(n.id)} hitSlop={8}>
-        <Trash2 color="rgba(255,255,255,0.2)" size={14} />
-      </Pressable>
+      {!isArchived && (
+        <Pressable style={s.deleteBtn} onPress={() => onDelete(n.id)} hitSlop={8}>
+          <Trash2 color="rgba(255,255,255,0.2)" size={14} />
+        </Pressable>
+      )}
     </Pressable>
   );
 }

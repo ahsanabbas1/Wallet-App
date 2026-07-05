@@ -15,19 +15,20 @@ import HeaderMenu from '../../components/HeaderMenu';
 import HeaderPlusButton from '../../components/HeaderPlusButton';
 import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
-import { useAuth }   from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
-import { useTheme }  from '../../context/ThemeContext';
+import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
 import { loanService } from '../../services/loanService';
+import { accountService } from '../../services/accountService';
 
 /* ─── helpers ────────────────────────────────────────────────────────── */
 
-const fmt  = (n, cur) => `${cur} ${(Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+const fmt = (n, cur) => `${cur} ${(Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 const initials = (name) => (name || '?').split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-const fmtDate  = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+const fmtDate = (d) => new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
-const GIVEN    = 'given';
+const GIVEN = 'given';
 const RECEIVED = 'received';
 
 /* ─── Progress bar ────────────────────────────────────────────────────── */
@@ -53,48 +54,61 @@ const ProgressBar = ({ paid, total, color, styles, COLORS }) => {
 ═══════════════════════════════════════════════════════════════════════ */
 
 const LoanManagement = () => {
-  const { openDrawer }          = useDrawer();
-  const { userId }              = useAuth();
-  const { currency }            = useProfile();
-  const { colors: COLORS }      = useTheme();
-  const styles                  = useMemo(() => makeStyles(COLORS), [COLORS]);
-  const insets                  = useSafeAreaInsets();
+  const { openDrawer } = useDrawer();
+  const { userId } = useAuth();
+  const { currency } = useProfile();
+  const { colors: COLORS } = useTheme();
+  const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
+  const insets = useSafeAreaInsets();
 
   /* ── Data ───────────────────────────────────────────────────────── */
-  const [loans,      setLoans]      = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [statusTab,  setStatusTab]  = useState('active'); // 'active' | 'archive'
-  const [tab,        setTab]        = useState('all');
-  const [expanded,   setExpanded]   = useState(null);
+  const [loans, setLoans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [statusTab, setStatusTab] = useState('active'); // 'active' | 'archive'
+  const [tab, setTab] = useState('all');
+  const [expanded, setExpanded] = useState(null);
 
   /* ── Add-loan modal ─────────────────────────────────────────────── */
-  const [showAddLoan,    setShowAddLoan]    = useState(false);
-  const [editingLoan,    setEditingLoan]    = useState(null);
-  const [loanType,       setLoanType]       = useState(GIVEN);
-  const [personName,     setPersonName]     = useState('');
-  const [loanAmount,     setLoanAmount]     = useState('');
-  const [loanDate,       setLoanDate]       = useState(new Date());
-  const [loanNotes,      setLoanNotes]      = useState('');
-  const [showLoanDate,   setShowLoanDate]   = useState(false);
-  const [savingLoan,     setSavingLoan]     = useState(false);
+  const [showAddLoan, setShowAddLoan] = useState(false);
+  const [editingLoan, setEditingLoan] = useState(null);
+  const [loanType, setLoanType] = useState(GIVEN);
+  const [personName, setPersonName] = useState('');
+  const [loanAmount, setLoanAmount] = useState('');
+  const [loanDate, setLoanDate] = useState(new Date());
+  const [loanDueDate, setLoanDueDate] = useState(new Date());
+  const [loanNotes, setLoanNotes] = useState('');
+  const [showLoanDate, setShowLoanDate] = useState(false);
+  const [showLoanDueDate, setShowLoanDueDate] = useState(false);
+  const [savingLoan, setSavingLoan] = useState(false);
+  const [accounts, setAccounts] = useState([]);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [repaymentType, setRepaymentType] = useState('single'); // 'single' or 'multi'
+  const [defineBy, setDefineBy] = useState('count'); // 'count' or 'amount'
+  const [numInstallments, setNumInstallments] = useState('');
+  const [installmentAmount, setInstallmentAmount] = useState('');
+  const [installmentInterval, setInstallmentInterval] = useState('monthly');
 
   /* ── Add-payment modal ──────────────────────────────────────────── */
-  const [showAddPayment,    setShowAddPayment]    = useState(false);
-  const [paymentLoan,       setPaymentLoan]       = useState(null);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [paymentLoan, setPaymentLoan] = useState(null);
   const [editingPaymentItem, setEditingPaymentItem] = useState(null);
-  const [paymentAmount,     setPaymentAmount]     = useState('');
-  const [paymentDate,       setPaymentDate]       = useState(new Date());
-  const [paymentNotes,      setPaymentNotes]      = useState('');
-  const [showPayDate,       setShowPayDate]       = useState(false);
-  const [savingPayment,     setSavingPayment]     = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date());
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [showPayDate, setShowPayDate] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   /* ── Fetch ──────────────────────────────────────────────────────── */
   const fetchLoans = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const enriched = await loanService.getLoans(userId);
+      const [enriched, accts] = await Promise.all([
+        loanService.getLoans(userId),
+        accountService.getAccounts(userId).catch(() => []),
+      ]);
       setLoans(enriched);
+      setAccounts(accts);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -106,14 +120,14 @@ const LoanManagement = () => {
 
   /* ── Summary figures (based on statusTab) ──────────────────────── */
   const summary = useMemo(() => {
-    const pool     = loans.filter(l => statusTab === 'active' ? !l.is_settled : l.is_settled);
-    const given    = pool.filter(l => l.type === GIVEN);
+    const pool = loans.filter(l => statusTab === 'active' ? !l.is_settled : l.is_settled);
+    const given = pool.filter(l => l.type === GIVEN);
     const received = pool.filter(l => l.type === RECEIVED);
     return {
-      totalGiven:         given.reduce   ((s, l) => s + parseFloat(l.total_amount), 0),
-      totalReceived:      received.reduce((s, l) => s + parseFloat(l.total_amount), 0),
-      remainingGiven:     given.reduce   ((s, l) => s + l.remaining, 0),
-      remainingReceived:  received.reduce((s, l) => s + l.remaining, 0),
+      totalGiven: given.reduce((s, l) => s + parseFloat(l.total_amount), 0),
+      totalReceived: received.reduce((s, l) => s + parseFloat(l.total_amount), 0),
+      remainingGiven: given.reduce((s, l) => s + l.remaining, 0),
+      remainingReceived: received.reduce((s, l) => s + l.remaining, 0),
     };
   }, [loans, statusTab]);
 
@@ -124,38 +138,91 @@ const LoanManagement = () => {
       .filter(l => tab === 'all' || l.type === tab);
   }, [loans, statusTab, tab]);
 
-  const activeCount  = useMemo(() => loans.filter(l => !l.is_settled).length, [loans]);
-  const archiveCount = useMemo(() => loans.filter(l =>  l.is_settled).length, [loans]);
+  const activeCount = useMemo(() => loans.filter(l => !l.is_settled).length, [loans]);
+  const archiveCount = useMemo(() => loans.filter(l => l.is_settled).length, [loans]);
+
+  /* ── Real-time calc for modal ────────────────────────────────────── */
+  const calculatedInstallmentAmount = useMemo(() => {
+    if (repaymentType !== 'multi' || defineBy !== 'count') return null;
+    const amt = parseFloat(loanAmount);
+    const count = parseInt(numInstallments);
+    if (!amt || !count || count <= 0) return null;
+    return amt / count;
+  }, [loanAmount, numInstallments, repaymentType, defineBy]);
+
+  const calculatedInstallmentCount = useMemo(() => {
+    if (repaymentType !== 'multi' || defineBy !== 'amount') return null;
+    const amt = parseFloat(loanAmount);
+    const instAmt = parseFloat(installmentAmount);
+    if (!amt || !instAmt || instAmt <= 0) return null;
+    return Math.ceil(amt / instAmt);
+  }, [loanAmount, installmentAmount, repaymentType, defineBy]);
+
+  const calcRemainingCount = useMemo(() => {
+    if (repaymentType !== 'multi') return null;
+    const totalInst = defineBy === 'amount'
+      ? calculatedInstallmentCount
+      : parseInt(numInstallments);
+    return totalInst || null;
+  }, [repaymentType, defineBy, calculatedInstallmentCount, numInstallments]);
 
   /* ══ LOAN CRUD ══════════════════════════════════════════════════════ */
 
   const openAddLoan = (loan = null) => {
     setEditingLoan(loan);
-    setLoanType   (loan?.type        || GIVEN);
-    setPersonName (loan?.person_name || '');
-    setLoanAmount (loan ? String(loan.total_amount) : '');
-    setLoanDate   (loan ? new Date(loan.date) : new Date());
-    setLoanNotes  (loan?.notes || '');
+    setLoanType(loan?.type || GIVEN);
+    setPersonName(loan?.person_name || '');
+    setLoanAmount(loan ? String(loan.total_amount) : '');
+    setLoanDate(loan ? new Date(loan.date) : new Date());
+    setLoanDueDate(loan?.due_date ? new Date(loan.due_date) : new Date());
+    setLoanNotes(loan?.notes || '');
+    setSelectedAccount(loan?.account_id ? accounts.find(a => a.id === loan.account_id) : null);
+    setRepaymentType(loan?.is_multi_installment ? 'multi' : 'single');
+    setDefineBy(loan?.define_by || 'count');
+    setNumInstallments(loan?.num_installments ? String(loan.num_installments) : '');
+    setInstallmentAmount(loan?.installment_amount ? String(loan.installment_amount) : '');
+    setInstallmentInterval(loan?.installment_interval || 'monthly');
     setShowAddLoan(true);
   };
 
   const handleSaveLoan = async () => {
-    if (!personName.trim())         return Alert.alert('Missing', 'Enter the person\'s name.');
+    if (!personName.trim()) return Alert.alert('Missing', 'Enter the person\'s name.');
     const amt = parseFloat(loanAmount);
-    if (!amt || amt <= 0)           return Alert.alert('Invalid', 'Enter a valid loan amount.');
+    if (!amt || amt <= 0) return Alert.alert('Invalid', 'Enter a valid loan amount.');
+
+    if (repaymentType === 'multi') {
+      if (defineBy === 'count') {
+        const numInst = parseInt(numInstallments);
+        if (!numInst || numInst < 2) return Alert.alert('Invalid', 'Enter at least 2 installments.');
+      } else {
+        const instAmt = parseFloat(installmentAmount);
+        if (!instAmt || instAmt <= 0) return Alert.alert('Invalid', 'Enter a valid installment amount.');
+        if (instAmt >= amt) return Alert.alert('Invalid', 'Installment amount must be less than total loan amount.');
+      }
+    }
 
     setSavingLoan(true);
     try {
       const payload = {
-        id:           editingLoan?.id,
-        user_id:      userId,
-        type:         loanType,
-        person_name:  personName.trim(),
+        id: editingLoan?.id,
+        user_id: userId,
+        account_id: selectedAccount?.id || null,
+        type: loanType,
+        person_name: personName.trim(),
         total_amount: amt,
-        date:         loanDate.toISOString(),
-        notes:        loanNotes.trim() || null,
-        is_settled:   editingLoan?.is_settled ?? false,
-        created_at:   editingLoan?.created_at,
+        date: loanDate.toISOString(),
+        due_date: loanDueDate.toISOString(),
+        notes: loanNotes.trim() || null,
+        is_settled: editingLoan?.is_settled ?? false,
+        is_multi_installment: repaymentType === 'multi',
+        repayment_type: repaymentType,
+        define_by: repaymentType === 'multi' ? defineBy : null,
+        installment_amount: repaymentType === 'multi' && defineBy === 'amount' ? parseFloat(installmentAmount) : null,
+        num_installments: repaymentType === 'multi'
+          ? (defineBy === 'count' ? parseInt(numInstallments) : null)
+          : null,
+        installment_interval: repaymentType === 'multi' ? installmentInterval : null,
+        created_at: editingLoan?.created_at,
       };
 
       await loanService.saveLoan(payload, !editingLoan);
@@ -174,14 +241,16 @@ const LoanManagement = () => {
       `Delete the loan with ${loan.person_name}? All payments will also be removed.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            await loanService.deleteLoan(userId, loan.id);
-            fetchLoans();
-          } catch (e) {
-            Alert.alert('Error', e.message);
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              await loanService.deleteLoan(userId, loan.id);
+              fetchLoans();
+            } catch (e) {
+              Alert.alert('Error', e.message);
+            }
           }
-        }},
+        },
       ]
     );
   };
@@ -198,21 +267,21 @@ const LoanManagement = () => {
   /* ══ PAYMENT CRUD ═══════════════════════════════════════════════════ */
 
   const openAddPayment = (loan) => {
-    setPaymentLoan       (loan);
+    setPaymentLoan(loan);
     setEditingPaymentItem(null);
-    setPaymentAmount     ('');
-    setPaymentDate       (new Date());
-    setPaymentNotes      ('');
-    setShowAddPayment    (true);
+    setPaymentAmount('');
+    setPaymentDate(new Date());
+    setPaymentNotes('');
+    setShowAddPayment(true);
   };
 
   const openEditPayment = (loan, pay) => {
-    setPaymentLoan       (loan);
+    setPaymentLoan(loan);
     setEditingPaymentItem(pay);
-    setPaymentAmount     (String(pay.amount));
-    setPaymentDate       (new Date(pay.date));
-    setPaymentNotes      (pay.notes || '');
-    setShowAddPayment    (true);
+    setPaymentAmount(String(pay.amount));
+    setPaymentDate(new Date(pay.date));
+    setPaymentNotes(pay.notes || '');
+    setShowAddPayment(true);
   };
 
   const handleSavePayment = async () => {
@@ -227,14 +296,14 @@ const LoanManagement = () => {
       if (editingPaymentItem) {
         await loanService.updatePayment(editingPaymentItem.id, {
           amount: amt,
-          date:   paymentDate.toISOString(),
-          notes:  paymentNotes.trim() || null,
+          date: paymentDate.toISOString(),
+          notes: paymentNotes.trim() || null,
         });
       } else {
         const { isSettling } = await loanService.savePayment(
           {
-            date:   paymentDate.toISOString(),
-            notes:  paymentNotes.trim() || null,
+            date: paymentDate.toISOString(),
+            notes: paymentNotes.trim() || null,
             amount: amt,
           },
           paymentLoan
@@ -254,23 +323,25 @@ const LoanManagement = () => {
     }
   };
 
-  const handleDeletePayment = (paymentId) => {
+  const handleDeletePayment = (paymentId, loan) => {
     Alert.alert('Delete Payment', 'Remove this payment record?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        try {
-          await loanService.deletePayment(paymentId);
-          fetchLoans();
-        } catch (e) {
-          Alert.alert('Error', e.message);
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await loanService.deletePayment(paymentId, loan);
+            fetchLoans();
+          } catch (e) {
+            Alert.alert('Error', e.message);
+          }
         }
-      }},
+      },
     ]);
   };
 
   /* ── Color helpers ──────────────────────────────────────────────── */
   const typeColor = (type) => type === GIVEN ? COLORS.error : COLORS.success;
-  const pctColor  = (pct)  => pct >= 100 ? COLORS.success : pct >= 60 ? COLORS.warning : COLORS.primary;
+  const pctColor = (pct) => pct >= 100 ? COLORS.success : pct >= 60 ? COLORS.warning : COLORS.primary;
 
   const showPageInfo = () => Alert.alert('About This Page', "Track money you've lent or borrowed. Record repayments and mark loans as settled.");
 
@@ -288,8 +359,8 @@ const LoanManagement = () => {
         <Text style={styles.headerTitle}>Loans</Text>
         <HeaderPlusButton onPress={() => openAddLoan()} />
         <HeaderMenu items={[
-          { icon: RefreshCw, label: 'Refresh',        onPress: fetchLoans },
-          { icon: Info,      label: 'About This Page', onPress: showPageInfo },
+          { icon: RefreshCw, label: 'Refresh', onPress: fetchLoans },
+          { icon: Info, label: 'About This Page', onPress: showPageInfo },
         ]} />
       </View>
 
@@ -344,7 +415,7 @@ const LoanManagement = () => {
         {/* ── Status tabs (Active / Archive) ── */}
         <View style={styles.statusTabRow}>
           {[
-            { key: 'active',  label: `Active (${activeCount})` },
+            { key: 'active', label: `Active (${activeCount})` },
             { key: 'archive', label: `Archive (${archiveCount})` },
           ].map(t => (
             <TouchableOpacity
@@ -362,8 +433,8 @@ const LoanManagement = () => {
         {/* ── Type tabs (All / Given / Received) ── */}
         <View style={styles.tabRow}>
           {[
-            { key: 'all',      label: `All (${filteredLoans.length})` },
-            { key: 'given',    label: `Given (${filteredLoans.filter(l => l.type === GIVEN).length})` },
+            { key: 'all', label: `All (${filteredLoans.length})` },
+            { key: 'given', label: `Given (${filteredLoans.filter(l => l.type === GIVEN).length})` },
             { key: 'received', label: `Received (${filteredLoans.filter(l => l.type === RECEIVED).length})` },
           ].map(t => (
             <TouchableOpacity
@@ -397,7 +468,7 @@ const LoanManagement = () => {
           </View>
         ) : (
           filteredLoans.map(loan => {
-            const color  = typeColor(loan.type);
+            const color = typeColor(loan.type);
             const barClr = pctColor(loan.pct);
             const isOpen = expanded === loan.id;
 
@@ -437,7 +508,7 @@ const LoanManagement = () => {
                       onPress={() => setExpanded(isOpen ? null : loan.id)}
                     >
                       {isOpen
-                        ? <ChevronUp   color={COLORS.textSecondary} size={18} />
+                        ? <ChevronUp color={COLORS.textSecondary} size={18} />
                         : <ChevronDown color={COLORS.textSecondary} size={18} />}
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionBtn} onPress={() => openAddLoan(loan)}>
@@ -475,6 +546,31 @@ const LoanManagement = () => {
                   styles={styles}
                   COLORS={COLORS}
                 />
+
+                {/* Next due & remaining installments */}
+                {loan.is_multi_installment && !loan.is_settled && loan.remaining_installments > 0 && (
+                  <View style={styles.installmentInfoRow}>
+                    <View style={styles.installmentInfoBlock}>
+                      <Text style={styles.installmentInfoLabel}>Remaining Inst.</Text>
+                      <Text style={styles.installmentInfoValue}>
+                        {loan.remaining_installments}
+                      </Text>
+                    </View>
+                    <View style={styles.installmentInfoBlock}>
+                      <Text style={styles.installmentInfoLabel}>Next Due</Text>
+                      <Text style={[styles.installmentInfoValue, loan.isOverdue && { color: COLORS.error }]}>
+                        {loan.next_due_date ? fmtDate(loan.next_due_date) : '—'}
+                        {loan.isOverdue ? ' ⚠️' : ''}
+                      </Text>
+                    </View>
+                    {loan.installment_amount > 0 && (
+                      <View style={styles.installmentInfoBlock}>
+                        <Text style={styles.installmentInfoLabel}>Per Inst.</Text>
+                        <Text style={styles.installmentInfoValue}>{fmt(loan.installment_amount, currency)}</Text>
+                      </View>
+                    )}
+                  </View>
+                )}
 
                 {/* Notes */}
                 {loan.notes ? (
@@ -542,7 +638,7 @@ const LoanManagement = () => {
                           </TouchableOpacity>
                           <TouchableOpacity
                             style={styles.paymentDeleteBtn}
-                            onPress={() => handleDeletePayment(pay.id)}
+                            onPress={() => handleDeletePayment(pay.id, loan)}
                           >
                             <Trash2 color={COLORS.error} size={14} />
                           </TouchableOpacity>
@@ -664,6 +760,174 @@ const LoanManagement = () => {
                 />
               )}
 
+              {/* Due Date */}
+              <Text style={styles.fieldLabel}>Due Date (optional)</Text>
+              <TouchableOpacity
+                style={styles.dateBtn}
+                onPress={() => setShowLoanDueDate(true)}
+              >
+                <Calendar color={COLORS.primary} size={18} />
+                <Text style={styles.dateBtnText}>{fmtDate(loanDueDate)}</Text>
+              </TouchableOpacity>
+
+              {showLoanDueDate && (
+                <DateTimePicker
+                  value={loanDueDate}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  textColor={COLORS.text}
+                  onChange={(e, d) => { setShowLoanDueDate(Platform.OS === 'ios'); if (d) setLoanDueDate(d); }}
+                />
+              )}
+
+              {/* Account Selection */}
+              <Text style={styles.fieldLabel}>Account (optional)</Text>
+              <View style={{ borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 60 }}>
+                  <TouchableOpacity
+                    style={[
+                      { paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center', borderRightWidth: 1, borderRightColor: COLORS.divider },
+                      !selectedAccount && { backgroundColor: COLORS.primary + '22' }
+                    ]}
+                    onPress={() => setSelectedAccount(null)}
+                  >
+                    <Text style={{ color: !selectedAccount ? COLORS.primary : COLORS.textSecondary, fontWeight: '600', fontSize: 12 }}>
+                      None
+                    </Text>
+                  </TouchableOpacity>
+                  {accounts.map(acct => (
+                    <TouchableOpacity
+                      key={acct.id}
+                      style={[
+                        { paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center', borderRightWidth: 1, borderRightColor: COLORS.divider },
+                        selectedAccount?.id === acct.id && { backgroundColor: acct.color + '22' }
+                      ]}
+                      onPress={() => setSelectedAccount(acct)}
+                    >
+                      <Text style={{ color: selectedAccount?.id === acct.id ? acct.color : COLORS.textSecondary, fontWeight: '600', fontSize: 12 }}>
+                        {acct.account_name}{acct.bank_name ? ` (${acct.bank_name})` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Repayment Type */}
+              <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Repayment Type</Text>
+              <View style={styles.typeRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeBtn,
+                    repaymentType === 'single' && { ...styles.typeBtnActive, backgroundColor: COLORS.primary + '18', borderColor: COLORS.primary },
+                  ]}
+                  onPress={() => setRepaymentType('single')}
+                >
+                  <Text style={[styles.typeBtnLabel, { color: repaymentType === 'single' ? COLORS.primary : COLORS.textSecondary }]}>
+                    Single Payment
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.typeBtn,
+                    repaymentType === 'multi' && { ...styles.typeBtnActive, backgroundColor: COLORS.primary + '18', borderColor: COLORS.primary },
+                  ]}
+                  onPress={() => setRepaymentType('multi')}
+                >
+                  <Text style={[styles.typeBtnLabel, { color: repaymentType === 'multi' ? COLORS.primary : COLORS.textSecondary }]}>
+                    Installments
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Multi-installment fields */}
+              {repaymentType === 'multi' && (
+                <>
+                  {/* Define by toggle */}
+                  <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Define By</Text>
+                  <View style={styles.typeRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeBtn,
+                        defineBy === 'count' && { ...styles.typeBtnActive, backgroundColor: COLORS.primary + '18', borderColor: COLORS.primary },
+                      ]}
+                      onPress={() => setDefineBy('count')}
+                    >
+                      <Text style={[styles.typeBtnLabel, { color: defineBy === 'count' ? COLORS.primary : COLORS.textSecondary }]}>
+                        Number of Installments
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeBtn,
+                        defineBy === 'amount' && { ...styles.typeBtnActive, backgroundColor: COLORS.primary + '18', borderColor: COLORS.primary },
+                      ]}
+                      onPress={() => setDefineBy('amount')}
+                    >
+                      <Text style={[styles.typeBtnLabel, { color: defineBy === 'amount' ? COLORS.primary : COLORS.textSecondary }]}>
+                        Installment Amount
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {defineBy === 'count' ? (
+                    <>
+                      <Text style={styles.fieldLabel}>Number of Installments</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="e.g. 12"
+                        placeholderTextColor={COLORS.textSecondary}
+                        keyboardType="number-pad"
+                        value={numInstallments}
+                        onChangeText={setNumInstallments}
+                      />
+                      {calculatedInstallmentAmount !== null && (
+                        <View style={styles.calcRow}>
+                          <Text style={styles.calcLabel}>Each installment:</Text>
+                          <Text style={styles.calcValue}>{fmt(calculatedInstallmentAmount, currency)}</Text>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.fieldLabel}>Installment Amount ({currency})</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="e.g. 5000"
+                        placeholderTextColor={COLORS.textSecondary}
+                        keyboardType="decimal-pad"
+                        value={installmentAmount}
+                        onChangeText={setInstallmentAmount}
+                      />
+                      {calculatedInstallmentCount !== null && (
+                        <View style={styles.calcRow}>
+                          <Text style={styles.calcLabel}>Total installments:</Text>
+                          <Text style={styles.calcValue}>{calculatedInstallmentCount}</Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  <Text style={styles.fieldLabel}>Installment Interval</Text>
+                  <View style={{ borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' }}>
+                    {['weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'].map(interval => (
+                      <TouchableOpacity
+                        key={interval}
+                        style={[
+                          { paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
+                          installmentInterval === interval && { backgroundColor: COLORS.primary + '22' }
+                        ]}
+                        onPress={() => setInstallmentInterval(interval)}
+                      >
+                        <Text style={{ color: installmentInterval === interval ? COLORS.primary : COLORS.text, fontWeight: '600', textTransform: 'capitalize' }}>
+                          {interval.charAt(0).toUpperCase() + interval.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
               {/* Notes */}
               <Text style={styles.fieldLabel}>Notes (optional)</Text>
               <TextInput
@@ -687,8 +951,8 @@ const LoanManagement = () => {
                 {savingLoan
                   ? <ActivityIndicator color="#fff" />
                   : <Text style={styles.saveBtnText}>
-                      {editingLoan ? 'Update Loan' : `Record ${loanType === GIVEN ? 'Given' : 'Received'} Loan`}
-                    </Text>
+                    {editingLoan ? 'Update Loan' : `Record ${loanType === GIVEN ? 'Given' : 'Received'} Loan`}
+                  </Text>
                 }
               </TouchableOpacity>
             </ScrollView>

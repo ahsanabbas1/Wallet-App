@@ -283,8 +283,9 @@ const deriveCashFlow = (current) => {
 };
 
 const deriveLedger = (current) => {
+  const nonTransfer = current.filter(t => t.type !== 'transfer');
   let balance = 0;
-  const txs = [...current].sort((a, b) => new Date(a.date) - new Date(b.date)).map(t => {
+  const txs = [...nonTransfer].sort((a, b) => new Date(a.date) - new Date(b.date)).map(t => {
     const a = parseFloat(t.amount);
     balance += t.type === 'income' ? a : -a;
     return {

@@ -2,22 +2,24 @@ import React, { useMemo } from 'react';
 import { Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
-const AppButton = ({ title, onPress, loading, style, textStyle, variant = 'primary' }) => {
+const AppButton = ({ title, onPress, loading, disabled, style, textStyle, variant = 'primary' }) => {
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const isSecondary = variant === 'secondary';
   const isOutline = variant === 'outline';
+  const isDisabled = loading || disabled;
 
   return (
     <Pressable
-      onPress={onPress}
-      disabled={loading}
+      onPress={isDisabled ? undefined : onPress}
+      disabled={isDisabled}
       style={({ pressed }) => [
         styles.button,
         isSecondary && styles.secondaryButton,
         isOutline && styles.outlineButton,
+        isDisabled && { opacity: 0.4 },
         style,
-        pressed && { opacity: 0.8 }
+        pressed && !isDisabled && { opacity: 0.8 }
       ]}
     >
       {loading ? (
