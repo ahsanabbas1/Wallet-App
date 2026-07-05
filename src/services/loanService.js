@@ -1,5 +1,8 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDb, generateId } from '../lib/db';
 import { transactionService } from './transactionService';
+
+const LOAN_DEFAULT_ACCOUNT_KEY = (uid) => `loan_default_account_${uid}`;
 
 function enrichLoan(loan, payments) {
   const loanPayments = (payments || [])
@@ -197,7 +200,7 @@ export const loanService = {
     await db.runAsync('UPDATE loans SET is_settled = ? WHERE id = ?', [isSettled ? 1 : 0, id]);
   },
 
-  async savePayment(paymentData, loan) {
+  async savePayment(paymentData, loan, accountId) {
     const db = getDb();
     const amt = Number(paymentData.amount);
     let id;
@@ -240,16 +243,21 @@ export const loanService = {
     }
 
     const isGiven = loan.type === 'given';
-    await transactionService.addTransaction({
+    const { id: txnId } = await transactionService.addTransaction({
       user_id: loan.user_id,
       amount: amt,
       type: isGiven ? 'income' : 'expense',
       title: isGiven ? `Loan repaid by ${loan.person_name}` : `Loan repaid to ${loan.person_name}`,
       description: paymentData.notes || 'Loan repayment',
       date: paymentData.date,
-      account_id: loan.account_id || null,
+      account_id: accountId || loan.account_id || null,
       is_loan: 1,
     });
+
+    // Save the transaction_id on the payment record for reverse-sync
+    if (id && txnId) {
+      await db.runAsync('UPDATE loan_payments SET transaction_id = ? WHERE id = ?', [txnId, id]);
+    }
 
     return { id, isSettling };
   },
@@ -265,15 +273,55 @@ export const loanService = {
 
   async deletePayment(id, loan) {
     const db = getDb();
+    // Find the transaction_id linked to this payment
+    const pay = await db.getFirstAsync('SELECT transaction_id, amount FROM loan_payments WHERE id = ?', [id]);
+    const txnId = pay?.transaction_id;
+
     if (loan?.is_multi_installment) {
+      // Keep the row to preserve installment schedule, just mark unpaid
       await db.runAsync(
-        'UPDATE loan_payments SET is_paid = 0, notes = NULL WHERE id = ?',
+        'UPDATE loan_payments SET is_paid = 0, notes = NULL, transaction_id = NULL WHERE id = ?',
         [id]
       );
     } else {
+      // Single-payment: remove the row entirely
       await db.runAsync('DELETE FROM loan_payments WHERE id = ?', [id]);
     }
+
+    // If the loan was settled because of this payment, un-settle it
+    if (loan?.is_settled) {
+      const paidRows = await db.getAllAsync(
+        'SELECT COALESCE(SUM(amount), 0) as paid FROM loan_payments WHERE loan_id = ? AND is_paid = 1',
+        [loan.id]
+      );
+      const totalPaid = paidRows[0]?.paid || 0;
+      if (totalPaid < parseFloat(loan.total_amount || 0)) {
+        await db.runAsync('UPDATE loans SET is_settled = 0 WHERE id = ?', [loan.id]);
+      }
+    }
+
+    // Delete the linked transaction (reverses account balance automatically)
+    if (txnId) {
+      await transactionService.deleteTransaction(loan?.user_id, txnId).catch(() => {});
+    }
     return {};
+  },
+
+  async getDefaultPaymentAccount(userId) {
+    try {
+      const raw = await AsyncStorage.getItem(LOAN_DEFAULT_ACCOUNT_KEY(userId));
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  },
+
+  async setDefaultPaymentAccount(userId, account) {
+    try {
+      if (account) {
+        await AsyncStorage.setItem(LOAN_DEFAULT_ACCOUNT_KEY(userId), JSON.stringify(account));
+      } else {
+        await AsyncStorage.removeItem(LOAN_DEFAULT_ACCOUNT_KEY(userId));
+      }
+    } catch {}
   },
 };
 

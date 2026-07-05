@@ -298,6 +298,7 @@ export async function runMigrations(db) {
   try { await ensureColumn(db, 'loans', 'define_by', "TEXT DEFAULT 'count'"); } catch (_) { }
   try { await ensureColumn(db, 'loan_payments', 'due_date', 'TEXT'); } catch (_) { }
   try { await ensureColumn(db, 'loan_payments', 'is_paid', 'INTEGER DEFAULT 0'); } catch (_) { }
+  try { await ensureColumn(db, 'loan_payments', 'transaction_id', 'TEXT'); } catch (_) { }
 
   // Savings Goals: archive support + notes field
   try { await ensureColumn(db, 'savings_goals', 'is_archived', 'INTEGER DEFAULT 0'); } catch (_) { }

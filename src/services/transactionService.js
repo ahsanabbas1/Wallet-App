@@ -135,6 +135,14 @@ export const transactionService = {
     const db = getDb();
     const tx = await db.getFirstAsync('SELECT * FROM transactions WHERE id = ?', [id]);
 
+    // If this is a loan transaction, un-pay the linked loan payment
+    if (tx?.is_loan) {
+      await db.runAsync(
+        "UPDATE loan_payments SET is_paid = 0, notes = NULL, transaction_id = NULL WHERE transaction_id = ?",
+        [id]
+      );
+    }
+
     // Reverse the account balance effect before deleting
     if (tx?.account_id) {
       const reversal = tx.type === 'expense' ? Number(tx.amount) : -Number(tx.amount);

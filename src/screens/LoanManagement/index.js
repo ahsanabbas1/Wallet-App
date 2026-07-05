@@ -97,18 +97,22 @@ const LoanManagement = () => {
   const [paymentNotes, setPaymentNotes] = useState('');
   const [showPayDate, setShowPayDate] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentAccount, setPaymentAccount] = useState(null);
+  const [defaultPaymentAccountId, setDefaultPaymentAccountId] = useState(null);
 
   /* ── Fetch ──────────────────────────────────────────────────────── */
   const fetchLoans = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const [enriched, accts] = await Promise.all([
+      const [enriched, accts, defaultAcct] = await Promise.all([
         loanService.getLoans(userId),
         accountService.getAccounts(userId).catch(() => []),
+        loanService.getDefaultPaymentAccount(userId),
       ]);
       setLoans(enriched);
       setAccounts(accts);
+      setDefaultPaymentAccountId(defaultAcct?.id || null);
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -272,6 +276,11 @@ const LoanManagement = () => {
     setPaymentAmount('');
     setPaymentDate(new Date());
     setPaymentNotes('');
+    // Pre-select: default payment account > loan's original account > null
+    const preSelected = defaultPaymentAccountId
+      ? accounts.find(a => a.id === defaultPaymentAccountId) || null
+      : (loan.account_id ? accounts.find(a => a.id === loan.account_id) || null : null);
+    setPaymentAccount(preSelected);
     setShowAddPayment(true);
   };
 
@@ -279,7 +288,7 @@ const LoanManagement = () => {
     setPaymentLoan(loan);
     setEditingPaymentItem(pay);
     setPaymentAmount(String(pay.amount));
-    setPaymentDate(new Date(pay.date));
+    setPaymentDate(pay.date ? new Date(pay.date) : (pay.due_date ? new Date(pay.due_date) : new Date()));
     setPaymentNotes(pay.notes || '');
     setShowAddPayment(true);
   };
@@ -306,7 +315,8 @@ const LoanManagement = () => {
             notes: paymentNotes.trim() || null,
             amount: amt,
           },
-          paymentLoan
+          paymentLoan,
+          paymentAccount?.id || null
         );
         if (isSettling) {
           Alert.alert('🎉 Fully Settled!', `The loan with ${paymentLoan.person_name} is now fully settled.`);
@@ -614,12 +624,12 @@ const LoanManagement = () => {
                       </Text>
                     </View>
 
-                    {loan.loan_payments.length === 0 ? (
+                    {loan.loan_payments.filter(p => p.is_paid).length === 0 ? (
                       <Text style={[styles.paymentItemDate, { textAlign: 'center', paddingVertical: 8 }]}>
                         No payments recorded yet.
                       </Text>
                     ) : (
-                      loan.loan_payments.map(pay => (
+                      loan.loan_payments.filter(p => p.is_paid).map(pay => (
                         <View key={pay.id} style={styles.paymentItem}>
                           <View style={[styles.paymentDot, { backgroundColor: COLORS.success }]} />
                           <View style={styles.paymentItemInfo}>
@@ -627,7 +637,7 @@ const LoanManagement = () => {
                               + {fmt(pay.amount, currency)}
                             </Text>
                             <Text style={styles.paymentItemDate}>
-                              {fmtDate(pay.date)}{pay.notes ? `  ·  ${pay.notes}` : ''}
+                              {fmtDate(pay.date || pay.due_date)}{pay.notes ? `  ·  ${pay.notes}` : ''}
                             </Text>
                           </View>
                           <TouchableOpacity
@@ -804,9 +814,18 @@ const LoanManagement = () => {
                       ]}
                       onPress={() => setSelectedAccount(acct)}
                     >
-                      <Text style={{ color: selectedAccount?.id === acct.id ? acct.color : COLORS.textSecondary, fontWeight: '600', fontSize: 12 }}>
-                        {acct.account_name}{acct.bank_name ? ` (${acct.bank_name})` : ''}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View>
+                          <Text style={{ color: selectedAccount?.id === acct.id ? acct.color : COLORS.textSecondary, fontWeight: '600', fontSize: 12 }}>
+                            {acct.account_name}
+                          </Text>
+                          {acct.bank_name ? (
+                            <Text style={{ color: COLORS.textSecondary, fontSize: 9, opacity: 0.7 }}>
+                              {acct.bank_name}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -955,6 +974,7 @@ const LoanManagement = () => {
                   </Text>
                 }
               </TouchableOpacity>
+              <View style={{ height: insets.bottom + 40 }} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -991,7 +1011,11 @@ const LoanManagement = () => {
 
               <Text style={styles.fieldLabel}>Amount ({currency})</Text>
               <TextInput
-                style={[styles.textInput, { fontSize: 22, fontWeight: '800', textAlign: 'center' }]}
+                style={[
+                  styles.textInput,
+                  { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+                  paymentAmount && parseFloat(paymentAmount) > paymentLoan?.remaining && { borderColor: COLORS.error, borderWidth: 2 },
+                ]}
                 placeholder="0.00"
                 placeholderTextColor={COLORS.textSecondary}
                 keyboardType="decimal-pad"
@@ -999,6 +1023,113 @@ const LoanManagement = () => {
                 onChangeText={setPaymentAmount}
                 autoFocus
               />
+
+              {/* Runtime balance preview */}
+              {paymentAmount && parseFloat(paymentAmount) > 0 && (
+                <View style={[styles.calcRow, {
+                  backgroundColor: parseFloat(paymentAmount) > paymentLoan?.remaining
+                    ? COLORS.error + '18'
+                    : COLORS.success + '18',
+                  borderColor: parseFloat(paymentAmount) > paymentLoan?.remaining
+                    ? COLORS.error + '40'
+                    : COLORS.success + '40',
+                }]}>
+                  <Text style={styles.calcLabel}>
+                    {parseFloat(paymentAmount) > paymentLoan?.remaining
+                      ? 'Exceeds balance by'
+                      : 'After payment'}
+                  </Text>
+                  <Text style={[styles.calcValue, {
+                    color: parseFloat(paymentAmount) > paymentLoan?.remaining
+                      ? COLORS.error
+                      : COLORS.success,
+                  }]}>
+                    {parseFloat(paymentAmount) > paymentLoan?.remaining
+                      ? fmt(parseFloat(paymentAmount) - paymentLoan?.remaining, currency)
+                      : fmt(paymentLoan?.remaining - parseFloat(paymentAmount), currency)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Account selector (only for new payments, not edit) */}
+              {!editingPaymentItem && (
+                <>
+                  <Text style={styles.fieldLabel}>Receive in Account</Text>
+                  <View style={{ borderRadius: 12, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden', marginBottom: 4 }}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 60 }}>
+                      <TouchableOpacity
+                        style={[
+                          { paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center', borderRightWidth: 1, borderRightColor: COLORS.divider },
+                          !paymentAccount && { backgroundColor: COLORS.primary + '22' }
+                        ]}
+                        onPress={() => setPaymentAccount(null)}
+                      >
+                        <Text style={{ color: !paymentAccount ? COLORS.primary : COLORS.textSecondary, fontWeight: '600', fontSize: 12 }}>
+                          {paymentLoan?.account_id ? 'Same as loan' : 'None'}
+                        </Text>
+                      </TouchableOpacity>
+                      {accounts.map(acct => (
+                        <TouchableOpacity
+                          key={acct.id}
+                          style={[
+                            { paddingHorizontal: 12, paddingVertical: 8, justifyContent: 'center', borderRightWidth: 1, borderRightColor: COLORS.divider },
+                            paymentAccount?.id === acct.id && { backgroundColor: acct.color + '22' }
+                          ]}
+                          onPress={() => setPaymentAccount(acct)}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <View>
+                              <Text style={{ color: paymentAccount?.id === acct.id ? acct.color : COLORS.textSecondary, fontWeight: '600', fontSize: 12 }}>
+                                {acct.account_name}
+                              </Text>
+                              {acct.bank_name ? (
+                                <Text style={{ color: COLORS.textSecondary, fontSize: 9, opacity: 0.7 }}>
+                                  {acct.bank_name}
+                                </Text>
+                              ) : null}
+                            </View>
+                            {defaultPaymentAccountId === acct.id && (
+                              <Text style={{ color: COLORS.warning, fontSize: 10 }}>★</Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Set as default toggle */}
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row', alignItems: 'center', gap: 8,
+                      marginBottom: 16, paddingVertical: 8,
+                    }}
+                    onPress={() => {
+                      if (defaultPaymentAccountId === paymentAccount?.id) {
+                        setDefaultPaymentAccountId(null);
+                        loanService.setDefaultPaymentAccount(userId, null);
+                      } else if (paymentAccount) {
+                        setDefaultPaymentAccountId(paymentAccount.id);
+                        loanService.setDefaultPaymentAccount(userId, paymentAccount);
+                      }
+                    }}
+                  >
+                    <View style={{
+                      width: 20, height: 20, borderRadius: 4,
+                      borderWidth: 2,
+                      borderColor: defaultPaymentAccountId === paymentAccount?.id ? COLORS.warning : COLORS.border,
+                      backgroundColor: defaultPaymentAccountId === paymentAccount?.id ? COLORS.warning + '22' : 'transparent',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {defaultPaymentAccountId === paymentAccount?.id && (
+                        <Text style={{ color: COLORS.warning, fontSize: 12, fontWeight: '800' }}>✓</Text>
+                      )}
+                    </View>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                      Default account for repayments
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
 
               <Text style={styles.fieldLabel}>Date</Text>
               <TouchableOpacity style={styles.dateBtn} onPress={() => setShowPayDate(true)}>
@@ -1026,15 +1157,24 @@ const LoanManagement = () => {
               />
 
               <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: COLORS.success, opacity: savingPayment ? 0.7 : 1 }]}
+                style={[styles.saveBtn, {
+                  backgroundColor: parseFloat(paymentAmount) > paymentLoan?.remaining ? COLORS.textSecondary : COLORS.success,
+                  opacity: savingPayment ? 0.7 : 1,
+                }]}
                 onPress={handleSavePayment}
-                disabled={savingPayment}
+                disabled={savingPayment || parseFloat(paymentAmount) > paymentLoan?.remaining}
               >
                 {savingPayment
                   ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.saveBtnText}>{editingPaymentItem ? 'Update Payment' : 'Save Payment'}</Text>
+                  : <Text style={styles.saveBtnText}>
+                    {parseFloat(paymentAmount) > paymentLoan?.remaining
+                      ? 'Insufficient Balance'
+                      : (editingPaymentItem ? 'Update Payment' : 'Save Payment')
+                    }
+                  </Text>
                 }
               </TouchableOpacity>
+              <View style={{ height: insets.bottom + 40 }} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
