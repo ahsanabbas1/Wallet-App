@@ -25,6 +25,26 @@ function enrichLoan(loan, payments) {
   const paidInstallments = paidPayments.length;
   const totalInstallments = loanPayments.length;
 
+  // Projected remaining based on effective payment amount
+  const lastPaidAmount = paidPayments.length > 0 ? parseFloat(paidPayments[0].amount || 0) : 0;
+  const effectiveAmount = parseFloat(loan.installment_amount || 0) || lastPaidAmount || (totalInstallments > 0 ? total / totalInstallments : 0);
+  const projectedRemaining = effectiveAmount > 0 && remaining > 0 ? Math.ceil(remaining / effectiveAmount) : remainingInstallments;
+
+  // Projected completion date
+  let projectedCompletion = null;
+  if (projectedRemaining > 0 && loan.installment_interval) {
+    const baseDate = nextDuePayment?.due_date ? new Date(nextDuePayment.due_date) : new Date();
+    const endDate = new Date(baseDate);
+    switch (loan.installment_interval) {
+      case 'weekly': endDate.setDate(endDate.getDate() + 7 * projectedRemaining); break;
+      case 'biweekly': endDate.setDate(endDate.getDate() + 14 * projectedRemaining); break;
+      case 'monthly': endDate.setMonth(endDate.getMonth() + projectedRemaining); break;
+      case 'quarterly': endDate.setMonth(endDate.getMonth() + 3 * projectedRemaining); break;
+      case 'yearly': endDate.setFullYear(endDate.getFullYear() + projectedRemaining); break;
+    }
+    projectedCompletion = endDate.toISOString();
+  }
+
   return {
     ...loan,
     is_settled: loan.is_settled === 1 || loan.is_settled === true,
@@ -39,6 +59,8 @@ function enrichLoan(loan, payments) {
     paid_installments: paidInstallments,
     total_installments: totalInstallments,
     next_due_date: nextDuePayment ? nextDuePayment.due_date : null,
+    projected_remaining_installments: projectedRemaining,
+    projected_completion_date: projectedCompletion,
   };
 }
 

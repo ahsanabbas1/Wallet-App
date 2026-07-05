@@ -177,15 +177,16 @@ const LoanManagement = () => {
     const instAmt = parseFloat(installmentAmount);
     if (!amt || !instAmt || instAmt <= 0) return null;
     return Math.ceil(amt / instAmt);
-  }, [loanAmount, installmentAmount, repaymentType, defineBy, installmentInterval]);
+  }, [loanAmount, installmentAmount, repaymentType, defineBy]);
 
-  const calcRemainingCount = useMemo(() => {
-    if (repaymentType !== 'multi') return null;
-    const totalInst = defineBy === 'amount'
-      ? calculatedInstallmentCount
-      : parseInt(numInstallments);
-    return totalInst || null;
-  }, [repaymentType, defineBy, calculatedInstallmentCount, numInstallments]);
+  const totalInstallCount = useMemo(() => {
+    if (repaymentType !== 'multi') return 0;
+    return defineBy === 'count' ? parseInt(numInstallments) : calculatedInstallmentCount;
+  }, [repaymentType, defineBy, numInstallments, calculatedInstallmentCount]);
+
+  const calcWarnLongDuration = useMemo(() => {
+    return repaymentType === 'multi' && (totalInstallCount || 0) > 36;
+  }, [repaymentType, totalInstallCount]);
 
   /* ══ LOAN CRUD ══════════════════════════════════════════════════════ */
 
@@ -199,9 +200,25 @@ const LoanManagement = () => {
     setLoanNotes(loan?.notes || '');
     setSelectedAccount(loan?.account_id ? accounts.find(a => a.id === loan.account_id) : null);
     setRepaymentType(loan?.is_multi_installment ? 'multi' : 'single');
-    setDefineBy(loan?.define_by || 'count');
-    setNumInstallments(loan?.num_installments ? String(loan.num_installments) : '');
-    setInstallmentAmount(loan?.installment_amount ? String(loan.installment_amount) : '');
+    const dbDefineBy = loan?.define_by || 'count';
+    setDefineBy(dbDefineBy);
+    if (loan?.is_multi_installment) {
+      if (dbDefineBy === 'count') {
+        setNumInstallments(loan.num_installments ? String(loan.num_installments) : '');
+        setInstallmentAmount(loan.installment_amount ? String(loan.installment_amount) : '');
+      } else {
+        setInstallmentAmount(loan.installment_amount ? String(loan.installment_amount) : '');
+        setNumInstallments(loan.num_installments
+          ? String(loan.num_installments)
+          : (loan.installment_amount > 0
+            ? String(Math.ceil(parseFloat(loan.total_amount) / parseFloat(loan.installment_amount)))
+            : '')
+        );
+      }
+    } else {
+      setNumInstallments('');
+      setInstallmentAmount('');
+    }
     setInstallmentInterval(loan?.installment_interval || 'monthly');
     setShowAddLoan(true);
   };
@@ -237,10 +254,12 @@ const LoanManagement = () => {
         is_settled: editingLoan?.is_settled ?? false,
         is_multi_installment: repaymentType === 'multi',
         repayment_type: repaymentType,
-        define_by: repaymentType === 'multi' ? defineBy : null,
-        installment_amount: repaymentType === 'multi' && defineBy === 'amount' ? parseFloat(installmentAmount) : null,
+        define_by: defineBy,
+        installment_amount: repaymentType === 'multi'
+          ? (defineBy === 'amount' ? parseFloat(installmentAmount) : calculatedInstallmentAmount)
+          : null,
         num_installments: repaymentType === 'multi'
-          ? (defineBy === 'count' ? parseInt(numInstallments) : null)
+          ? (defineBy === 'count' ? parseInt(numInstallments) : calculatedInstallmentCount)
           : null,
         installment_interval: repaymentType === 'multi' ? installmentInterval : null,
         created_at: editingLoan?.created_at,
@@ -341,7 +360,9 @@ const LoanManagement = () => {
     setPaymentLoan(loan);
     setEditingPaymentItem(null);
     const savedDefault = loanDefaultPayments[loan.id];
-    const defaultAmt = savedDefault || loan.installment_amount || '';
+    const calcInstAmount = loan.installment_amount
+      || (loan.is_multi_installment && loan.num_installments > 0 ? parseFloat(loan.total_amount) / loan.num_installments : 0);
+    const defaultAmt = savedDefault || calcInstAmount || '';
     setPaymentAmount(String(defaultAmt));
     setSaveAsDefaultAmount(false);
     setPaymentDate(new Date());
@@ -636,12 +657,12 @@ const LoanManagement = () => {
                 />
 
                 {/* Next due & remaining installments */}
-                {loan.is_multi_installment && !loan.is_settled && loan.remaining_installments > 0 && (
+                {loan.is_multi_installment && !loan.is_settled && loan.remaining > 0 && (
                   <View style={styles.installmentInfoRow}>
                     <View style={styles.installmentInfoBlock}>
-                      <Text style={styles.installmentInfoLabel}>Remaining Inst.</Text>
+                      <Text style={styles.installmentInfoLabel}>Remaining</Text>
                       <Text style={styles.installmentInfoValue}>
-                        {loan.remaining_installments}
+                        {loan.projected_remaining_installments || loan.remaining_installments} inst.
                       </Text>
                     </View>
                     <View style={styles.installmentInfoBlock}>
@@ -651,12 +672,12 @@ const LoanManagement = () => {
                         {loan.isOverdue ? ' ⚠️' : ''}
                       </Text>
                     </View>
-                    {loan.installment_amount > 0 && (
-                      <View style={styles.installmentInfoBlock}>
-                        <Text style={styles.installmentInfoLabel}>Per Inst.</Text>
-                        <Text style={styles.installmentInfoValue}>{fmt(loan.installment_amount, currency)}</Text>
-                      </View>
-                    )}
+                    <View style={styles.installmentInfoBlock}>
+                      <Text style={styles.installmentInfoLabel}>Per Inst.</Text>
+                      <Text style={styles.installmentInfoValue}>
+                        {fmt(loan.installment_amount > 0 ? loan.installment_amount : (loan.paid_installments > 0 ? (loan.paid_amount / loan.paid_installments) : 0), currency)}
+                      </Text>
+                    </View>
                   </View>
                 )}
 
@@ -668,6 +689,14 @@ const LoanManagement = () => {
                 {/* ── Comprehensive info (visible when expanded) ───── */}
                 {isOpen && (
                   <View style={styles.infoSection}>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>
+                        {loan.type === GIVEN ? 'Given to' : 'Received from'}
+                      </Text>
+                      <Text style={styles.infoValue}>
+                        {loan.person_name} on {fmtDate(loan.date)}
+                      </Text>
+                    </View>
                     {loan.due_date && (
                       <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Due Date</Text>
@@ -678,9 +707,20 @@ const LoanManagement = () => {
                       const linkedAcct = loan.account_id ? accounts.find(a => a.id === loan.account_id) : null;
                       return linkedAcct ? (
                         <View style={styles.infoRow}>
-                          <Text style={styles.infoLabel}>Linked Account</Text>
+                          <Text style={styles.infoLabel}>Source Account</Text>
                           <Text style={styles.infoValue}>
                             {linkedAcct.account_name}{linkedAcct.bank_name ? ` · ${linkedAcct.bank_name}` : ''}
+                          </Text>
+                        </View>
+                      ) : null;
+                    })()}
+                    {(() => {
+                      const recvAcct = defaultPaymentAccountId ? accounts.find(a => a.id === defaultPaymentAccountId) : null;
+                      return recvAcct ? (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Receive In</Text>
+                          <Text style={styles.infoValue}>
+                            {recvAcct.account_name}{recvAcct.bank_name ? ` · ${recvAcct.bank_name}` : ''}
                           </Text>
                         </View>
                       ) : null;
@@ -696,15 +736,19 @@ const LoanManagement = () => {
                         <View style={styles.infoRow}>
                           <Text style={styles.infoLabel}>Installments</Text>
                           <Text style={styles.infoValue}>
-                            {loan.paid_installments} paid of {loan.total_installments}
+                            {loan.total_installments - loan.paid_installments}/{loan.total_installments} remaining
                           </Text>
                         </View>
-                        {loan.installment_amount > 0 && (
-                          <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Per Installment</Text>
-                            <Text style={styles.infoValue}>{fmt(loan.installment_amount, currency)}</Text>
-                          </View>
-                        )}
+                        {(() => {
+                          const perInstAmt = loan.installment_amount
+                            || (loan.num_installments > 0 ? parseFloat(loan.total_amount) / loan.num_installments : 0);
+                          return perInstAmt > 0 ? (
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>Per Installment</Text>
+                              <Text style={styles.infoValue}>{fmt(perInstAmt, currency)}</Text>
+                            </View>
+                          ) : null;
+                        })()}
                         {loan.next_due_date && (
                           <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Next Due</Text>
@@ -717,9 +761,17 @@ const LoanManagement = () => {
                             </Text>
                           </View>
                         )}
+                        {loan.projected_completion_date && (
+                          <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Projected End</Text>
+                            <Text style={[styles.infoValue, { color: COLORS.primary }]}>
+                              {fmtDate(loan.projected_completion_date)}
+                              {'  ·  '}{loan.projected_remaining_installments} payments left
+                            </Text>
+                          </View>
+                        )}
                       </>
                     )}
-                    {/* Show define-by info for non-installment loans */}
                     {!loan.is_multi_installment && (
                       <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>Payment Type</Text>
@@ -1008,8 +1060,9 @@ const LoanManagement = () => {
               {/* Multi-installment fields */}
               {repaymentType === 'multi' && (
                 <>
+
                   {/* Define by toggle */}
-                  <Text style={[styles.fieldLabel, { marginTop: 16 }]}>Define By</Text>
+                  <Text style={styles.fieldLabel}>Define Installments By</Text>
                   <View style={styles.typeRow}>
                     <TouchableOpacity
                       style={[
@@ -1030,7 +1083,7 @@ const LoanManagement = () => {
                       onPress={() => setDefineBy('amount')}
                     >
                       <Text style={[styles.typeBtnLabel, { color: defineBy === 'amount' ? COLORS.primary : COLORS.textSecondary }]}>
-                        Installment Amount
+                        Amount Per Installment
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1044,7 +1097,10 @@ const LoanManagement = () => {
                         placeholderTextColor={COLORS.textSecondary}
                         keyboardType="number-pad"
                         value={numInstallments}
-                        onChangeText={setNumInstallments}
+                        onChangeText={(v) => {
+                          setNumInstallments(v);
+                          setDefineBy('count');
+                        }}
                       />
                       {calculatedInstallmentAmount !== null && (
                         <View style={styles.calcRow}>
@@ -1057,33 +1113,35 @@ const LoanManagement = () => {
                     </>
                   ) : (
                     <>
-                      <Text style={styles.fieldLabel}>Installment Amount ({currency})</Text>
+                      <Text style={styles.fieldLabel}>Amount Per Installment ({currency})</Text>
                       <TextInput
                         style={styles.textInput}
-                        placeholder="e.g. 5000"
+                        placeholder="0.00"
                         placeholderTextColor={COLORS.textSecondary}
                         keyboardType="decimal-pad"
                         value={installmentAmount}
-                        onChangeText={setInstallmentAmount}
+                        onChangeText={(v) => {
+                          setInstallmentAmount(v);
+                          setDefineBy('amount');
+                        }}
                       />
                       {calculatedInstallmentCount !== null && (
-                        <>
-                          <View style={styles.calcRow}>
-                            <Text style={styles.calcLabel}>Total installments:</Text>
-                            <Text style={styles.calcValue}>
-                              {calculatedInstallmentCount}  ·  {getDurationLabel(calculatedInstallmentCount, installmentInterval)}
-                            </Text>
-                          </View>
-                          {calculatedInstallmentCount > 36 && (
-                            <View style={[styles.calcRow, { backgroundColor: COLORS.warning + '18', borderColor: COLORS.warning + '40', marginTop: 4 }]}>
-                              <Text style={[styles.calcLabel, { color: COLORS.warning }]}>
-                                ⚠ Long duration — consider increasing the installment amount
-                              </Text>
-                            </View>
-                          )}
-                        </>
+                        <View style={styles.calcRow}>
+                          <Text style={styles.calcLabel}>Total installments:</Text>
+                          <Text style={styles.calcValue}>
+                            {calculatedInstallmentCount}  ·  {getDurationLabel(calculatedInstallmentCount, installmentInterval)}
+                          </Text>
+                        </View>
                       )}
                     </>
+                  )}
+
+                  {calcWarnLongDuration && (
+                    <View style={[styles.calcRow, { backgroundColor: COLORS.warning + '18', borderColor: COLORS.warning + '40', marginTop: -8, marginBottom: 16 }]}>
+                      <Text style={[styles.calcLabel, { color: COLORS.warning }]}>
+                        ⚠ Long duration — consider fewer installments
+                      </Text>
+                    </View>
                   )}
 
                   <Text style={styles.fieldLabel}>Installment Interval</Text>
@@ -1162,11 +1220,11 @@ const LoanManagement = () => {
                 </Text>
                 {paymentLoan?.is_multi_installment && paymentLoan?.total_installments > 0 && (
                   <Text style={[styles.paymentItemDate, { marginTop: 2, color: COLORS.primary }]}>
-                    {paymentLoan?.paid_installments >= paymentLoan?.total_installments
+                    {paymentLoan?.remaining <= 0
                       ? `All ${paymentLoan?.total_installments} installments paid`
-                      : `Installment ${Math.min(paymentLoan?.paid_installments + 1, paymentLoan?.total_installments)} of ${paymentLoan?.total_installments}`
+                      : `Payment ${paymentLoan?.paid_installments + 1} · ${paymentLoan?.projected_remaining_installments || paymentLoan?.remaining_installments} remaining`
                     }
-                    {'  ·  '}{paymentLoan?.paid_installments} paid, {paymentLoan?.remaining_installments} remaining
+                    {'  ·  '}{fmt(paymentLoan?.remaining, currency)} left
                   </Text>
                 )}
               </View>
@@ -1220,7 +1278,7 @@ const LoanManagement = () => {
               )}
 
               {/* Save as default amount toggle */}
-              {!editingPaymentItem && paymentLoan?.installment_amount && (
+              {!editingPaymentItem && parseFloat(paymentAmount) > 0 && (
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, paddingVertical: 8 }}
                   onPress={() => setSaveAsDefaultAmount(!saveAsDefaultAmount)}
