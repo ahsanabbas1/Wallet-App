@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Alert,
   ActivityIndicator, TextInput, Modal, KeyboardAvoidingView,
@@ -15,6 +15,7 @@ import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
+import { SIZES } from '../../constants/theme';
 import { makeStyles } from './styles';
 import { accountService } from '../../services/accountService';
 import HeaderPlusButton from '../../components/HeaderPlusButton';
@@ -72,6 +73,13 @@ const Accounts = () => {
   const [acctColor, setAcctColor] = useState(PRESET_COLORS[0]);
   const [acctIcon, setAcctIcon] = useState('Wallet');
   const [saving, setSaving] = useState(false);
+  /* ── details tab state ──────────────────────────────────────────── */
+  const [detailsTab, setDetailsTab] = useState('accounts'); // 'accounts' | 'details'
+  const [detailsAccountId, setDetailsAccountId] = useState(null); // null = All
+  const [detailsPeriod, setDetailsPeriod] = useState('ALL'); // 1W,1M,3M,6M,1Y,ALL
+  const [detailsData, setDetailsData] = useState({ transactions: [], spent: 0, received: 0, count: 0 });
+  const [detailsLoading, setDetailsLoading] = useState(false);
+
   /* ── transfer modal state ───────────────────────────────────────── */
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferFrom, setTransferFrom] = useState(null);
@@ -107,6 +115,23 @@ const Accounts = () => {
   }, [userId]);
 
   useFocusEffect(useCallback(() => { fetchAccounts(); }, [fetchAccounts]));
+
+  const fetchDetails = useCallback(async (acctId, period) => {
+    if (!userId) return;
+    setDetailsLoading(true);
+    try {
+      const data = await accountService.getTransactionsByAccount(userId, acctId, period);
+      setDetailsData(data);
+    } catch (e) {
+      setDetailsData({ transactions: [], spent: 0, received: 0, count: 0 });
+    } finally {
+      setDetailsLoading(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    if (detailsTab === 'details') fetchDetails(detailsAccountId, detailsPeriod);
+  }, [detailsTab, detailsAccountId, detailsPeriod, fetchDetails]);
 
   const showPageInfo = () => Alert.alert('About This Page', 'Manage your bank accounts and wallets. Track balances, add new accounts, and see monthly activity per account.');
 
@@ -252,138 +277,276 @@ const Accounts = () => {
         </TouchableOpacity>
       </View>
 
+      {/* ── Tab bar (Accounts / Details) ── */}
+      <View style={styles.detailsTabRow}>
+        {['accounts', 'details'].map(tabKey => (
+          <TouchableOpacity
+            key={tabKey}
+            style={[styles.detailsTab, detailsTab === tabKey && styles.detailsTabActive]}
+            onPress={() => setDetailsTab(tabKey)}
+          >
+            <Text style={[styles.detailsTabText, detailsTab === tabKey && styles.detailsTabTextActive]}>
+              {tabKey === 'accounts' ? 'Accounts' : 'Details'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + 100 }} showsVerticalScrollIndicator={false}>
 
-        {/* ── Total balance card ── */}
-        <View style={styles.totalCard}>
-          <Text style={styles.totalLabel}>Cash in Hands</Text>
-          <Text style={styles.totalAmount}>{fmt(totalBalance, currency)}</Text>
-          <Text style={styles.totalSub}>{accounts.length} account{accounts.length !== 1 ? 's' : ''} · This month</Text>
+        {detailsTab === 'accounts' ? (
+          <>
+            {/* ── Total balance card ── */}
+            <View style={styles.totalCard}>
+              <Text style={styles.totalLabel}>Cash in Hands</Text>
+              <Text style={styles.totalAmount}>{fmt(totalBalance, currency)}</Text>
+              <Text style={styles.totalSub}>{accounts.length} account{accounts.length !== 1 ? 's' : ''} · This month</Text>
 
-          {accounts.length > 0 && (
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-              <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>− {fmt(totalMonthlySpent, currency)}</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Spent</Text>
-              </View>
-              <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>+ {fmt(totalMonthlyIn, currency)}</Text>
-                <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Received</Text>
-              </View>
+              {accounts.length > 0 && (
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>− {fmt(totalMonthlySpent, currency)}</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Spent</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>+ {fmt(totalMonthlyIn, currency)}</Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Received</Text>
+                  </View>
+                </View>
+              )}
             </View>
-          )}
-        </View>
 
-        {/* ── Accounts list ── */}
-        {accounts.length > 0 && (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Your Accounts</Text>
-          </View>
-        )}
+            {/* ── Accounts list ── */}
+            {accounts.length > 0 && (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Your Accounts</Text>
+              </View>
+            )}
 
-        {loading ? (
-          <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: 40 }} />
-        ) : accounts.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <Building2 color={COLORS.textSecondary} size={36} />
-            </View>
-            <Text style={styles.emptyTitle}>No Accounts Yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Add your bank accounts, wallets, or cash holdings. The total will show as your Cash in Hands on the Dashboard.
-            </Text>
-          </View>
+            {loading ? (
+              <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: 40 }} />
+            ) : accounts.length === 0 ? (
+              <View style={styles.emptyState}>
+                <View style={styles.emptyIconWrap}>
+                  <Building2 color={COLORS.textSecondary} size={36} />
+                </View>
+                <Text style={styles.emptyTitle}>No Accounts Yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Add your bank accounts, wallets, or cash holdings. The total will show as your Cash in Hands on the Dashboard.
+                </Text>
+              </View>
+            ) : (
+              accounts.map(acct => {
+                const spent = Number(acct.monthly_spent || 0);
+                const received = Number(acct.monthly_received || 0);
+                const balance = Number(acct.balance || 0);
+                const spendable = balance + spent;
+                const spendPct = spendable > 0 ? Math.min((spent / spendable) * 100, 100) : 0;
+                const typeLabel = ACCOUNT_TYPES.find(t => t.key === acct.account_type)?.label ?? acct.account_type;
+
+                return (
+                  <View key={acct.id} style={[styles.accountCard, { flexDirection: 'column', alignItems: 'stretch', padding: 16 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
+                        <View style={[styles.accountIconWrap, { backgroundColor: acct.color + '15', marginRight: 12 }]}>
+                          {renderIcon(acct.icon, 20, acct.color)}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.accountName, { fontSize: 16, fontWeight: '700' }]} numberOfLines={1}>{acct.account_name}</Text>
+                          {!!acct.bank_name && (
+                            <Text style={[styles.accountBank, { fontSize: 12, color: COLORS.textSecondary }]} numberOfLines={1}>{acct.bank_name}</Text>
+                          )}
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.accountBalance, { color: acct.color, fontSize: 18, fontWeight: '800', marginRight: 0 }]}>
+                          {fmt(balance, currency)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>Monthly Spending</Text>
+                        <Text style={{ color: spendPct > 75 ? COLORS.error : spendPct > 50 ? COLORS.warning : COLORS.success, fontSize: 11, fontWeight: '700' }}>
+                          {spendPct.toFixed(0)}% spent
+                        </Text>
+                      </View>
+                      <View style={{ height: 4, backgroundColor: COLORS.surface, borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+                        <View style={{
+                          height: '100%', borderRadius: 2, width: `${spendPct}%`,
+                          backgroundColor: spendPct > 75 ? COLORS.error : spendPct > 50 ? COLORS.warning : acct.color,
+                        }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flex: 1, backgroundColor: COLORS.error + '08', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.error + '10' }}>
+                          <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' }}>Spent</Text>
+                          <Text style={{ color: COLORS.error, fontSize: 12, fontWeight: '700' }}>− {fmt(spent, currency)}</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: COLORS.success + '08', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.success + '10' }}>
+                          <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' }}>Received</Text>
+                          <Text style={{ color: COLORS.success, fontSize: 12, fontWeight: '700' }}>+ {fmt(received, currency)}</Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.divider, marginTop: 12, paddingTop: 10, justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={styles.accountTypeBadge}>
+                        <Text style={styles.accountTypeBadgeText}>{typeLabel}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 14 }}>
+                        <TouchableOpacity onPress={() => openTransfer(acct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Icons.ArrowRightLeft color={COLORS.primary} size={14} />
+                          <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '700' }}>Transfer</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => openEdit(acct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Pencil color={COLORS.textSecondary} size={14} />
+                          <Text style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(acct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Trash2 color={COLORS.error} size={14} />
+                          <Text style={{ color: COLORS.error, fontSize: 12, fontWeight: '600' }}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </>
         ) : (
-          accounts.map(acct => {
-            const spent = Number(acct.monthly_spent || 0);
-            const received = Number(acct.monthly_received || 0);
-            const balance = Number(acct.balance || 0);
-            // spendable = current balance + what was spent this month (i.e. starting balance this month)
-            const spendable = balance + spent;
-            const spendPct = spendable > 0 ? Math.min((spent / spendable) * 100, 100) : 0;
-            const typeLabel = ACCOUNT_TYPES.find(t => t.key === acct.account_type)?.label ?? acct.account_type;
+          <>
+            {/* ════════════════════════════════════════
+                DETAILS TAB
+            ════════════════════════════════════════ */}
 
-            return (
-              <View key={acct.id} style={[styles.accountCard, { flexDirection: 'column', alignItems: 'stretch', padding: 16 }]}>
-                {/* Top row: icon + info + balance */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
-                    <View style={[styles.accountIconWrap, { backgroundColor: acct.color + '15', marginRight: 12 }]}>
-                      {renderIcon(acct.icon, 20, acct.color)}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.accountName, { fontSize: 16, fontWeight: '700' }]} numberOfLines={1}>{acct.account_name}</Text>
-                      {!!acct.bank_name && (
-                        <Text style={[styles.accountBank, { fontSize: 12, color: COLORS.textSecondary }]} numberOfLines={1}>{acct.bank_name}</Text>
-                      )}
-                    </View>
-                  </View>
+            {/* Account selector */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Select Account</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingLeft: SIZES.padding, marginBottom: 8 }}>
+              <TouchableOpacity
+                style={[styles.detailsPill, !detailsAccountId && styles.detailsPillActive]}
+                onPress={() => setDetailsAccountId(null)}
+              >
+                <Text style={[styles.detailsPillText, !detailsAccountId && styles.detailsPillTextActive]}>All Accounts</Text>
+              </TouchableOpacity>
+              {accounts.map(acct => (
+                <TouchableOpacity
+                  key={acct.id}
+                  style={[styles.detailsPill, detailsAccountId === acct.id && styles.detailsPillActive]}
+                  onPress={() => setDetailsAccountId(acct.id)}
+                >
+                  <View style={[styles.detailsPillDot, { backgroundColor: acct.color }]} />
+                  <Text style={[styles.detailsPillText, detailsAccountId === acct.id && styles.detailsPillTextActive]}>
+                    {acct.account_name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.accountBalance, { color: acct.color, fontSize: 18, fontWeight: '800', marginRight: 0 }]}>
-                      {fmt(balance, currency)}
-                    </Text>
-                  </View>
-                </View>
+            {/* Period filter */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Period</Text>
+            </View>
+            <View style={styles.detailsPeriodRow}>
+              {[
+                { key: '1W', label: '1W' },
+                { key: '1M', label: '1M' },
+                { key: '3M', label: '3M' },
+                { key: '6M', label: '6M' },
+                { key: '1Y', label: '1Y' },
+                { key: 'ALL', label: 'All' },
+              ].map(p => (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.detailsPeriodBtn, detailsPeriod === p.key && styles.detailsPeriodBtnActive]}
+                  onPress={() => setDetailsPeriod(p.key)}
+                >
+                  <Text style={[styles.detailsPeriodText, detailsPeriod === p.key && styles.detailsPeriodTextActive]}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-                {/* Spending progress bar & compact stats */}
-                <View style={{ marginTop: 12 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' }}>
-                      Monthly Spending
-                    </Text>
-                    <Text style={{ color: spendPct > 75 ? COLORS.error : spendPct > 50 ? COLORS.warning : COLORS.success, fontSize: 11, fontWeight: '700' }}>
-                      {spendPct.toFixed(0)}% spent
-                    </Text>
-                  </View>
-                  <View style={{ height: 4, backgroundColor: COLORS.surface, borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
-                    <View style={{
-                      height: '100%', borderRadius: 2,
-                      width: `${spendPct}%`,
-                      backgroundColor: spendPct > 75 ? COLORS.error : spendPct > 50 ? COLORS.warning : acct.color,
-                    }} />
-                  </View>
-
-                  {/* Compact Spent / Received Stat Rows */}
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <View style={{ flex: 1, backgroundColor: COLORS.error + '08', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.error + '10' }}>
-                      <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' }}>Spent</Text>
-                      <Text style={{ color: COLORS.error, fontSize: 12, fontWeight: '700' }}>
-                        − {fmt(spent, currency)}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, backgroundColor: COLORS.success + '08', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.success + '10' }}>
-                      <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '500' }}>Received</Text>
-                      <Text style={{ color: COLORS.success, fontSize: 12, fontWeight: '700' }}>
-                        + {fmt(received, currency)}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Footer row: Account Type Badge & Actions */}
-                <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.divider, marginTop: 12, paddingTop: 10, justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={styles.accountTypeBadge}>
-                    <Text style={styles.accountTypeBadgeText}>{typeLabel}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 14 }}>
-                    <TouchableOpacity onPress={() => openTransfer(acct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Icons.ArrowRightLeft color={COLORS.primary} size={14} />
-                      <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '700' }}>Transfer</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => openEdit(acct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Pencil color={COLORS.textSecondary} size={14} />
-                      <Text style={{ color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' }}>Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleDelete(acct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Trash2 color={COLORS.error} size={14} />
-                      <Text style={{ color: COLORS.error, fontSize: 12, fontWeight: '600' }}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+            {/* Summary card */}
+            <View style={[styles.detailsSummaryCard, { marginHorizontal: SIZES.padding, marginTop: 8 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.detailsSummaryLabel, { color: COLORS.error }]}>
+                  Spent
+                </Text>
+                <Text style={[styles.detailsSummaryValue, { color: COLORS.error }]}>
+                  − {fmt(detailsData.spent, currency)}
+                </Text>
               </View>
-            );
-          })
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                <Text style={[styles.detailsSummaryLabel, { color: COLORS.success }]}>
+                  Received
+                </Text>
+                <Text style={[styles.detailsSummaryValue, { color: COLORS.success }]}>
+                  + {fmt(detailsData.received, currency)}
+                </Text>
+              </View>
+              <View style={{ height: 1, backgroundColor: COLORS.divider, marginVertical: 8 }} />
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.detailsSummaryLabel, { color: COLORS.text }]}>
+                  Net
+                </Text>
+                <Text style={[styles.detailsSummaryValue, {
+                  color: detailsData.received - detailsData.spent >= 0 ? COLORS.success : COLORS.error,
+                }]}>
+                  {fmt(detailsData.received - detailsData.spent, currency)}
+                </Text>
+              </View>
+              <Text style={{ color: COLORS.textSecondary, fontSize: 11, marginTop: 6 }}>
+                {detailsData.count} transaction{detailsData.count !== 1 ? 's' : ''}
+              </Text>
+            </View>
+
+            {/* Transaction list */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Transactions</Text>
+            </View>
+
+            {detailsLoading ? (
+              <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: 20 }} />
+            ) : detailsData.transactions.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No Transactions</Text>
+                <Text style={styles.emptySubtitle}>No transactions found for the selected filters.</Text>
+              </View>
+            ) : (
+              detailsData.transactions.map(tx => (
+                <View key={tx.id} style={[styles.accountCard, { flexDirection: 'row', alignItems: 'center', padding: 14 }]}>
+                  <View style={{
+                    width: 38, height: 38, borderRadius: 12,
+                    backgroundColor: tx.type === 'expense' ? COLORS.error + '15' : COLORS.success + '15',
+                    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+                  }}>
+                    <Text style={{ fontSize: 16 }}>
+                      {tx.type === 'expense' ? '↓' : '↑'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
+                      {tx.title || tx.description || 'Transaction'}
+                    </Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, marginTop: 1 }}>
+                      {new Date(tx.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {tx.description && tx.description !== tx.title ? ` · ${tx.description}` : ''}
+                    </Text>
+                  </View>
+                  <Text style={{
+                    color: tx.type === 'expense' ? COLORS.error : COLORS.success,
+                    fontSize: 15, fontWeight: '800',
+                  }}>
+                    {tx.type === 'expense' ? '−' : '+'}{fmt(tx.amount, currency)}
+                  </Text>
+                </View>
+              ))
+            )}
+          </>
         )}
       </ScrollView>
 

@@ -1,6 +1,21 @@
 import { getDb, generateId } from '../lib/db';
 import { transactionService } from './transactionService';
 
+function buildDateRange(period) {
+  if (period === 'ALL') return { clause: '', params: [] };
+  const now = new Date();
+  let start;
+  switch (period) {
+    case '1W': start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7); break;
+    case '1M': start = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()); break;
+    case '3M': start = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()); break;
+    case '6M': start = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate()); break;
+    case '1Y': start = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()); break;
+    default: return { clause: '', params: [] };
+  }
+  return { clause: ' AND date >= ?', params: [start.toISOString()] };
+}
+
 export const accountService = {
   async getAccounts(userId) {
     const db = getDb();
@@ -40,6 +55,27 @@ export const accountService = {
       monthly_received: statsMap[a.id]?.monthly_received ?? 0,
       monthly_tx_count: statsMap[a.id]?.monthly_tx_count ?? 0,
     }));
+  },
+
+  async getTransactionsByAccount(userId, accountId, period = 'ALL') {
+    const db = getDb();
+    const { clause, params } = buildDateRange(period);
+    const accountFilter = accountId ? ' AND account_id = ?' : ' AND account_id IS NOT NULL';
+    const acctParams = accountId ? [accountId] : [];
+
+    const transactions = await db.getAllAsync(
+      `SELECT * FROM transactions WHERE user_id = ?${accountFilter}${clause} ORDER BY date DESC`,
+      [userId, ...acctParams, ...params]
+    );
+
+    const spent = transactions
+      .filter(t => t.type === 'expense')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const received = transactions
+      .filter(t => t.type === 'income')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+    return { transactions, spent, received, count: transactions.length };
   },
 
   async saveAccount(userId, data, isNew) {

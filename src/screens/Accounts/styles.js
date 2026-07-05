@@ -339,4 +339,114 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
   },
+
+  /* ── Details tab bar ────────────────────────────────────────────── */
+  detailsTabRow: {
+    flexDirection: 'row',
+    marginHorizontal: SIZES.padding,
+    marginTop: 12,
+    marginBottom: 8,
+    gap: 10,
+  },
+  detailsTab: {
+    flex: 1,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderRadius: 14,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  detailsTabActive: {
+    backgroundColor: COLORS.primary + '18',
+    borderColor: COLORS.primary,
+  },
+  detailsTabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textSecondary,
+  },
+  detailsTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '800',
+  },
+
+  /* ── Details pills (account selector) ────────────────────────────── */
+  detailsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    marginRight: 8,
+    gap: 6,
+  },
+  detailsPillActive: {
+    backgroundColor: COLORS.primary + '18',
+    borderColor: COLORS.primary,
+  },
+  detailsPillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  detailsPillText: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  detailsPillTextActive: {
+    color: COLORS.primary,
+  },
+
+  /* ── Period filter row ──────────────────────────────────────────── */
+  detailsPeriodRow: {
+    flexDirection: 'row',
+    marginHorizontal: SIZES.padding,
+    gap: 8,
+    marginBottom: 8,
+  },
+  detailsPeriodBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+  },
+  detailsPeriodBtnActive: {
+    backgroundColor: COLORS.primary + '18',
+    borderColor: COLORS.primary,
+  },
+  detailsPeriodText: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  detailsPeriodTextActive: {
+    color: COLORS.primary,
+  },
+
+  /* ── Details summary card ───────────────────────────────────────── */
+  detailsSummaryCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 8,
+  },
+  detailsSummaryLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  detailsSummaryValue: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
 });
