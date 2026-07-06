@@ -49,13 +49,19 @@ export const dashboardService = {
     const allLoans               = await loanService.getLoans(userId);
 
     const loanSummary = allLoans.reduce((acc, l) => {
+      const rem = parseFloat(l.remaining || 0);
       acc.total     += parseFloat(l.total_amount || 0);
       acc.paid      += parseFloat(l.paid_amount  || 0);
-      acc.remaining += parseFloat(l.remaining    || 0);
-      if (l.type === 'given') acc.netRemaining += parseFloat(l.remaining || 0);
-      else                    acc.netRemaining -= parseFloat(l.remaining || 0);
+      acc.remaining += rem;
+      if (l.type === 'given') {
+        acc.netRemaining += rem;
+        acc.receivables  += rem;
+      } else {
+        acc.netRemaining -= rem;
+        acc.liabilities  += rem;
+      }
       return acc;
-    }, { total: 0, paid: 0, remaining: 0, netRemaining: 0 });
+    }, { total: 0, paid: 0, remaining: 0, netRemaining: 0, liabilities: 0, receivables: 0 });
 
     const isLoan = (t) => t.is_loan === 1;
 

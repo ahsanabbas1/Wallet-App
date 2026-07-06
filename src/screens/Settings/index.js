@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins, Trash2 } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins, Trash2, Database } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +14,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import WhatsNewModal from '../../components/WhatsNewModal';
 import PinSetupModal from '../../components/PinSetupModal';
+import LinkOldTransactionsModal from '../../components/LinkOldTransactionsModal';
 import { useLock } from '../../context/LockContext';
 import { APP_VERSION } from '../../constants/changelog';
 
@@ -163,6 +164,7 @@ export default function Settings() {
   };
 
   const [showWhatsNew, setShowWhatsNew] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
   const showPageInfo = () => Alert.alert('About This Page', 'Customize currency, theme, notifications, and other app preferences.');
 
   if (loading) {
@@ -355,6 +357,17 @@ export default function Settings() {
           )}
         </View>
 
+        {/* Data */}
+        <SectionHeader title="Data" />
+        <View style={styles.card}>
+          <SettingRow
+            icon={Database}
+            label="Link Old Transactions"
+            value="Assign account to unlinked entries"
+            onPress={() => setShowLinkModal(true)}
+          />
+        </View>
+
         {/* Security */}
         <SectionHeader title="Security" />
         <View style={styles.card}>
@@ -495,6 +508,14 @@ export default function Settings() {
         verifyFn={verifyPin}
         onSuccess={handlePinSuccess}
         onCancel={() => setPinModal(null)}
+      />
+      <LinkOldTransactionsModal
+        visible={showLinkModal}
+        userId={userId}
+        onClose={(success) => {
+          setShowLinkModal(false);
+          if (success) Alert.alert('Done', 'Old transactions have been linked to the selected account. They now contribute to all financial views.');
+        }}
       />
     </SafeAreaView>
   );

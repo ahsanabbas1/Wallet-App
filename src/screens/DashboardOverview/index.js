@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
@@ -22,7 +21,7 @@ import {
   ArrowLeftRight,
 } from 'lucide-react-native';
 import CurrencyConverterModal from '../../components/CurrencyConverterModal';
-import CashFlowForecastCard from '../../components/CashFlowForecastCard';
+import HealthScoreCard from '../../components/HealthScoreCard';
 import HeaderMenu from '../../components/HeaderMenu';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -69,12 +68,11 @@ const DashboardOverview = () => {
     monthlySpend: 0,
     totalSaved: 0,
     totalIncome: 0,
-    loan: { total: 0, paid: 0, remaining: 0, netRemaining: 0 },
+    loan: { total: 0, paid: 0, remaining: 0, netRemaining: 0, liabilities: 0, receivables: 0 },
     budget: { totalBudget: 0, totalUsed: 0, count: 0 }
   });
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [expenseChange, setExpenseChange] = useState(0);
-  const [savingsProgress, setSavingsProgress] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
   const [balanceVisible, setBalanceVisible] = useState(false);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
@@ -118,7 +116,6 @@ const DashboardOverview = () => {
       setCategoryBreakdown(dashData.categoryBreakdown);
       setExpenseChange(dashData.expenseChange);
       setPerformanceMetrics(dashData.performanceMetrics);
-      setSavingsProgress(dashData.savingsProgress);
     } catch (error) {
       console.error('Dashboard load error:', error.message);
     } finally {
@@ -263,73 +260,10 @@ const DashboardOverview = () => {
 
         {/* Dashboard Cards Layout */}
         <View style={{ marginBottom: 24 }}>
-          {/* 1. Total Amount: Comprehensive Executive Summary */}
-          <LinearGradient
-            colors={['#4f5ff7', '#7c4dff']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.balanceCard, { padding: 24, marginBottom: 16, borderHeight: 0 }]}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View>
-                <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.8)', marginBottom: 4 }]}>Total Net Worth</Text>
-                <Text style={[styles.balanceAmount, { fontSize: SCREEN_WIDTH * 0.085, color: '#fff', marginBottom: 0, fontWeight: '800' }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {mv(`${currency} ${formatAmount(totals.totalAmount)}`)}
-                </Text>
-              </View>
-              <TrendingUp color="rgba(255,255,255,0.4)" size={24} />
-            </View>
-
-            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 20 }} />
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>
-              <View style={{ minWidth: '40%' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Available Cash</Text>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>{mv(`${currency} ${formatAmount(totals.cashInHand)}`)}</Text>
-              </View>
-              <View style={{ minWidth: '40%' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Net Loan Pos.</Text>
-                <Text style={{ color: '#00e676', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                  {mv(`${totals.loan.netRemaining >= 0 ? '+' : ''}${formatAmount(totals.loan.netRemaining)}`)}
-                </Text>
-              </View>
-              <View style={{ minWidth: '40%' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Budget Usage</Text>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                  {mv(`${((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}%`)}
-                </Text>
-              </View>
-              <View style={{ minWidth: '40%' }}>
-                <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' }}>Savings</Text>
-                <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700', marginTop: 2 }}>
-                  {mv(`${savingsProgress.toFixed(0)}%`)}
-                </Text>
-              </View>
-            </View>
-          </LinearGradient>
+          {/* Financial Health (merged Net Worth + Health Score) */}
+          <HealthScoreCard totals={totals} expenseChange={expenseChange} userId={userId} gradient balanceVisible={balanceVisible} />
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-            {/* 2. Total Cash In Hand: Income - Expense */}
-            <View style={[styles.balanceCard, { flex: 1, marginRight: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(0, 230, 118, 0.2)' }]}>
-              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Cash In Hand</Text>
-              <Text style={[styles.balanceAmount, { color: '#00e676', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
-                {mv(`${currency} ${formatAmount(totals.cashInHand)}`)}
-              </Text>
-              <Text style={{ color: 'rgba(0, 230, 118, 0.7)', fontSize: 10, fontWeight: '600', marginTop: 4 }}>
-                {mv(`${((totals.cashInHand / (totals.totalIncome || 1)) * 100).toFixed(1)}% liquidity`)}
-              </Text>
-            </View>
- 
-            {/* 3. Total Expense of the Month: Outgoing */}
-            <View style={[styles.balanceCard, { flex: 1, marginLeft: 6, marginBottom: 0, padding: 18, backgroundColor: COLORS.card, borderWidth: 1, borderColor: 'rgba(255, 82, 82, 0.2)' }]}>
-              <Text style={[styles.balanceLabel, { color: COLORS.text, fontSize: 12, fontWeight: '600' }]}>Expenses</Text>
-              <Text style={[styles.balanceAmount, { color: '#ff5252', fontSize: SCREEN_WIDTH * 0.05, marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>
-                {mv(`${currency} ${formatAmount(totals.outgoing)}`)}
-              </Text>
-              <Text style={{ color: expenseChange > 0 ? COLORS.error : COLORS.success, fontSize: 10, fontWeight: '600', marginTop: 4 }}>
-                {mv(`${expenseChange > 0 ? '↑' : '↓'} ${Math.abs(expenseChange).toFixed(1)}% vs prev`)}
-              </Text>
-            </View>
           </View>
 
           {/* 4. Budget Status Card */}
@@ -417,9 +351,6 @@ const DashboardOverview = () => {
             </Pressable>
           )}
         </View>
-
-        {/* Cash Flow Forecast */}
-        <CashFlowForecastCard userId={userId} />
 
         {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Quick Actions</Text>
