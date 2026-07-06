@@ -24,6 +24,8 @@ import {
   Repeat,
   X,
   Info,
+  Archive,
+  Bell,
 } from 'lucide-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
@@ -86,6 +88,8 @@ const PlannedPayments = () => {
   const [loading,          setLoading]          = useState(true);
   const [submitting,       setSubmitting]        = useState(false);
   const [plannedPayments,  setPlannedPayments]   = useState([]);
+  const [archivedPayments, setArchivedPayments]  = useState([]);
+  const [activeTab,        setActiveTab]         = useState(0);
   const [showAddModal,     setShowAddModal]      = useState(false);
   const [recordingId,      setRecordingId]       = useState(null);
   const [editingPayment,   setEditingPayment]    = useState(null);
@@ -110,8 +114,12 @@ const PlannedPayments = () => {
       setLoading(true);
       setTableExists(true);
       if (!userId) return;
-      const data = await paymentService.getPlannedPayments(userId);
-      setPlannedPayments(data);
+      const [active, archived] = await Promise.all([
+        paymentService.getPlannedPayments(userId),
+        paymentService.getArchivedPlannedPayments(userId),
+      ]);
+      setPlannedPayments(active);
+      setArchivedPayments(archived);
     } catch (error) {
       if (error.message?.includes('relation "planned_payments" does not exist')) {
         setTableExists(false);
@@ -380,6 +388,34 @@ const PlannedPayments = () => {
           </Text>
         </View>
 
+        {/* Tab bar */}
+        <View style={styles.tabBar}>
+          <Pressable
+            style={[styles.tab, activeTab === 0 && styles.tabActive]}
+            onPress={() => setActiveTab(0)}
+          >
+            <Bell color={activeTab === 0 ? COLORS.primary : COLORS.textSecondary} size={16} />
+            <Text style={[styles.tabText, activeTab === 0 && styles.tabTextActive]}>Active</Text>
+            {plannedPayments.length > 0 && (
+              <View style={[styles.tabBadge, { backgroundColor: COLORS.primary }]}>
+                <Text style={styles.tabBadgeText}>{plannedPayments.length}</Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            style={[styles.tab, activeTab === 1 && styles.tabActive]}
+            onPress={() => setActiveTab(1)}
+          >
+            <Archive color={activeTab === 1 ? COLORS.primary : COLORS.textSecondary} size={16} />
+            <Text style={[styles.tabText, activeTab === 1 && styles.tabTextActive]}>Archive</Text>
+            {archivedPayments.length > 0 && (
+              <View style={[styles.tabBadge, { backgroundColor: COLORS.textSecondary }]}>
+                <Text style={styles.tabBadgeText}>{archivedPayments.length}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
+
         {loading ? (
           <ActivityIndicator color={COLORS.primary} size="large" style={{ marginTop: 40 }} />
         ) : !tableExists ? (
@@ -389,24 +425,44 @@ const PlannedPayments = () => {
             <Text style={styles.emptySub}>Run the Supabase migration to create the planned_payments table.</Text>
             <AppButton title="Check Again" onPress={fetchPlannedPayments} style={{ backgroundColor: COLORS.error, marginTop: 16 }} />
           </View>
-        ) : plannedPayments.length > 0 ? (
-          plannedPayments.map((item) => (
-            <PaymentCard
-              key={item.id}
-              item={item}
-              onDelete={recordingId ? undefined : deletePlanned}
-              onRecord={handleRecordNow}
-              recording={recordingId === item.id}
-              onEdit={recordingId ? undefined : openEditModal}
-            />
-          ))
+        ) : activeTab === 0 ? (
+          plannedPayments.length > 0 ? (
+            plannedPayments.map((item) => (
+              <PaymentCard
+                key={item.id}
+                item={item}
+                onDelete={recordingId ? undefined : deletePlanned}
+                onRecord={handleRecordNow}
+                recording={recordingId === item.id}
+                onEdit={recordingId ? undefined : openEditModal}
+              />
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <CalendarClock color={COLORS.textSecondary} size={56} style={{ opacity: 0.4, marginBottom: 16 }} />
+              <Text style={styles.emptyTitle}>No Active Payments</Text>
+              <Text style={styles.emptySub}>Add your first repeating bill or salary.</Text>
+              <AppButton title="Add Planned Payment" onPress={() => setShowAddModal(true)} style={{ marginTop: 16 }} />
+            </View>
+          )
         ) : (
-          <View style={styles.emptyState}>
-            <CalendarClock color={COLORS.textSecondary} size={56} style={{ opacity: 0.4, marginBottom: 16 }} />
-            <Text style={styles.emptyTitle}>No Planned Payments</Text>
-            <Text style={styles.emptySub}>Add your first repeating bill or salary.</Text>
-            <AppButton title="Add Planned Payment" onPress={() => setShowAddModal(true)} style={{ marginTop: 16 }} />
-          </View>
+          archivedPayments.length > 0 ? (
+            archivedPayments.map((item) => (
+              <PaymentCard
+                key={item.id}
+                item={item}
+                onDelete={recordingId ? undefined : deletePlanned}
+                recording={recordingId === item.id}
+                archived
+              />
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <Archive color={COLORS.textSecondary} size={56} style={{ opacity: 0.4, marginBottom: 16 }} />
+              <Text style={styles.emptyTitle}>Archive is Empty</Text>
+              <Text style={styles.emptySub}>Payments that reach their end date will appear here.</Text>
+            </View>
+          )
         )}
       </ScrollView>
 

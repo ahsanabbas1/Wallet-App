@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, ActivityIndicator, Dimensions, AppState } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
@@ -79,6 +80,21 @@ const DashboardOverview = () => {
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showConverter, setShowConverter] = useState(false);
 
+  // Restore persisted visibility toggle (survives app lock/unlock)
+  useEffect(() => {
+    AsyncStorage.getItem('dashboard_balance_visible').then(val => {
+      if (val === 'true') setBalanceVisible(true);
+    });
+  }, []);
+
+  const toggleVisibility = () => {
+    setBalanceVisible(v => {
+      const next = !v;
+      AsyncStorage.setItem('dashboard_balance_visible', String(next));
+      return next;
+    });
+  };
+
   const mv = (formatted) => balanceVisible ? formatted : '••••••';
 
   // Single load function — uses userId from context, no extra getSession() call
@@ -121,6 +137,8 @@ const DashboardOverview = () => {
       if (!userId || !dbReady) return;
       const checkVersion = async () => {
         try {
+          const dontShow = await AsyncStorage.getItem('dont_show_whats_new');
+          if (dontShow === 'true') return;
           const db = getDb();
           const row = await db.getFirstAsync('SELECT last_seen_version FROM users WHERE id = ?', [userId]);
           if (!row || row.last_seen_version !== APP_VERSION) {
@@ -173,9 +191,12 @@ const DashboardOverview = () => {
 
 
 
-  const handleDismissWhatsNew = async () => {
+  const handleDismissWhatsNew = async (dontShowAgain) => {
     setShowWhatsNew(false);
     try {
+      if (dontShowAgain) {
+        await AsyncStorage.setItem('dont_show_whats_new', 'true');
+      }
       const db = getDb();
       await db.runAsync('UPDATE users SET last_seen_version = ? WHERE id = ?', [APP_VERSION, userId]);
     } catch (_) {}
@@ -205,7 +226,7 @@ const DashboardOverview = () => {
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
             <Pressable
               style={styles.iconButton}
-              onPress={() => setBalanceVisible(v => !v)}
+              onPress={toggleVisibility}
             >
               {balanceVisible
                 ? <Eye color={COLORS.text} size={20} />

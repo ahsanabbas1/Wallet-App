@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../lib/supabase';
-import { openUserDatabase } from '../lib/db';
+import { openUserDatabase, deleteUserDatabase } from '../lib/db';
 import { isMigrationDone, runInitialMigration } from '../services/dataMigrationService';
 
 // Cached user is stored here so the app survives offline token expiry
@@ -167,6 +168,34 @@ export const AuthProvider = ({ children }) => {
     await supabase.auth.signOut();
   };
 
+  // ─── delete all data: wipe local copy only, stay logged in ──────────────
+  const deleteAllData = async () => {
+    const uid = effectiveUserId;
+    if (!uid) return;
+
+    // 1. Delete the SQLite database file
+    await deleteUserDatabase(uid);
+
+    // 2. Clear all AsyncStorage keys
+    const keys = await AsyncStorage.getAllKeys();
+    if (keys.length > 0) {
+      await AsyncStorage.multiRemove(keys);
+    }
+
+    // 3. Clear SecureStore (PIN)
+    try { await SecureStore.deleteItemAsync('app_pin'); } catch (_) {}
+
+    // 4. Re-cache user identity so offline mode still works after restart
+    if (effectiveUser) {
+      await cacheUser(effectiveUser);
+    }
+
+    // 5. Re-initialize database with fresh tables
+    setDbStatus('opening');
+    await openUserDatabase(uid);
+    setDbStatus('ready');
+  };
+
   // Effective user (online session or offline cache)
   const effectiveUser   = session?.user ?? offlineUser ?? null;
   const effectiveUserId = effectiveUser?.id ?? null;
@@ -181,6 +210,7 @@ export const AuthProvider = ({ children }) => {
       dbReady:           dbStatus === 'ready',
       migrationProgress,
       signOut,
+      deleteAllData,
     }}>
       {children}
     </AuthContext.Provider>

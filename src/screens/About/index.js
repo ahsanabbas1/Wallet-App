@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Linking, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Mail, Heart, Shield, Zap, Layout, BarChart, Smartphone } from 'lucide-react-native';
+import { ChevronLeft, Mail, Heart, Shield, LayoutDashboard, List, Calendar, Layout, Target, CalendarClock, Banknote, ShoppingBag, Landmark, MessageSquare, BarChart3 } from 'lucide-react-native';
 import { SIZES } from '../../constants/theme';
 import { useTheme } from '../../context/ThemeContext';
+import { APP_VERSION } from '../../constants/changelog';
 
 const FeatureItem = ({ icon: Icon, title, description }) => {
   const { colors: COLORS } = useTheme();
@@ -52,7 +53,7 @@ const About = ({ navigation }) => {
             />
           </View>
           <Text style={styles.appName}>Wallet Budget App</Text>
-          <Text style={styles.appVersion}>Version 1.0.0</Text>
+          <Text style={styles.appVersion}>Version {APP_VERSION}</Text>
         </View>
 
         {/* Developer Info */}
@@ -85,39 +86,75 @@ const About = ({ navigation }) => {
           <Text style={styles.sectionTitle}>What the App Does</Text>
           <View style={styles.card}>
             <Text style={styles.description}>
-              Wallet Budget App is a premium financial management tool designed to help you take full control of your money.
-              Track every expense, set realistic budgets, and gain deep insights into your spending habits with ease.
+              A comprehensive offline-first financial management app with expense tracking, budgeting, Islamic wealth
+              management (Khums/Zakat), loan tracking, savings goals, shopping lists with warranties, AI-powered insights,
+              bank account management, and advanced reporting — all secured with PIN & biometric lock.
             </Text>
           </View>
         </View>
 
         {/* Features */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cool Features</Text>
+          <Text style={styles.sectionTitle}>Features</Text>
+          <FeatureItem
+            icon={LayoutDashboard}
+            title="Dashboard & Accounts"
+            description="Real-time financial overview with multi-account management and balance tracking."
+          />
+          <FeatureItem
+            icon={List}
+            title="Expense Tracking"
+            description="Log income and expenses with a rich hierarchical category system."
+          />
+          <FeatureItem
+            icon={Calendar}
+            title="Financial Calendar"
+            description="Visual calendar view of all your income, expenses, and financial events."
+          />
           <FeatureItem
             icon={Layout}
-            title="Hierarchical Categories"
-            description="Organize transactions with a professional multi-level category system."
+            title="Budgeting"
+            description="Set category budgets and track spending against limits throughout the month."
           />
           <FeatureItem
-            icon={Zap}
+            icon={Target}
+            title="Savings Goals"
+            description="Create savings targets, track progress, and archive completed goals."
+          />
+          <FeatureItem
+            icon={CalendarClock}
+            title="Planned Payments"
+            description="Schedule recurring payments and never miss a due date again."
+          />
+          <FeatureItem
+            icon={Banknote}
+            title="Loan Management"
+            description="Track loans given and received with installment plans and payment history."
+          />
+          <FeatureItem
+            icon={ShoppingBag}
+            title="Shopping & Warranties"
+            description="Manage shopping lists and track product warranties with expiry notifications."
+          />
+          <FeatureItem
+            icon={Landmark}
+            title="Khums / Zakat"
+            description="Islamic wealth management tools — Khums calculator for Shia and Zakat for Sunni."
+          />
+          <FeatureItem
+            icon={MessageSquare}
             title="AI Assistant"
-            description="Get personalized financial advice and insights from our built-in AI."
+            description="Get personalized financial advice, tips, and insights from built-in AI."
           />
           <FeatureItem
-            icon={BarChart}
-            title="Advanced Reports"
-            description="Visualize your financial health with beautiful charts and data analytics."
+            icon={BarChart3}
+            title="Reports & Analytics"
+            description="Visualize your finances with charts, export data, and gain deep spending insights."
           />
           <FeatureItem
             icon={Shield}
-            title="Secure Sync"
-            description="Your data is safely stored and synced across devices using Supabase."
-          />
-          <FeatureItem
-            icon={Smartphone}
-            title="Premium UI"
-            description="A sleek, dark-themed interface designed for the best user experience."
+            title="Security & Privacy"
+            description="Protect your data with PIN lock and biometric authentication — fully offline-first."
           />
         </View>
 

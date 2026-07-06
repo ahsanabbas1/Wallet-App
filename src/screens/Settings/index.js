@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins, Trash2 } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -15,6 +15,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import WhatsNewModal from '../../components/WhatsNewModal';
 import PinSetupModal from '../../components/PinSetupModal';
 import { useLock } from '../../context/LockContext';
+import { APP_VERSION } from '../../constants/changelog';
 
 const CURRENCIES = [
   { code: 'PKR', symbol: 'Rs', label: 'Pakistani Rupee' },
@@ -54,7 +55,7 @@ const SettingRow = ({ icon: Icon, label, value, onPress, rightElement, color }) 
 export default function Settings() {
   const navigation = useNavigation();
   const { openDrawer } = useDrawer();
-  const { userId, user, signOut } = useAuth();
+  const { userId, user, signOut, deleteAllData } = useAuth();
   const { currency: profileCurrency, name: profileName, updateCurrency, updateName: updateProfileName, madhab, updateMadhab } = useProfile();
   const { colors: COLORS, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -107,6 +108,26 @@ export default function Settings() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: signOut },
     ]);
+  };
+
+  const handleDeleteAllData = () => {
+    Alert.alert(
+      'Delete All Data',
+      'This will permanently delete ALL local data including transactions, accounts, budgets, savings goals, loans, shopping lists, khums records, and all settings. The app will reset to a fresh state with a new empty database.\n\nYou will stay signed in.\n\nThis action CANNOT be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete Everything', style: 'destructive', onPress: () => {
+          Alert.alert(
+            'Final Confirmation',
+            'Are you absolutely sure? All your local financial data will be lost permanently.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'DELETE', style: 'destructive', onPress: deleteAllData },
+            ]
+          );
+        }},
+      ]
+    );
   };
 
   const {
@@ -430,7 +451,7 @@ export default function Settings() {
           <SettingRow
             icon={Info}
             label="App Version"
-            value="2.0.0"
+            value={APP_VERSION}
             onPress={null}
             rightElement={<View />}
           />
@@ -439,6 +460,21 @@ export default function Settings() {
             label="About App"
             onPress={() => navigation.navigate('About')}
           />
+        </View>
+
+        {/* Danger Zone */}
+        <SectionHeader title="Danger Zone" />
+        <View style={styles.card}>
+          <Pressable
+            style={({ pressed }) => [styles.dangerRow, pressed && { opacity: 0.6 }]}
+            onPress={handleDeleteAllData}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: '#f44336' + '22' }]}>
+              <Trash2 color="#f44336" size={18} />
+            </View>
+            <Text style={styles.dangerLabel}>Delete All Data</Text>
+            <ChevronRight color="#f44336" size={18} />
+          </Pressable>
         </View>
 
         {/* Sign out */}
@@ -634,6 +670,18 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   themeBtnActive: {
     backgroundColor: COLORS.primary,
+  },
+  dangerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 14,
+  },
+  dangerLabel: {
+    flex: 1,
+    color: '#f44336',
+    fontSize: 14,
+    fontWeight: '500',
   },
   signOutBtn: {
     flexDirection: 'row',

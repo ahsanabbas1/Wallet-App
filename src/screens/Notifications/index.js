@@ -19,7 +19,7 @@ import { useTheme } from '../../context/ThemeContext';
 import {
   NOTIFICATION_TYPES, NOTIFICATION_META, DEFAULT_PREFERENCES,
   getNotifications, getPreferences, savePreferences,
-  markAsRead, markAllAsRead, deleteNotification, clearAllNotifications,
+  markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications, clearAllNotifications,
   generateNotifications, getArchivedNotifications, archiveOldNotifications,
 } from '../../services/notificationService';
 
@@ -131,6 +131,19 @@ export default function Notifications() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
   };
 
+  const handleDeleteAll = () => {
+    Alert.alert('Delete All', 'Permanently delete all inbox notifications? This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete All', style: 'destructive',
+        onPress: async () => {
+          await deleteAllNotifications(userId);
+          setNotifications([]);
+        },
+      },
+    ]);
+  };
+
   const handleArchiveAll = () => {
     Alert.alert('Archive All', 'Move all notifications to archive?', [
       { text: 'Cancel', style: 'cancel' },
@@ -228,6 +241,10 @@ export default function Notifications() {
                       <Text style={s.actionBtnText}>Mark all read</Text>
                     </Pressable>
                   )}
+                  <Pressable style={[s.actionBtn, { borderColor: '#f44336' + '40' }]} onPress={handleDeleteAll}>
+                    <Trash2 color="#f44336" size={14} />
+                    <Text style={[s.actionBtnText, { color: '#f44336' }]}>Delete all</Text>
+                  </Pressable>
                   <Pressable style={[s.actionBtn, { marginLeft: 'auto', borderColor: COLORS.textSecondary + '40' }]} onPress={handleArchiveAll}>
                     <Archive color={COLORS.textSecondary} size={14} />
                     <Text style={[s.actionBtnText, { color: COLORS.textSecondary }]}>Archive all</Text>

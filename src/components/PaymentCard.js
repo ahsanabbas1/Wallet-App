@@ -1,11 +1,11 @@
 import React, { useMemo, memo } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
-import { CalendarClock, CheckCircle2, Trash2, Pencil } from 'lucide-react-native';
+import { CalendarClock, CheckCircle2, Trash2, Pencil, Archive } from 'lucide-react-native';
 import { useProfile } from '../context/ProfileContext';
 import { useTheme } from '../context/ThemeContext';
 import { paymentService } from '../services/paymentService';
 
-const PaymentCard = memo(({ item, onDelete, onRecord, onEdit, recording }) => {
+const PaymentCard = memo(({ item, onDelete, onRecord, onEdit, recording, archived }) => {
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -41,37 +41,46 @@ const PaymentCard = memo(({ item, onDelete, onRecord, onEdit, recording }) => {
         </Text>
       </View>
       <View style={styles.cardActions}>
-        {onRecord ? (
-          <Pressable 
-            onPress={() => onRecord(item)} 
-            style={styles.recordButton}
-            disabled={recording}
-          >
-            {recording ? (
-              <ActivityIndicator size="small" color={COLORS.success} />
-            ) : (
-              <CheckCircle2 color={COLORS.success} size={18} />
-            )}
-            <Text style={[styles.recordButtonText, { color: COLORS.success }]}>
-              {recording ? 'Recording...' : 'Record Now'}
-            </Text>
-          </Pressable>
-        ) : null}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {onEdit && (
-            <Pressable
-              onPress={() => onEdit(item)}
-              style={[styles.deleteButton, { backgroundColor: COLORS.surface }]}
-            >
-              <Pencil color={COLORS.textSecondary} size={16} />
-            </Pressable>
-          )}
-          {onDelete && (
-            <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
-              <Trash2 color={COLORS.error} size={18} />
-            </Pressable>
-          )}
-        </View>
+        {archived ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Archive color={COLORS.textSecondary} size={14} />
+            <Text style={{ color: COLORS.textSecondary, fontSize: 12 }}>Archived</Text>
+          </View>
+        ) : (
+          <>
+            {onRecord ? (
+              <Pressable 
+                onPress={() => onRecord(item)} 
+                style={styles.recordButton}
+                disabled={recording}
+              >
+                {recording ? (
+                  <ActivityIndicator size="small" color={COLORS.success} />
+                ) : (
+                  <CheckCircle2 color={COLORS.success} size={18} />
+                )}
+                <Text style={[styles.recordButtonText, { color: COLORS.success }]}>
+                  {recording ? 'Recording...' : 'Record Now'}
+                </Text>
+              </Pressable>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {onEdit && (
+                <Pressable
+                  onPress={() => onEdit(item)}
+                  style={[styles.deleteButton, { backgroundColor: COLORS.surface }]}
+                >
+                  <Pencil color={COLORS.textSecondary} size={16} />
+                </Pressable>
+              )}
+              {onDelete && (
+                <Pressable onPress={() => onDelete(item.id)} style={styles.deleteButton}>
+                  <Trash2 color={COLORS.error} size={18} />
+                </Pressable>
+              )}
+            </View>
+          </>
+        )}
       </View>
     </View>
   );

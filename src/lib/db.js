@@ -47,6 +47,13 @@ export function getActiveUserId() {
   return _activeUserId;
 }
 
+export async function deleteUserDatabase(userId) {
+  await closeUserDatabase(userId);
+  try {
+    await SQLite.deleteDatabaseAsync(`user_${userId}.db`);
+  } catch (_) {}
+}
+
 export function generateId() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;

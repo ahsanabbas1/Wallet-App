@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet,
 } from 'react-native';
@@ -8,6 +8,7 @@ import { CHANGELOG, APP_VERSION } from '../constants/changelog';
 
 const WhatsNewModal = ({ visible, onDismiss }) => {
   const { colors: COLORS } = useTheme();
+  const [dontShowAgain, setDontShowAgain] = useState(false);
   const entry = CHANGELOG[0];
 
   if (!entry) return null;
@@ -41,10 +42,22 @@ const WhatsNewModal = ({ visible, onDismiss }) => {
             ))}
           </ScrollView>
 
+          {/* Don't show again */}
+          <TouchableOpacity
+            style={styles.dontShowRow}
+            onPress={() => setDontShowAgain(prev => !prev)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, { borderColor: COLORS.textSecondary, backgroundColor: dontShowAgain ? COLORS.primary : 'transparent' }]}>
+              {dontShowAgain && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={[styles.dontShowText, { color: COLORS.textSecondary }]}>Don't show this again</Text>
+          </TouchableOpacity>
+
           {/* Dismiss button */}
           <TouchableOpacity
             style={[styles.btn, { backgroundColor: COLORS.primary }]}
-            onPress={onDismiss}
+            onPress={() => onDismiss(dontShowAgain)}
           >
             <Text style={styles.btnText}>Got it!</Text>
           </TouchableOpacity>
@@ -109,9 +122,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  dontShowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+    lineHeight: 15,
+  },
+  dontShowText: {
+    fontSize: 14,
+  },
   btn: {
     marginHorizontal: 20,
-    marginTop: 16,
+    marginTop: 14,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',

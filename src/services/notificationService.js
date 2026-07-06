@@ -75,6 +75,13 @@ export const savePreferences = async (userId, prefs) => {
 
 /* ── Notification CRUD ────────────────────────────────────────────────────── */
 
+export const deleteAllNotifications = async (userId) => {
+  try {
+    const db = getDb();
+    await db.runAsync('DELETE FROM notifications WHERE user_id = ? AND is_archived = 0', [userId]);
+  } catch { }
+};
+
 export const getNotifications = async (userId, limit = 50) => {
   try {
     const db = getDb();
@@ -237,7 +244,7 @@ const checkBudgets = async (userId, prefs, currency) => {
   const budgets = await db.getAllAsync('SELECT * FROM budgets WHERE user_id = ?', [userId]);
   const allCats = await db.getAllAsync('SELECT id, parent_id, name, color FROM categories WHERE user_id = ? OR user_id IS NULL', [userId]);
   const txData = await db.getAllAsync(
-    "SELECT category_id, amount FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?",
+    "SELECT category_id, amount FROM transactions WHERE user_id = ? AND type = 'expense' AND (is_loan IS NULL OR is_loan = 0) AND date >= ? AND date <= ?",
     [userId, monthStart, monthEnd]
   );
   const catMap = Object.fromEntries(allCats.map(c => [c.id, c]));
@@ -286,7 +293,7 @@ const checkSavingsGoals = async (userId, prefs, currency) => {
 
   const db = getDb();
   const goals = await db.getAllAsync(
-    'SELECT id, title, target_amount, saved_amount, target_date FROM savings_goals WHERE user_id = ?',
+    'SELECT id, title, target_amount, saved_amount, target_date FROM savings_goals WHERE user_id = ? AND (is_archived IS NULL OR is_archived = 0)',
     [userId]
   );
   if (!goals?.length) return;
@@ -343,11 +350,11 @@ const checkSpendingSpike = async (userId, prefs, currency) => {
 
   const db = getDb();
   const curTxs = await db.getAllAsync(
-    "SELECT amount FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ?",
+    "SELECT amount FROM transactions WHERE user_id = ? AND type = 'expense' AND (is_loan IS NULL OR is_loan = 0) AND date >= ?",
     [userId, curStart]
   );
   const prvTxs = await db.getAllAsync(
-    "SELECT amount FROM transactions WHERE user_id = ? AND type = 'expense' AND date >= ? AND date <= ?",
+    "SELECT amount FROM transactions WHERE user_id = ? AND type = 'expense' AND (is_loan IS NULL OR is_loan = 0) AND date >= ? AND date <= ?",
     [userId, prvStart, prvEnd]
   );
 
@@ -370,7 +377,7 @@ const checkSpendingSpike = async (userId, prefs, currency) => {
 const checkNegativeBalance = async (userId, prefs, currency) => {
   if (!prefs[NOTIFICATION_TYPES.NEGATIVE_BALANCE]?.enabled) return;
   const db = getDb();
-  const txs = await db.getAllAsync('SELECT amount, type FROM transactions WHERE user_id = ?', [userId]);
+  const txs = await db.getAllAsync('SELECT amount, type FROM transactions WHERE user_id = ? AND (is_loan IS NULL OR is_loan = 0)', [userId]);
   if (!txs?.length) return;
   const balance = txs.reduce((s, t) => s + (t.type === 'income' ? 1 : -1) * parseFloat(t.amount), 0);
   if (balance < 0) {
@@ -392,7 +399,7 @@ const checkLargeTransactions = async (userId, prefs, currency) => {
 
   const db = getDb();
   const txs = await db.getAllAsync(
-    "SELECT t.id, t.title, t.amount, t.category_id, c.name AS cat_name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id WHERE t.user_id = ? AND t.type = 'expense' AND t.date >= ? AND t.amount >= ?",
+    "SELECT t.id, t.title, t.amount, t.category_id, c.name AS cat_name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id WHERE t.user_id = ? AND t.type = 'expense' AND (t.is_loan IS NULL OR t.is_loan = 0) AND t.date >= ? AND t.amount >= ?",
     [userId, yesterday, threshold]
   );
   if (!txs?.length) return;

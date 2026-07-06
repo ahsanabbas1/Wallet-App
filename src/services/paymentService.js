@@ -115,6 +115,14 @@ async function processDuePlannedPayments(userId) {
       const processed = await processSinglePlannedPayment(db, item).catch(() => false);
       if (processed) changed = true;
     }
+
+    // Deactivate payments past their end_date
+    const today = formatLocalDate(new Date());
+    await db.runAsync(
+      'UPDATE planned_payments SET is_active = 0 WHERE user_id = ? AND is_active = 1 AND end_date IS NOT NULL AND end_date < ?',
+      [userId, today]
+    );
+
     return changed;
   })();
   try { return await dueSyncPromise; } finally { dueSyncPromise = null; }
@@ -130,7 +138,12 @@ export const paymentService = {
   async getPlannedPayments(userId) {
     await processDuePlannedPayments(userId).catch(() => {});
     const db = getDb();
-    return db.getAllAsync('SELECT * FROM planned_payments WHERE user_id = ?', [userId]);
+    return db.getAllAsync('SELECT * FROM planned_payments WHERE user_id = ? AND (is_active IS NULL OR is_active = 1) ORDER BY next_date ASC', [userId]);
+  },
+
+  async getArchivedPlannedPayments(userId) {
+    const db = getDb();
+    return db.getAllAsync('SELECT * FROM planned_payments WHERE user_id = ? AND is_active = 0 ORDER BY end_date DESC', [userId]);
   },
 
   async addPlannedPayment(paymentData) {
