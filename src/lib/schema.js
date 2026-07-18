@@ -196,6 +196,33 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id, is_active);
   `);
 
+  // Budget transfers table (Feature: transfer between budget heads)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS budget_transfers (
+      id            TEXT PRIMARY KEY,
+      user_id       TEXT NOT NULL,
+      from_budget_id TEXT NOT NULL,
+      to_budget_id   TEXT NOT NULL,
+      amount        REAL NOT NULL,
+      is_permanent  INTEGER DEFAULT 0,
+      period        TEXT,
+      created_at    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_budget_transfers_user ON budget_transfers(user_id, period);
+  `);
+
+  // Chat messages table (AI Assistant conversation history)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id         TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL,
+      role       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      created_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_user ON chat_messages(user_id, created_at);
+  `);
+
   // Khums tables
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS khums_years (

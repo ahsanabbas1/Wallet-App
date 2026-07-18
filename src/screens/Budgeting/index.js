@@ -6,7 +6,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
-  Wallet, Target, Plus, Menu, X, Pencil, Trash2,
+  Wallet, Target, Plus, Menu, X, Pencil, Trash2, ArrowLeftRight,
   AlertTriangle, CheckCircle, TrendingUp, RefreshCw, CalendarClock, Info
 } from 'lucide-react-native';
 import HeaderMenu from '../../components/HeaderMenu';
@@ -63,6 +63,14 @@ const Budgeting = ({ navigation }) => {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerMode, setPickerMode] = useState('start');
 
+  // Transfer state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferSource, setTransferSource] = useState(null);
+  const [transferTargetId, setTransferTargetId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferIsPermanent, setTransferIsPermanent] = useState(false);
+  const [savingTransfer, setSavingTransfer] = useState(false);
+
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   const fetchData = async () => {
@@ -110,11 +118,22 @@ const Budgeting = ({ navigation }) => {
         return { ...b, used: spent, activeStart, activeEnd };
       });
 
-      setBudgets(processedBudgets);
+      // Apply one-time transfer adjustments to display amounts
+      const transfers = await budgetService.getTransfersForPeriod(userId, period);
+      const adjustedBudgets = processedBudgets.map(b => {
+        let adjTotal = parseFloat(b.total_amount);
+        transfers.forEach(t => {
+          if (t.from_budget_id === b.id) adjTotal -= t.amount;
+          if (t.to_budget_id === b.id) adjTotal += t.amount;
+        });
+        return { ...b, total_amount: Math.max(0, adjTotal) };
+      });
+
+      setBudgets(adjustedBudgets);
       setGoals(goalRes.data || []);
 
-      const totalBudget = processedBudgets.reduce((s, b) => s + parseFloat(b.total_amount), 0);
-      const totalUsed = processedBudgets.reduce((s, b) => s + b.used, 0);
+      const totalBudget = adjustedBudgets.reduce((s, b) => s + parseFloat(b.total_amount), 0);
+      const totalUsed = adjustedBudgets.reduce((s, b) => s + b.used, 0);
       setTotals({
         remaining: totalBudget - totalUsed,
         percentUsed: totalBudget > 0 ? (totalUsed / totalBudget) * 100 : 0,
@@ -225,6 +244,40 @@ const Budgeting = ({ navigation }) => {
     ]);
   };
 
+  const handleOpenTransfer = (budget) => {
+    setTransferSource(budget);
+    setTransferTargetId('');
+    setTransferAmount('');
+    setTransferIsPermanent(false);
+    setShowTransferModal(true);
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!transferSource || !transferTargetId || !transferAmount || parseFloat(transferAmount) <= 0) {
+      Alert.alert('Missing Fields', 'Please select a target budget and enter a valid amount.');
+      return;
+    }
+    if (transferTargetId === transferSource.id) {
+      Alert.alert('Invalid Transfer', 'Source and target budgets must be different.');
+      return;
+    }
+    const remaining = parseFloat(transferSource.total_amount) - transferSource.used;
+    if (parseFloat(transferAmount) > remaining) {
+      Alert.alert('Insufficient Budget', `This budget only has ${userCurrency} ${remaining.toLocaleString()} remaining to transfer.`);
+      return;
+    }
+    try {
+      setSavingTransfer(true);
+      await budgetService.transferBudget(userId, transferSource.id, transferTargetId, parseFloat(transferAmount), transferIsPermanent);
+      setShowTransferModal(false);
+      fetchData();
+    } catch (error) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setSavingTransfer(false);
+    }
+  };
+
   const progressColor = (pct) => pct >= 100 ? COLORS.error : pct >= 80 ? COLORS.warning : COLORS.primary;
   const totalPct = Math.min(totals.percentUsed, 100);
   const overallColor = progressColor(totals.percentUsed);
@@ -262,8 +315,8 @@ const Budgeting = ({ navigation }) => {
 
         {/* Overall Budget Summary Card */}
         <View style={[styles.remainingCard, { borderColor: overallColor + '33' }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-            <Text style={styles.remainingLabel}>Monthly Budget Remaining</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <Text style={styles.remainingLabel}>Monthly Budget Summary</Text>
             {totals.percentUsed >= 80 && (
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <AlertTriangle color={overallColor} size={15} />
@@ -274,23 +327,49 @@ const Budgeting = ({ navigation }) => {
             )}
           </View>
 
-          <Text style={[styles.remainingAmount, { color: totals.remaining < 0 ? COLORS.error : COLORS.text }]}>
-            {userCurrency} {Math.abs(totals.remaining).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            {totals.remaining < 0 ? ' over' : ''}
-          </Text>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Total Budget</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.summaryValue}>
+                {userCurrency} {totals.totalBudget.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </Text>
+              <Text style={[styles.summaryPercent, { color: COLORS.textSecondary }]}>100%</Text>
+            </View>
+          </View>
 
-          <View style={[styles.progressContainer, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Spent</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.summaryValue}>
+                {userCurrency} {totals.totalUsed.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </Text>
+              <Text style={[styles.summaryPercent, { color: overallColor }]}>
+                {totals.percentUsed.toFixed(0)}%
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryDivider} />
+
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Remaining</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={[styles.summaryValue, { color: totals.remaining < 0 ? COLORS.error : COLORS.success || '#4CAF50' }]}>
+                {totals.remaining < 0 ? '-' : ''}{userCurrency} {Math.abs(totals.remaining).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </Text>
+              <Text style={[styles.summaryPercent, { color: totals.remaining < 0 ? COLORS.error : COLORS.success || '#4CAF50' }]}>
+                {Math.max(0, 100 - totals.percentUsed).toFixed(0)}%
+              </Text>
+            </View>
+          </View>
+
+          <View style={[styles.progressContainer, { backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 12, marginBottom: 0 }]}>
             <View style={[styles.progressBar, { width: `${totalPct}%`, backgroundColor: overallColor }]} />
           </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-            <Text style={styles.progressText}>
-              Spent: {userCurrency} {totals.totalUsed.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </Text>
-            <Text style={[styles.progressText, { color: overallColor, fontWeight: '700' }]}>
-              {totals.percentUsed.toFixed(0)}% used
-            </Text>
-          </View>
+          <Text style={[styles.progressText, { textAlign: 'center', marginTop: 6 }]}>
+            {totals.percentUsed.toFixed(0)}% used
+          </Text>
         </View>
 
         {/* Category Budgets Section */}
@@ -319,8 +398,11 @@ const Budgeting = ({ navigation }) => {
                       {userCurrency} {parseFloat(b.total_amount).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                     {pct >= 80 && <AlertTriangle color={color} size={15} />}
+                    <TouchableOpacity onPress={() => handleOpenTransfer(b)}>
+                      <ArrowLeftRight color={COLORS.primary} size={16} />
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => openAddModal(b)}>
                       <Pencil color={COLORS.textSecondary} size={16} />
                     </TouchableOpacity>
@@ -401,6 +483,138 @@ const Budgeting = ({ navigation }) => {
         </View>
 
       </ScrollView>
+
+      {/* Transfer Budget Modal */}
+      <Modal visible={showTransferModal} transparent animationType="slide" onRequestClose={() => setShowTransferModal(false)}>
+        <KeyboardAvoidingView
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' }}>
+              <Text style={{ color: COLORS.text, fontSize: 20, fontWeight: 'bold' }}>Transfer Budget</Text>
+              <TouchableOpacity onPress={() => setShowTransferModal(false)} style={{ padding: 4 }}>
+                <X color={COLORS.text} size={24} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+              <Text style={labelStyle}>From</Text>
+              <View style={[inputStyle, { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, opacity: 0.7 }]}>
+                {transferSource && (
+                  <>
+                    {(() => { const IC = Icons[transferSource.categories?.icon] || Wallet; return <IC color={transferSource.categories?.color || COLORS.primary} size={16} />; })()}
+                    <Text style={{ color: COLORS.text, flex: 1 }}>{transferSource.categories?.name || 'Uncategorized'}</Text>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 13 }}>
+                      {userCurrency} {parseFloat(transferSource.total_amount).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    </Text>
+                  </>
+                )}
+              </View>
+
+              <Text style={labelStyle}>To</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {budgets.filter(b => b.id !== transferSource?.id).map(cat => {
+                    const IC = Icons[cat.categories?.icon] || Wallet;
+                    const selected = transferTargetId === cat.id;
+                    const catColor = cat.categories?.color || COLORS.primary;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={{
+                          paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20,
+                          backgroundColor: selected ? catColor : COLORS.background,
+                          borderWidth: 1,
+                          borderColor: selected ? catColor : 'rgba(255,255,255,0.1)',
+                          flexDirection: 'row', alignItems: 'center', gap: 6
+                        }}
+                        onPress={() => setTransferTargetId(cat.id)}
+                      >
+                        <IC color={selected ? '#fff' : catColor} size={14} />
+                        <Text style={{ color: selected ? '#fff' : COLORS.textSecondary, fontSize: 13 }}>
+                          {cat.categories?.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+
+              <Text style={labelStyle}>Transfer Amount ({userCurrency})</Text>
+              <TextInput
+                style={inputStyle}
+                placeholder="e.g. 5000"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+                keyboardType="decimal-pad"
+                value={transferAmount}
+                onChangeText={setTransferAmount}
+              />
+
+              <Text style={labelStyle}>Transfer Type</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+                <TouchableOpacity
+                  onPress={() => setTransferIsPermanent(false)}
+                  style={{
+                    flex: 1, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
+                    backgroundColor: !transferIsPermanent ? COLORS.primary : COLORS.background,
+                    borderWidth: 1, borderColor: !transferIsPermanent ? COLORS.primary : COLORS.border,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{
+                    color: !transferIsPermanent ? '#fff' : COLORS.textSecondary,
+                    fontSize: 12, fontWeight: '700', textTransform: 'uppercase'
+                  }}>
+                    One-Time
+                  </Text>
+                  <Text style={{
+                    color: !transferIsPermanent ? 'rgba(255,255,255,0.7)' : COLORS.textSecondary,
+                    fontSize: 10, marginTop: 4,
+                  }}>
+                    This month only
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setTransferIsPermanent(true)}
+                  style={{
+                    flex: 1, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
+                    backgroundColor: transferIsPermanent ? COLORS.primary : COLORS.background,
+                    borderWidth: 1, borderColor: transferIsPermanent ? COLORS.primary : COLORS.border,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{
+                    color: transferIsPermanent ? '#fff' : COLORS.textSecondary,
+                    fontSize: 12, fontWeight: '700', textTransform: 'uppercase'
+                  }}>
+                    Forever
+                  </Text>
+                  <Text style={{
+                    color: transferIsPermanent ? 'rgba(255,255,255,0.7)' : COLORS.textSecondary,
+                    fontSize: 10, marginTop: 4,
+                  }}>
+                    Permanent change
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={{ backgroundColor: COLORS.accent, padding: 16, borderRadius: 14, alignItems: 'center', opacity: savingTransfer ? 0.7 : 1 }}
+                onPress={handleConfirmTransfer}
+                disabled={savingTransfer}
+              >
+                {savingTransfer
+                  ? <ActivityIndicator color="#000" />
+                  : <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 16 }}>
+                      Confirm Transfer
+                    </Text>
+                }
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Add/Edit Budget Modal */}
       <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>

@@ -126,4 +126,29 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  summaryLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 13,
+  },
+  summaryValue: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  summaryPercent: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginVertical: 8,
+  },
 });

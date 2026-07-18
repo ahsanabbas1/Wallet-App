@@ -113,6 +113,39 @@ export const budgetService = {
     await db.runAsync('DELETE FROM budgets WHERE id = ?', [id]);
     return { id };
   },
+
+  async transferBudget(userId, fromBudgetId, toBudgetId, amount, isPermanent) {
+    const db = getDb();
+    const period = formatLocalDate(new Date()).slice(0, 7);
+
+    if (isPermanent) {
+      await db.runAsync(
+        'UPDATE budgets SET total_amount = MAX(total_amount - ?, 0) WHERE id = ? AND user_id = ?',
+        [Number(amount), fromBudgetId, userId]
+      );
+      await db.runAsync(
+        'UPDATE budgets SET total_amount = total_amount + ? WHERE id = ? AND user_id = ?',
+        [Number(amount), toBudgetId, userId]
+      );
+    }
+
+    const id = generateId();
+    await db.runAsync(
+      `INSERT INTO budget_transfers (id, user_id, from_budget_id, to_budget_id, amount, is_permanent, period, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, userId, fromBudgetId, toBudgetId, Number(amount), isPermanent ? 1 : 0, period, new Date().toISOString()]
+    );
+    return { id };
+  },
+
+  async getTransfersForPeriod(userId, period) {
+    const db = getDb();
+    const rows = await db.getAllAsync(
+      'SELECT * FROM budget_transfers WHERE user_id = ? AND period = ? AND is_permanent = 0',
+      [userId, period]
+    );
+    return rows;
+  },
 };
 
 export default budgetService;
