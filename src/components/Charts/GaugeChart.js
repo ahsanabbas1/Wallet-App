@@ -40,7 +40,7 @@ const GaugeChart = ({ score, label }) => {
          <Path 
            d="M 10 50 A 40 40 0 0 1 90 50" 
            fill="none" 
-           stroke="rgba(255,255,255,0.05)" 
+           stroke={COLORS.border} 
            strokeWidth="8" 
            strokeLinecap="round" 
          />

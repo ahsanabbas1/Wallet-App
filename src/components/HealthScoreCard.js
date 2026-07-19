@@ -204,12 +204,12 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
 
 const makeStyles = (COLORS) => StyleSheet.create({
   card: {
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   header: {
     flexDirection: 'row',

@@ -70,8 +70,8 @@ export const transactionService = {
     const amount = Number(transactionData.amount);
 
     await db.runAsync(
-      `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at, account_id, is_loan)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO transactions (id, user_id, category_id, amount, type, title, description, date, created_at, account_id, is_loan, receipt_uri)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         transactionData.user_id,
@@ -84,6 +84,7 @@ export const transactionService = {
         transactionData.created_at || transactionData.date || new Date().toISOString(),
         transactionData.account_id ?? null,
         transactionData.is_loan ? 1 : 0,
+        transactionData.receipt_uri ?? null,
       ]
     );
 
@@ -108,7 +109,7 @@ export const transactionService = {
 
     await db.runAsync(
       `UPDATE transactions
-       SET category_id = ?, amount = ?, type = ?, title = ?, description = ?, date = ?, account_id = ?
+       SET category_id = ?, amount = ?, type = ?, title = ?, description = ?, date = ?, account_id = ?, receipt_uri = ?
        WHERE id = ?`,
       [
         transactionData.category_id ?? null,
@@ -118,6 +119,7 @@ export const transactionService = {
         transactionData.description ?? null,
         transactionData.date,
         transactionData.account_id ?? null,
+        transactionData.receipt_uri ?? null,
         id,
       ]
     );

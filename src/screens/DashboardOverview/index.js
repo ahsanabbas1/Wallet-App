@@ -266,86 +266,82 @@ const DashboardOverview = () => {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
           </View>
 
-          {/* 4. Budget Status Card */}
           {totals.budget.count > 0 && (
-            <Pressable 
+            <Pressable
               onPress={() => navigation.navigate('Budgeting')}
               style={({ pressed }) => [
-                styles.balanceCard, 
-                { 
-                  padding: 18, 
-                  backgroundColor: COLORS.primary, 
-                  marginBottom: 12, 
-                  borderWidth: 1, 
-                  borderColor: 'rgba(255,255,255,0.1)',
-                  opacity: pressed ? 0.9 : 1,
+                styles.balanceCard,
+                {
+                  padding: 16,
+                  marginBottom: 12,
+                  borderColor: COLORS.primary + '30',
+                  opacity: pressed ? 0.92 : 1,
                   transform: [{ scale: pressed ? 0.98 : 1 }]
                 }
               ]}
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View>
-                  <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 2 }]}>Budget Overview</Text>
-                  <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 10 }}>{totals.budget.count} ACTIVE BUDGETS</Text>
+                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700', marginBottom: 2 }}>Budget Overview</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 10 }}>{totals.budget.count} ACTIVE BUDGETS</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>{mv(`${currency} ${formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))} Left`)}</Text>
-                  <Text style={{ color: totals.budget.totalUsed > totals.budget.totalBudget ? '#ff5252' : '#00e676', fontSize: 10, fontWeight: '700' }}>
+                  <Text style={{ color: COLORS.text, fontWeight: 'bold', fontSize: 16 }}>{mv(`${currency} ${formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))} Left`)}</Text>
+                  <Text style={{ color: totals.budget.totalUsed > totals.budget.totalBudget ? COLORS.error : COLORS.accent, fontSize: 10, fontWeight: '700' }}>
                     {mv(`${((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}% USED`)}
                   </Text>
                 </View>
               </View>
-              
-              <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, marginVertical: 12, overflow: 'hidden' }}>
-                <View style={{ 
-                  height: '100%', 
-                  width: `${Math.min(100, (totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100)}%`, 
-                  backgroundColor: totals.budget.totalUsed > totals.budget.totalBudget ? '#ff5252' : COLORS.accent,
-                  borderRadius: 3 
+
+              <View style={{ height: 5, backgroundColor: COLORS.glassLight, borderRadius: 3, marginVertical: 10, overflow: 'hidden' }}>
+                <View style={{
+                  height: '100%',
+                  width: `${Math.min(100, (totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100)}%`,
+                  backgroundColor: totals.budget.totalUsed > totals.budget.totalBudget ? COLORS.error : COLORS.primary,
+                  borderRadius: 3
                 }} />
               </View>
 
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL BUDGET</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.budget.totalBudget))}</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 10 }}>TOTAL BUDGET</Text>
+                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.budget.totalBudget))}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL SPENT</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.budget.totalUsed))}</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 10 }}>TOTAL SPENT</Text>
+                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.budget.totalUsed))}</Text>
                 </View>
               </View>
             </Pressable>
           )}
 
-          {/* 5. Total Loan: Loan Amount, Remaining, Paid */}
           {totals.loan.total > 0 && totals.loan.remaining > 0 && (
-            <Pressable 
+            <Pressable
               onPress={() => navigation.navigate('Loans')}
               style={({ pressed }) => [
-                styles.balanceCard, 
-                { 
-                  padding: 18, 
-                  backgroundColor: COLORS.accent, 
+                styles.balanceCard,
+                {
+                  padding: 16,
                   marginBottom: 0,
-                  opacity: pressed ? 0.9 : 1,
+                  borderColor: COLORS.accent + '30',
+                  opacity: pressed ? 0.92 : 1,
                   transform: [{ scale: pressed ? 0.98 : 1 }]
                 }
               ]}
             >
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[styles.balanceLabel, { color: 'rgba(255,255,255,0.9)', marginBottom: 0 }]}>Total Loan Status</Text>
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{mv(`${currency} ${formatAmount(totals.loan.remaining)} Left`)}</Text>
+                <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '700', marginBottom: 0 }}>Total Loan Status</Text>
+                <Text style={{ color: COLORS.text, fontWeight: 'bold' }}>{mv(`${currency} ${formatAmount(totals.loan.remaining)} Left`)}</Text>
               </View>
-              <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.2)', marginVertical: 10 }} />
+              <View style={{ height: 1, backgroundColor: COLORS.glassBorder, marginVertical: 10 }} />
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <View>
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>LOAN AMOUNT</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.loan.total))}</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 10 }}>LOAN AMOUNT</Text>
+                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.loan.total))}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>TOTAL PAID</Text>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.loan.paid))}</Text>
+                  <Text style={{ color: COLORS.textSecondary, fontSize: 10 }}>TOTAL PAID</Text>
+                  <Text style={{ color: COLORS.text, fontSize: 14, fontWeight: '600' }}>{mv(formatAmount(totals.loan.paid))}</Text>
                 </View>
               </View>
             </Pressable>
@@ -359,25 +355,25 @@ const DashboardOverview = () => {
             style={styles.actionItem}
             onPress={() => navigation.navigate('AddTransaction')}
           >
-            <View style={[styles.actionIcon, { backgroundColor: COLORS.primary }]}>
-              <Plus color={COLORS.text} size={24} />
+            <View style={[styles.actionIcon, { backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.primary + '40' }]}>
+              <Plus color={COLORS.primary} size={24} />
             </View>
             <Text style={styles.actionText}>Add</Text>
           </Pressable>
           <Pressable style={styles.actionItem} onPress={() => navigation.navigate('Expenses')}>
-            <View style={[styles.actionIcon, { backgroundColor: COLORS.accent }]}>
-              <DollarSign color={COLORS.text} size={24} />
+            <View style={[styles.actionIcon, { backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.accent + '40' }]}>
+              <DollarSign color={COLORS.accent} size={24} />
             </View>
             <Text style={styles.actionText}>Ledger</Text>
           </Pressable>
           <Pressable style={styles.actionItem} onPress={() => navigation.navigate('Savings Goals')}>
-            <View style={[styles.actionIcon, { backgroundColor: COLORS.warning }]}>
-              <Target color={COLORS.text} size={24} />
+            <View style={[styles.actionIcon, { backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.warning + '40' }]}>
+              <Target color={COLORS.warning} size={24} />
             </View>
             <Text style={styles.actionText}>Goal</Text>
           </Pressable>
           <Pressable style={styles.actionItem} onPress={() => navigation.navigate('Planned')}>
-            <View style={[styles.actionIcon, { backgroundColor: COLORS.card }]}>
+            <View style={[styles.actionIcon, { backgroundColor: COLORS.glass, borderWidth: 1, borderColor: COLORS.primary + '30' }]}>
               <CalendarClock color={COLORS.primary} size={24} />
             </View>
             <Text style={styles.actionText}>Planned</Text>

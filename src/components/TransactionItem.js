@@ -72,10 +72,12 @@ const makeStyles = (COLORS) => StyleSheet.create({
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     padding: 16,
     borderRadius: 20,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   transactionIcon: {
     width: 48,

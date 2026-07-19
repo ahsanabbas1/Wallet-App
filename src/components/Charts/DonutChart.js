@@ -9,45 +9,49 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const radius = 85; // Increased radius
-  const strokeWidth = 38; // Increased stroke width
-  const centerX = 110;
-  const centerY = 110;
+  const radius = 55;
+  const strokeWidth = 22;
+  const centerX = 80;
+  const centerY = 80;
   const circumference = 2 * Math.PI * radius;
   let currentOffset = 0;
 
   const isEmpty = !data || !data.length;
-  const chartData = isEmpty 
-    ? [{ name: 'No Expenses', amount: 0, percent: 100, color: COLORS.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }] 
+  const chartData = isEmpty
+    ? [{ name: 'No Expenses', amount: 0, percent: 100, color: COLORS.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]
     : data;
 
   return (
-    <View style={{ marginVertical: 20 }}>
-      {/* Integrated Header with Summary and Comparison */}
-      <View style={{ 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        paddingHorizontal: 16, 
-        marginBottom: 20,
-        alignItems: 'flex-start'
+    <View style={{
+      marginVertical: 16,
+      backgroundColor: COLORS.glass,
+      borderRadius: 24,
+      borderWidth: 1,
+      borderColor: COLORS.glassBorder,
+      padding: 16,
+    }}>
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+        alignItems: 'flex-start',
+        paddingHorizontal: 4
       }}>
-        {/* Top Left: This Month */}
         <View>
-          <Text style={{ color: COLORS.textSecondary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>This Month</Text>
-          <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: 'bold', marginTop: 2 }}>
+          <Text style={{ color: COLORS.textSecondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>This Month</Text>
+          <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: 'bold', marginTop: 1 }}>
             {currency} {monthlySpend ? monthlySpend.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}
           </Text>
         </View>
 
-        {/* Top Right: vs Past Month */}
         {expenseChange !== undefined && (
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ color: COLORS.textSecondary, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>vs past month</Text>
-            <Text style={{ 
-              color: expenseChange <= 0 ? COLORS.accent : COLORS.error, 
-              fontSize: 18, 
+            <Text style={{ color: COLORS.textSecondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>vs past month</Text>
+            <Text style={{
+              color: expenseChange <= 0 ? COLORS.accent : COLORS.error,
+              fontSize: 16,
               fontWeight: 'bold',
-              marginTop: 2 
+              marginTop: 1
             }}>
               {expenseChange > 0 ? '+' : ''}{expenseChange.toFixed(1)}%
             </Text>
@@ -55,16 +59,14 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
         )}
       </View>
 
-
-
       <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <Svg height="240" width="240" viewBox="0 0 220 220">
-          <G rotation="-90" origin="110, 110">
+        <Svg height="180" width="180" viewBox="0 0 160 160">
+          <G rotation="-90" origin="80, 80">
             {chartData.map((item, index) => {
               const dashLength = (item.percent / 100) * circumference;
               const dashOffset = currentOffset;
               currentOffset -= dashLength;
-              
+
               return (
                 <Circle
                   key={index}
@@ -82,48 +84,47 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
             })}
           </G>
           <G pointerEvents="none">
-            <SvgText x="110" y="105" fill={COLORS.text} fontSize="16" fontWeight="bold" textAnchor="middle">Expense</SvgText>
-            <SvgText x="110" y="125" fill={COLORS.textSecondary} fontSize="12" textAnchor="middle">Breakdown</SvgText>
+            <SvgText x="80" y="76" fill={COLORS.text} fontSize="13" fontWeight="bold" textAnchor="middle">Expense</SvgText>
+            <SvgText x="80" y="92" fill={COLORS.textSecondary} fontSize="10" textAnchor="middle">Breakdown</SvgText>
           </G>
         </Svg>
       </View>
 
-      {/* Legend at the bottom */}
       {!isEmpty && (
-        <View style={{ 
-          flexDirection: 'row', 
-          flexWrap: 'wrap', 
-          justifyContent: 'center', 
-          gap: 16, 
-          marginTop: 24,
-          paddingHorizontal: 20 
+        <View style={{
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          gap: 12,
+          marginTop: 18,
+          paddingHorizontal: 8
         }}>
           {chartData.slice(0, 6).map((item, idx) => (
-          <Pressable 
-            key={idx} 
-            style={{ flexDirection: 'row', alignItems: 'center', minWidth: '30%' }}
+          <Pressable
+            key={idx}
+            style={{ flexDirection: 'row', alignItems: 'center', minWidth: '28%' }}
             onPress={() => setSelectedCategory(item)}
           >
-            <View style={{ width: 12, height: 12, borderRadius: 4, backgroundColor: item.color, marginRight: 8 }} />
-            <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text>
+            <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: item.color, marginRight: 6 }} />
+            <Text style={{ color: COLORS.text, fontSize: 12, fontWeight: '500' }} numberOfLines={1}>{item.name}</Text>
           </Pressable>
         ))}
       </View>
       )}
 
       {selectedCategory && (
-        <View style={{ 
-          marginTop: 24, 
-          marginHorizontal: 30, 
-          alignItems: 'center', 
-          backgroundColor: 'rgba(255,255,255,0.05)', 
-          padding: 16, 
-          borderRadius: 20,
+        <View style={{
+          marginTop: 16,
+          marginHorizontal: 8,
+          alignItems: 'center',
+          backgroundColor: COLORS.glassStrong,
+          padding: 12,
+          borderRadius: 16,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.05)'
+          borderColor: COLORS.glassBorder,
         }}>
-          <Text style={{ color: selectedCategory.color, fontSize: 18, fontWeight: 'bold' }}>{selectedCategory.name}</Text>
-          <Text style={{ color: COLORS.text, fontSize: 16, marginTop: 4 }}>
+          <Text style={{ color: selectedCategory.color, fontSize: 15, fontWeight: 'bold' }}>{selectedCategory.name}</Text>
+          <Text style={{ color: COLORS.text, fontSize: 13, marginTop: 2 }}>
             {currency} {formatAmount(selectedCategory.amount)}  •  {selectedCategory.percent.toFixed(1)}%
           </Text>
         </View>
@@ -131,6 +132,5 @@ const DonutChart = ({ data, expenseChange, monthlySpend }) => {
     </View>
   );
 };
-
 
 export default DonutChart;

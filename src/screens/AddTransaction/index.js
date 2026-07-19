@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, Alert, KeyboardAvoidingView, Platform,
   TouchableWithoutFeedback, Keyboard, ActivityIndicator, Pressable,
-  Modal, TouchableOpacity, TextInput
+  Modal, TouchableOpacity, TextInput, Image
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Icons from 'lucide-react-native';
@@ -15,6 +15,7 @@ import AppInput from '../../components/Common/AppInput';
 import { transactionService } from '../../services/transactionService';
 import { generateNotifications } from '../../services/notificationService';
 import { accountService } from '../../services/accountService';
+import { captureReceipt, saveReceiptImage, scanReceipt, deleteReceiptImage } from '../../services/scanService';
 
 // ─── Safe math evaluator (no eval / Function() — Hermes-compatible) ─────────
 // Recursive descent parser: handles +, -, *, /, parentheses, decimals
@@ -243,6 +244,14 @@ const AddTransaction = ({ navigation, route }) => {
   const [pickerMode, setPickerMode] = useState('date');
   const [categorySearch, setCategorySearch] = useState('');
 
+  const [receiptUri, setReceiptUri] = useState(editTransaction?.receipt_uri || null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanResult, setScanResult] = useState(null);
+  const [showScanConfirm, setShowScanConfirm] = useState(false);
+  const [scanProgressText, setScanProgressText] = useState('');
+  const [showReceiptViewer, setShowReceiptViewer] = useState(false);
+
   useEffect(() => {
     navigation.setOptions({ title: isEdit ? 'Edit Record' : 'Add Record' });
     fetchCategories();
@@ -291,6 +300,109 @@ const AddTransaction = ({ navigation, route }) => {
     }
   };
 
+  const matchCategory = (suggested) => {
+    if (!suggested) return filteredCategories[0];
+    const match = filteredCategories.find((c) => {
+      if (!c.parent_id) return false;
+      const parent = categories.find((p) => p.id === c.parent_id);
+      return (
+        parent &&
+        c.name.toLowerCase() === suggested.subCategoryName?.toLowerCase() &&
+        parent.name.toLowerCase() === suggested.parentName?.toLowerCase()
+      );
+    });
+    return match || filteredCategories[0];
+  };
+
+  const handleScanReceipt = async () => {
+    const imageUri = await captureReceipt();
+    if (!imageUri) return;
+
+    try {
+      const savedUri = await saveReceiptImage(imageUri);
+      setReceiptUri(savedUri);
+
+      setShowScanModal(true);
+      setIsScanning(true);
+      setScanProgressText('Capturing image...');
+
+      setTimeout(() => setScanProgressText('Reading text...'), 800);
+
+      const result = await scanReceipt(savedUri, userId);
+      setScanResult(result);
+      setIsScanning(false);
+
+      if (result.totalAmount || result.items.length > 0 || result.suggestedTitle) {
+        setShowScanConfirm(true);
+      } else {
+        setShowScanModal(false);
+        Alert.alert('Low Confidence', 'Could not read this receipt clearly. Try a better-lit photo.');
+      }
+    } catch (e) {
+      setIsScanning(false);
+      setShowScanModal(false);
+      Alert.alert('Scan Failed', e.message || 'Could not process this receipt. Please try again.');
+    }
+  };
+
+  const applyScanResult = (adjustMode) => {
+    if (!scanResult) return;
+
+    updateFormField('type', 'expense');
+
+    if (scanResult.totalAmount) {
+      updateFormField('amount', scanResult.totalAmount.toString());
+    }
+
+    if (scanResult.suggestedTitle) {
+      updateFormField('title', scanResult.suggestedTitle);
+    }
+
+    const matched = matchCategory(scanResult.suggestedCategory);
+    if (matched) setSelectedCategory(matched);
+
+    if (scanResult.date) {
+      const parsed = new Date(scanResult.date);
+      if (!isNaN(parsed.getTime())) setDate(parsed);
+    }
+
+    let description = '';
+    if (scanResult.merchant) {
+      description += `Store: ${scanResult.merchant}`;
+    }
+    if (scanResult.items.length > 2) {
+      const itemList = scanResult.items.map((i) => `• ${i.name}${i.price ? ` - ${i.price}` : ''}`).join('\n');
+      description += (description ? '\n\n' : '') + itemList;
+    } else if (scanResult.items.length > 0 && scanResult.merchant) {
+      description = `Store: ${scanResult.merchant}`;
+    } else if (scanResult.items.length > 0) {
+      description = scanResult.items.map((i) => `• ${i.name}`).join('\n');
+    }
+
+    if (description.length > 250) {
+      description = description.slice(0, 247) + '...';
+    }
+    updateFormField('description', description);
+
+    setShowScanConfirm(false);
+    setShowScanModal(false);
+    setScanResult(null);
+
+    if (!adjustMode) {
+      Alert.alert('Receipt Applied', 'The receipt data has been filled in. Review and save.');
+    }
+  };
+
+  const dismissScan = () => {
+    if (receiptUri) {
+      try { deleteReceiptImage(receiptUri); } catch (_) {}
+    }
+    setReceiptUri(null);
+    setScanResult(null);
+    setShowScanConfirm(false);
+    setShowScanModal(false);
+  };
+
   const handleSave = async () => {
     const { title, amount, type, description } = form;
     const parsedAmount = parseFloat(amount);
@@ -322,6 +434,7 @@ const AddTransaction = ({ navigation, route }) => {
         description,
         date: date.toISOString(),
         account_id: selectedAccount?.id === '__cash__' ? null : selectedAccount?.id ?? null,
+        receipt_uri: receiptUri || null,
       };
       let result;
       if (isEdit) {
@@ -387,17 +500,26 @@ const AddTransaction = ({ navigation, route }) => {
               <AppButton title="Income" variant={form.type === 'income' ? 'primary' : 'secondary'} onPress={() => handleTypeChange('income')} style={{ flex: 1, borderRadius: 12, marginLeft: 10 }} />
             </View>
 
-            {/* Amount + Calculator Button */}
+            {/* Amount + Calculator Button + Scan Button */}
             <View style={styles.inputGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={styles.label}>Amount</Text>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary + '22', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary + '44' }}
-                  onPress={() => setShowCalcModal(true)}
-                >
-                  <Icons.Calculator color={COLORS.primary} size={14} />
-                  <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '600', marginLeft: 6 }}>Calculator</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.accent + '22', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: COLORS.accent + '44' }}
+                    onPress={handleScanReceipt}
+                  >
+                    <Icons.ScanLine color={COLORS.accent} size={14} />
+                    <Text style={{ color: COLORS.accent, fontSize: 12, fontWeight: '600', marginLeft: 6 }}>Scan</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.primary + '22', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: COLORS.primary + '44' }}
+                    onPress={() => setShowCalcModal(true)}
+                  >
+                    <Icons.Calculator color={COLORS.primary} size={14} />
+                    <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '600', marginLeft: 6 }}>Calc</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               <AppInput
                 placeholder="0.00"
@@ -536,6 +658,34 @@ const AddTransaction = ({ navigation, route }) => {
               onChangeText={(text) => text.length <= 250 && updateFormField('description', text)}
               style={styles.textArea}
             />
+
+            {/* Receipt Attachment Indicator */}
+            {receiptUri && (
+              <View style={{ backgroundColor: COLORS.card, borderRadius: 16, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: COLORS.accent + '44' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: COLORS.accent + '22', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      <Image source={{ uri: receiptUri }} style={{ width: 40, height: 40, borderRadius: 10 }} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '700' }}>Receipt Attached</Text>
+                      <Text style={{ color: COLORS.textSecondary, fontSize: 11 }}>Tap to preview</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => setShowReceiptViewer(true)} style={{ padding: 8, borderRadius: 8, backgroundColor: COLORS.surface }}>
+                      <Icons.Eye color={COLORS.textSecondary} size={18} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      try { deleteReceiptImage(receiptUri); } catch (_) {}
+                      setReceiptUri(null);
+                    }} style={{ padding: 8, borderRadius: 8, backgroundColor: COLORS.surface }}>
+                      <Icons.Trash2 color={COLORS.error} size={18} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
 
             <AppButton title={isEdit ? 'Update Record' : 'Save Transaction'} onPress={handleSave} loading={loading} disabled={insufficientFunds} style={{ marginTop: 20, marginBottom: insets.bottom + 20 }} />
           </ScrollView>
@@ -776,6 +926,147 @@ const AddTransaction = ({ navigation, route }) => {
             onClose={() => setShowCalcModal(false)}
           />
         </View>
+      </Modal>
+
+      {/* Scanning Progress Modal */}
+      <Modal visible={showScanModal && isScanning} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 32 }}>
+          <View style={{ backgroundColor: COLORS.card, borderRadius: 24, padding: 32, alignItems: 'center', width: '100%', maxWidth: 280 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.accent + '22', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <Icons.ScanLine color={COLORS.accent} size={32} />
+            </View>
+            <ActivityIndicator size="large" color={COLORS.accent} style={{ marginBottom: 16 }} />
+            <Text style={{ color: COLORS.text, fontSize: 16, fontWeight: '700', marginBottom: 8 }}>Scanning Receipt</Text>
+            <Text style={{ color: COLORS.textSecondary, fontSize: 13, textAlign: 'center' }}>{scanProgressText}</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Receipt Image Viewer */}
+      <Modal visible={showReceiptViewer} transparent animationType="fade" onRequestClose={() => setShowReceiptViewer(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <TouchableOpacity onPress={() => setShowReceiptViewer(false)} style={{ position: 'absolute', top: 60, right: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+            <Icons.X color="#fff" size={20} />
+          </TouchableOpacity>
+          {receiptUri && (
+            <Image
+              source={{ uri: receiptUri }}
+              style={{ width: '100%', height: '80%' }}
+              resizeMode="contain"
+            />
+          )}
+          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 16 }}>Tap X to close</Text>
+        </View>
+      </Modal>
+
+      {/* Scan Confirmation Modal */}
+      <Modal visible={showScanConfirm} transparent animationType="slide" onRequestClose={dismissScan}>
+        <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} onPress={dismissScan}>
+          <Pressable style={{ backgroundColor: COLORS.card, borderTopLeftRadius: 28, borderTopRightRadius: 28 }} onPress={() => {}}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: COLORS.border, alignSelf: 'center', marginTop: 10, marginBottom: 4 }} />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.divider }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.accent + '22', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icons.Check color={COLORS.accent} size={18} />
+                </View>
+                <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '800' }}>Receipt Scanned</Text>
+              </View>
+              <Pressable onPress={dismissScan} style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' }}>
+                <Icons.X color={COLORS.textSecondary} size={16} />
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} style={{ maxHeight: 420 }}>
+              {scanResult?.merchant && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surface, borderRadius: 12, padding: 12 }}>
+                  <Icons.Store color={COLORS.textSecondary} size={18} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' }}>Store</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{scanResult.merchant}</Text>
+                  </View>
+                </View>
+              )}
+
+              {scanResult?.totalAmount && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surface, borderRadius: 12, padding: 12 }}>
+                  <Icons.DollarSign color={COLORS.textSecondary} size={18} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' }}>Amount</Text>
+                    <Text style={{ color: COLORS.accent, fontSize: 20, fontWeight: '800' }}>
+                      {Number(scanResult.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {scanResult.currency ? ` ${scanResult.currency}` : ''}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {scanResult?.date && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surface, borderRadius: 12, padding: 12 }}>
+                  <Icons.Calendar color={COLORS.textSecondary} size={18} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' }}>Date</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>
+                      {new Date(scanResult.date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {scanResult?.suggestedCategory && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surface, borderRadius: 12, padding: 12 }}>
+                  <Icons.FolderOpen color={COLORS.textSecondary} size={18} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' }}>Category</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>
+                      {scanResult.suggestedCategory.parentName} › {scanResult.suggestedCategory.subCategoryName}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {scanResult?.suggestedTitle && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: COLORS.surface, borderRadius: 12, padding: 12 }}>
+                  <Icons.Tag color={COLORS.textSecondary} size={18} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' }}>Title</Text>
+                    <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>{scanResult.suggestedTitle}</Text>
+                  </View>
+                </View>
+              )}
+
+              {scanResult?.items && scanResult.items.length > 0 && (
+                <View style={{ backgroundColor: COLORS.surface, borderRadius: 12, padding: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Icons.List color={COLORS.textSecondary} size={16} />
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 11, fontWeight: '600', textTransform: 'uppercase' }}>
+                      Items ({scanResult.items.length})
+                    </Text>
+                  </View>
+                  {scanResult.items.slice(0, 8).map((item, i) => (
+                    <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: i < Math.min(scanResult.items.length, 8) - 1 ? 1 : 0, borderBottomColor: COLORS.divider }}>
+                      <Text style={{ color: COLORS.text, fontSize: 13, flex: 1 }} numberOfLines={1}>{item.name}</Text>
+                      {item.price && (
+                        <Text style={{ color: COLORS.textSecondary, fontSize: 13, fontWeight: '600', marginLeft: 8 }}>
+                          {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                  {scanResult.items.length > 8 && (
+                    <Text style={{ color: COLORS.textSecondary, fontSize: 12, fontStyle: 'italic', marginTop: 6 }}>And {scanResult.items.length - 8} more items...</Text>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={{ padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: COLORS.divider }}>
+              <AppButton title="Accept & Fill" variant="primary" onPress={() => applyScanResult(false)} />
+              <AppButton title="Adjust Fields" variant="secondary" onPress={() => applyScanResult(true)} />
+              <AppButton title="Discard" variant="secondary" onPress={dismissScan} />
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

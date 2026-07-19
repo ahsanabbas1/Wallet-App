@@ -88,12 +88,12 @@ const PaymentCard = memo(({ item, onDelete, onRecord, onEdit, recording, archive
 
 const makeStyles = (COLORS) => StyleSheet.create({
   paymentCard: {
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.glassBorder,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -129,7 +129,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopColor: COLORS.glassBorder,
     marginTop: 12,
     paddingTop: 12,
   },

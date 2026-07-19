@@ -289,6 +289,11 @@ export async function runMigrations(db) {
     await ensureColumn(db, 'transactions', 'account_id', 'TEXT');
   } catch (_) { }
 
+  // Add receipt_uri to transactions (idempotent)
+  try {
+    await ensureColumn(db, 'transactions', 'receipt_uri', 'TEXT');
+  } catch (_) { }
+
   // Add madhab to users (idempotent)
   try {
     await ensureColumn(db, 'users', 'madhab', "TEXT DEFAULT 'sunni'");

@@ -27,14 +27,18 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   iconButton: {
     padding: 7,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   balanceCard: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.glass,
     borderRadius: 24,
     padding: 32,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   balanceLabel: {
     color: 'rgba(255,255,255,0.7)',
@@ -50,7 +54,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: COLORS.glassLight,
     borderRadius: 20,
     padding: 16,
   },
@@ -62,7 +66,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.glass,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -117,9 +121,11 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   transactionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     borderRadius: 16,
     padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   transactionIcon: {
     width: 48,
@@ -139,11 +145,11 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     marginBottom: 4,
   },
   transactionSub: {
-    color: 'rgba(255,255,255,0.8)',
+    color: COLORS.textSecondary,
     fontSize: 12,
   },
   transactionMethod: {
-    color: COLORS.textSecondary,
+    color: COLORS.textTertiary,
     fontSize: 10,
   },
   editButton: {
@@ -174,31 +180,30 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   emptyState: {
     padding: 24,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   emptyStateText: {
     color: COLORS.textSecondary,
     fontSize: 14,
   },
-  // New Insights Styles
-
-
   insightsCard: {
     marginTop: 30,
     padding: 20,
-    backgroundColor: COLORS.card,
+    backgroundColor: COLORS.glass,
     borderRadius: 28,
     marginBottom: 40,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: COLORS.glassBorder,
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 24,
+    elevation: 3,
   },
   insightsHeader: {
     flexDirection: 'row',
@@ -219,10 +224,12 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   insightsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,188,212,0.1)',
+    backgroundColor: COLORS.glassLight,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.glassBorder,
   },
   insightsPillText: {
     color: COLORS.accent,
@@ -233,7 +240,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: COLORS.glassLight,
     borderRadius: 20,
     paddingVertical: 15,
     marginBottom: 24,
@@ -241,7 +248,7 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   verticalDivider: {
     width: 1,
     height: '60%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: COLORS.glassBorder,
   },
   performanceGrid: {
     flexDirection: 'row',
@@ -251,11 +258,10 @@ export const makeStyles = (COLORS) => StyleSheet.create({
   },
   gridItem: {
     width: '48%',
-    backgroundColor: 'rgba(255,255,255,0.02)',
+    backgroundColor: COLORS.glassLight,
     borderRadius: 16,
     padding: 10,
     marginBottom: 10,
     alignItems: 'center',
   },
 });
-
