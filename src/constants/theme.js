@@ -1,68 +1,252 @@
-export const DARK_COLORS = {
-  // Core
-  primary: '#4f5ff7',
-  background: '#0f1117',
-  card: '#1a1d2e',
-  text: '#f0f2ff',
-  textSecondary: '#8b8fa8',
-  textTertiary: '#6b7080',
-
-  // Status
-  success: '#22c55e',
-  error: '#ef4444',
-  warning: '#f97316',
-  accent: '#0bda73',
-
-  // Semantic tokens (used in inline styles)
+const EMERALD_DARK = {
+  primary: '#10B981',
+  primaryDark: '#059669',
+  background: '#0B0F14',
+  card: '#141A21',
+  text: '#F0F5F2',
+  textSecondary: '#8FA69B',
+  textTertiary: '#5E7168',
+  success: '#22C55E',
+  error: '#F87171',
+  warning: '#F59E0B',
+  accent: '#34D399',
   border: 'rgba(255,255,255,0.08)',
   surface: 'rgba(255,255,255,0.04)',
-  inputBg: '#13151f',
-  cardAlt: '#222534',
+  inputBg: '#101519',
+  cardAlt: '#1B2229',
   overlay: 'rgba(0,0,0,0.85)',
   divider: 'rgba(255,255,255,0.06)',
-
-  // Glass (liquid glass / glassmorphism)
   glass: 'rgba(255,255,255,0.06)',
   glassBorder: 'rgba(255,255,255,0.10)',
   glassStrong: 'rgba(255,255,255,0.10)',
   glassLight: 'rgba(255,255,255,0.03)',
-
-  // Theme identity
+  gradientStart: '#10B981',
+  gradientEnd: '#059669',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.75)',
   isDark: true,
 };
 
-export const LIGHT_COLORS = {
-  // Core
-  primary: '#4051b5',
-  background: '#eef0f8',
-  card: '#ffffff',
-  text: '#111827',
-  textSecondary: '#4b5563',
-  textTertiary: '#6b7280',
-
-  // Status
-  success: '#16a34a',
-  error: '#dc2626',
-  warning: '#d97706',
+const EMERALD_LIGHT = {
+  primary: '#059669',
+  primaryDark: '#047857',
+  background: '#F4F9F7',
+  card: '#FFFFFF',
+  text: '#0B1F17',
+  textSecondary: '#4B6B60',
+  textTertiary: '#75948A',
+  success: '#16A34A',
+  error: '#DC2626',
+  warning: '#D97706',
   accent: '#059669',
-
-  // Semantic tokens
-  border: 'rgba(0,0,0,0.08)',
-  surface: 'rgba(0,0,0,0.04)',
-  inputBg: '#f8fafc',
-  cardAlt: '#f3f4f8',
-  overlay: 'rgba(0,0,0,0.55)',
-  divider: 'rgba(0,0,0,0.06)',
-
-  // Glass (liquid glass / glassmorphism)
-  glass: 'rgba(255,255,255,0.65)',
-  glassBorder: 'rgba(0,0,0,0.06)',
-  glassStrong: 'rgba(255,255,255,0.80)',
-  glassLight: 'rgba(0,0,0,0.02)',
-
-  // Theme identity
+  border: 'rgba(6,78,59,0.10)',
+  surface: 'rgba(6,78,59,0.04)',
+  inputBg: '#EEF6F2',
+  cardAlt: '#EAF3EF',
+  overlay: 'rgba(6,20,15,0.55)',
+  divider: 'rgba(6,78,59,0.08)',
+  glass: 'rgba(255,255,255,0.70)',
+  glassBorder: 'rgba(6,78,59,0.08)',
+  glassStrong: 'rgba(255,255,255,0.85)',
+  glassLight: 'rgba(6,78,59,0.03)',
+  gradientStart: '#10B981',
+  gradientEnd: '#047857',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.8)',
   isDark: false,
 };
+
+const VIOLET_DARK = {
+  primary: '#7C5CFF',
+  primaryDark: '#6D28D9',
+  background: '#0E0B1A',
+  card: '#1B1730',
+  text: '#F3F0FF',
+  textSecondary: '#A79BC7',
+  textTertiary: '#6E6390',
+  success: '#22C55E',
+  error: '#F87171',
+  warning: '#F59E0B',
+  accent: '#22D3EE',
+  border: 'rgba(255,255,255,0.08)',
+  surface: 'rgba(255,255,255,0.04)',
+  inputBg: '#150F26',
+  cardAlt: '#221C3A',
+  overlay: 'rgba(0,0,0,0.85)',
+  divider: 'rgba(255,255,255,0.06)',
+  glass: 'rgba(255,255,255,0.06)',
+  glassBorder: 'rgba(255,255,255,0.10)',
+  glassStrong: 'rgba(255,255,255,0.10)',
+  glassLight: 'rgba(255,255,255,0.03)',
+  gradientStart: '#7C5CFF',
+  gradientEnd: '#6D28D9',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.75)',
+  isDark: true,
+};
+
+const VIOLET_LIGHT = {
+  primary: '#6D28D9',
+  primaryDark: '#5B21B6',
+  background: '#F6F4FC',
+  card: '#FFFFFF',
+  text: '#1E1533',
+  textSecondary: '#5B4E78',
+  textTertiary: '#8577A0',
+  success: '#16A34A',
+  error: '#DC2626',
+  warning: '#D97706',
+  accent: '#0891B2',
+  border: 'rgba(109,40,217,0.10)',
+  surface: 'rgba(109,40,217,0.04)',
+  inputBg: '#F1EDFB',
+  cardAlt: '#EEE9FA',
+  overlay: 'rgba(20,14,31,0.55)',
+  divider: 'rgba(109,40,217,0.08)',
+  glass: 'rgba(255,255,255,0.70)',
+  glassBorder: 'rgba(109,40,217,0.08)',
+  glassStrong: 'rgba(255,255,255,0.85)',
+  glassLight: 'rgba(109,40,217,0.03)',
+  gradientStart: '#7C5CFF',
+  gradientEnd: '#5B21B6',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.8)',
+  isDark: false,
+};
+
+const TEAL_GOLD_DARK = {
+  primary: '#0D9488',
+  primaryDark: '#115E59',
+  background: '#0A1613',
+  card: '#131F1C',
+  text: '#EAF6F3',
+  textSecondary: '#8FADA5',
+  textTertiary: '#5E7D75',
+  success: '#22C55E',
+  error: '#F87171',
+  warning: '#F59E0B',
+  accent: '#D4AF37',
+  border: 'rgba(255,255,255,0.08)',
+  surface: 'rgba(255,255,255,0.04)',
+  inputBg: '#0E1917',
+  cardAlt: '#1A2925',
+  overlay: 'rgba(0,0,0,0.85)',
+  divider: 'rgba(255,255,255,0.06)',
+  glass: 'rgba(255,255,255,0.06)',
+  glassBorder: 'rgba(255,255,255,0.10)',
+  glassStrong: 'rgba(255,255,255,0.10)',
+  glassLight: 'rgba(255,255,255,0.03)',
+  gradientStart: '#0D9488',
+  gradientEnd: '#115E59',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.75)',
+  isDark: true,
+};
+
+const TEAL_GOLD_LIGHT = {
+  primary: '#0F766E',
+  primaryDark: '#115E59',
+  background: '#F3F9F7',
+  card: '#FFFFFF',
+  text: '#0B211D',
+  textSecondary: '#4B6C65',
+  textTertiary: '#79968F',
+  success: '#16A34A',
+  error: '#DC2626',
+  warning: '#D97706',
+  accent: '#B8860B',
+  border: 'rgba(15,118,110,0.10)',
+  surface: 'rgba(15,118,110,0.04)',
+  inputBg: '#EEF6F4',
+  cardAlt: '#E9F3F0',
+  overlay: 'rgba(6,20,17,0.55)',
+  divider: 'rgba(15,118,110,0.08)',
+  glass: 'rgba(255,255,255,0.70)',
+  glassBorder: 'rgba(15,118,110,0.08)',
+  glassStrong: 'rgba(255,255,255,0.85)',
+  glassLight: 'rgba(15,118,110,0.03)',
+  gradientStart: '#0D9488',
+  gradientEnd: '#115E59',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.8)',
+  isDark: false,
+};
+
+const BLUE_DARK = {
+  primary: '#3B82F6',
+  primaryDark: '#2563EB',
+  background: '#0B1220',
+  card: '#151E30',
+  text: '#F1F5FB',
+  textSecondary: '#93A2BE',
+  textTertiary: '#64748B',
+  success: '#22C55E',
+  error: '#F87171',
+  warning: '#F59E0B',
+  accent: '#38BDF8',
+  border: 'rgba(255,255,255,0.08)',
+  surface: 'rgba(255,255,255,0.04)',
+  inputBg: '#101826',
+  cardAlt: '#1C2A40',
+  overlay: 'rgba(0,0,0,0.85)',
+  divider: 'rgba(255,255,255,0.06)',
+  glass: 'rgba(255,255,255,0.06)',
+  glassBorder: 'rgba(255,255,255,0.10)',
+  glassStrong: 'rgba(255,255,255,0.10)',
+  glassLight: 'rgba(255,255,255,0.03)',
+  gradientStart: '#3B82F6',
+  gradientEnd: '#2563EB',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.75)',
+  isDark: true,
+};
+
+const BLUE_LIGHT = {
+  primary: '#2563EB',
+  primaryDark: '#1D4ED8',
+  background: '#F4F7FC',
+  card: '#FFFFFF',
+  text: '#0F1A2E',
+  textSecondary: '#4B5C78',
+  textTertiary: '#7B8AA3',
+  success: '#16A34A',
+  error: '#DC2626',
+  warning: '#D97706',
+  accent: '#0284C7',
+  border: 'rgba(37,99,235,0.10)',
+  surface: 'rgba(37,99,235,0.04)',
+  inputBg: '#EEF3FB',
+  cardAlt: '#E9F0FA',
+  overlay: 'rgba(10,20,35,0.55)',
+  divider: 'rgba(37,99,235,0.08)',
+  glass: 'rgba(255,255,255,0.70)',
+  glassBorder: 'rgba(37,99,235,0.08)',
+  glassStrong: 'rgba(255,255,255,0.85)',
+  glassLight: 'rgba(37,99,235,0.03)',
+  gradientStart: '#3B82F6',
+  gradientEnd: '#1D4ED8',
+  onGradient: '#FFFFFF',
+  onGradientMuted: 'rgba(255,255,255,0.8)',
+  isDark: false,
+};
+
+// Selectable color themes — each has a dark and light variant sharing the
+// same token shape, so `useTheme()` consumers never need to know which
+// palette is active.
+export const PALETTES = {
+  emerald: { key: 'emerald', name: 'Deep Emerald', swatch: '#10B981', dark: EMERALD_DARK, light: EMERALD_LIGHT },
+  violet: { key: 'violet', name: 'Royal Violet', swatch: '#7C5CFF', dark: VIOLET_DARK, light: VIOLET_LIGHT },
+  tealGold: { key: 'tealGold', name: 'Deep Teal & Gold', swatch: '#0D9488', dark: TEAL_GOLD_DARK, light: TEAL_GOLD_LIGHT },
+  blue: { key: 'blue', name: 'Refined Electric Blue', swatch: '#3B82F6', dark: BLUE_DARK, light: BLUE_LIGHT },
+};
+
+export const DEFAULT_PALETTE = 'emerald';
+
+// Back-compat static exports — a handful of files (App.js pre-auth loading
+// screen, etc.) read these directly before ThemeProvider/palette selection
+// is available. They always reflect the default palette.
+export const DARK_COLORS = EMERALD_DARK;
+export const LIGHT_COLORS = EMERALD_LIGHT;
 
 // Default export keeps backward compat for any remaining static usage
 export const COLORS = DARK_COLORS;
@@ -70,4 +254,34 @@ export const COLORS = DARK_COLORS;
 export const SIZES = {
   padding: 16,
   borderRadius: 12,
+};
+
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  base: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+  xxxl: 40,
+};
+
+export const RADIUS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 28,
+  pill: 999,
+};
+
+export const TYPOGRAPHY = {
+  caption:  { fontSize: 11, fontWeight: '500', lineHeight: 14 },
+  body:     { fontSize: 14, fontWeight: '400', lineHeight: 20 },
+  bodyBold: { fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  subtitle: { fontSize: 16, fontWeight: '600', lineHeight: 22 },
+  title:    { fontSize: 20, fontWeight: '700', lineHeight: 26 },
+  heading:  { fontSize: 24, fontWeight: '800', lineHeight: 30 },
+  display:  { fontSize: 34, fontWeight: '800', lineHeight: 40 },
 };

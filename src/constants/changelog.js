@@ -1,6 +1,17 @@
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.2.0',
+    title: "What's New in v1.2.0",
+    features: [
+      { icon: '✨', text: 'Redesigned Dashboard with a bolder hero balance card, clearer sections, and less clutter' },
+      { icon: '🎨', text: 'New color themes — pick from Deep Emerald, Royal Violet, Deep Teal & Gold, or Electric Blue in Settings → Appearance' },
+      { icon: '📊', text: 'Wallet Insights is now collapsible — see your top predictions first, expand for the full breakdown' },
+      { icon: '💳', text: 'Budget and Loan status now sit side-by-side as compact cards instead of stacked full-width blocks' },
+      { icon: '🌗', text: 'Consistent colors across charts and reports in both light and dark mode' },
+    ],
+  },
   {
     version: '1.1.0',
     title: "What's New in v1.1.0",

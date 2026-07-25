@@ -4,7 +4,7 @@ import {
   ActivityIndicator, Alert, StyleSheet, Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins, Trash2, Database } from 'lucide-react-native';
+import { Menu, User, DollarSign, LogOut, Save, ChevronRight, Bell, Shield, Info, Moon, Sun, Building2, BookOpen, Landmark, Sparkles, Lock, Fingerprint, Clock, Coins, Trash2, Database, Palette, Check } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -58,7 +58,7 @@ export default function Settings() {
   const { openDrawer } = useDrawer();
   const { userId, user, signOut, deleteAllData } = useAuth();
   const { currency: profileCurrency, name: profileName, updateCurrency, updateName: updateProfileName, madhab, updateMadhab } = useProfile();
-  const { colors: COLORS, isDark, toggleTheme } = useTheme();
+  const { colors: COLORS, isDark, toggleTheme, palette, setPalette, palettes } = useTheme();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -316,15 +316,46 @@ export default function Settings() {
                 style={[styles.themeBtn, !isDark && styles.themeBtnActive]}
                 onPress={() => !isDark ? null : toggleTheme()}
               >
-                <Sun color={!isDark ? '#fff' : COLORS.textSecondary} size={16} />
+                <Sun color={!isDark ? COLORS.onGradient : COLORS.textSecondary} size={16} />
               </Pressable>
               <Pressable
                 style={[styles.themeBtn, isDark && styles.themeBtnActive]}
                 onPress={() => isDark ? null : toggleTheme()}
               >
-                <Moon color={isDark ? '#fff' : COLORS.textSecondary} size={16} />
+                <Moon color={isDark ? COLORS.onGradient : COLORS.textSecondary} size={16} />
               </Pressable>
             </View>
+          </View>
+
+          {/* Color theme picker */}
+          <View style={[styles.row, { borderBottomWidth: 0 }]}>
+            <View style={[styles.rowIcon, { backgroundColor: COLORS.primary + '22' }]}>
+              <Palette color={COLORS.primary} size={18} />
+            </View>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Color Theme</Text>
+              <Text style={styles.rowValue}>{palettes[palette]?.name}</Text>
+            </View>
+          </View>
+          <View style={styles.swatchRow}>
+            {Object.values(palettes).map(p => (
+              <Pressable
+                key={p.key}
+                style={styles.swatchItem}
+                onPress={() => setPalette(p.key)}
+              >
+                <View style={[
+                  styles.swatchCircle,
+                  { backgroundColor: p.swatch },
+                  palette === p.key && { borderColor: COLORS.text, borderWidth: 2 },
+                ]}>
+                  {palette === p.key && <Check color="#fff" size={16} />}
+                </View>
+                <Text style={[styles.swatchLabel, palette === p.key && { color: COLORS.text, fontWeight: '700' }]} numberOfLines={1}>
+                  {p.name}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </View>
 
@@ -691,6 +722,31 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   themeBtnActive: {
     backgroundColor: COLORS.primary,
+  },
+  swatchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 4,
+    gap: 16,
+  },
+  swatchItem: {
+    alignItems: 'center',
+    width: 68,
+  },
+  swatchCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  swatchLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    textAlign: 'center',
   },
   dangerRow: {
     flexDirection: 'row',

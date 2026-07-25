@@ -63,8 +63,8 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
       <Svg width={chartWidth} height={height}>
         <Defs>
           <LinearGradient id="savingsGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={lastPositive ? '#0bda73' : '#f44336'} stopOpacity="0.25" />
-            <Stop offset="1" stopColor={lastPositive ? '#0bda73' : '#f44336'} stopOpacity="0.02" />
+            <Stop offset="0" stopColor={lastPositive ? COLORS.success : COLORS.error} stopOpacity="0.25" />
+            <Stop offset="1" stopColor={lastPositive ? COLORS.success : COLORS.error} stopOpacity="0.02" />
           </LinearGradient>
         </Defs>
 
@@ -74,7 +74,7 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
             <Line
               x1={padding.left} y1={item.y}
               x2={chartWidth} y2={item.y}
-              stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="4,4"
+              stroke={COLORS.divider} strokeWidth="1" strokeDasharray="4,4"
             />
             <SvgText x={padding.left - 6} y={item.y + 4}
               fontSize="9" fill={COLORS.textSecondary} textAnchor="end">
@@ -88,7 +88,7 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
           <Line
             x1={padding.left} y1={baselineY}
             x2={chartWidth} y2={baselineY}
-            stroke="rgba(255,255,255,0.15)" strokeWidth="1"
+            stroke={COLORS.border} strokeWidth="1"
           />
         )}
 
@@ -98,7 +98,7 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
         {/* Line */}
         <Polyline
           points={linePoints}
-          stroke={lastPositive ? '#0bda73' : '#f44336'}
+          stroke={lastPositive ? COLORS.success : COLORS.error}
           strokeWidth="2.5"
           fill="none"
           strokeLinecap="round"
@@ -112,7 +112,7 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
             cx={getX(i)}
             cy={getY(d.cumulativeSavings)}
             r={data.length > 8 ? 2.5 : 4}
-            fill={d.cumulativeSavings >= 0 ? '#0bda73' : '#f44336'}
+            fill={d.cumulativeSavings >= 0 ? COLORS.success : COLORS.error}
             stroke={COLORS.card}
             strokeWidth="1.5"
           />
@@ -137,11 +137,11 @@ const SavingsAreaChart = ({ data = [], height = 220 }) => {
 
       <View style={styles.footer}>
         <View style={styles.footerItem}>
-          <View style={[styles.dot, { backgroundColor: '#0bda73' }]} />
+          <View style={[styles.dot, { backgroundColor: COLORS.success }]} />
           <Text style={styles.footerText}>Positive savings</Text>
         </View>
         <View style={styles.footerItem}>
-          <View style={[styles.dot, { backgroundColor: '#f44336' }]} />
+          <View style={[styles.dot, { backgroundColor: COLORS.error }]} />
           <Text style={styles.footerText}>Deficit</Text>
         </View>
       </View>

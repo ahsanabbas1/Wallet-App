@@ -65,7 +65,7 @@ const IncomeExpenseTrendChart = ({ userId, light }) => {
   const [loading, setLoading] = useState(true);
 
   const c = light
-    ? { ...COLORS, border: 'rgba(255,255,255,0.15)', textSecondary: 'rgba(255,255,255,0.7)', card: 'rgba(255,255,255,0.9)' }
+    ? { ...COLORS, border: 'rgba(255,255,255,0.15)', textSecondary: COLORS.onGradientMuted, card: 'rgba(255,255,255,0.9)' }
     : COLORS;
 
   const period = PERIODS[activeTab];
@@ -149,9 +149,9 @@ const IncomeExpenseTrendChart = ({ userId, light }) => {
   const xLabels = data.filter((_, i) => i % labelInterval === 0 || i === n - 1);
 
   const LINE_COLORS = {
-    income: '#0bda73',
-    expense: '#f44336',
-    net: light ? '#fff' : COLORS.primary,
+    income: COLORS.success,
+    expense: COLORS.error,
+    net: light ? COLORS.onGradient : COLORS.primary,
   };
 
   return (
@@ -164,7 +164,7 @@ const IncomeExpenseTrendChart = ({ userId, light }) => {
             style={[localStyles.tab, light && { backgroundColor: 'rgba(255,255,255,0.1)' }, activeTab === i && { backgroundColor: light ? 'rgba(255,255,255,0.25)' : COLORS.primary }]}
             onPress={() => setActiveTab(i)}
           >
-            <Text style={[localStyles.tabText, { color: activeTab === i ? '#fff' : c.textSecondary }]}>
+            <Text style={[localStyles.tabText, { color: activeTab === i ? COLORS.onGradient : c.textSecondary }]}>
               {p.label}
             </Text>
           </Pressable>

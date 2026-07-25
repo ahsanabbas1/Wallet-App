@@ -5,6 +5,7 @@ import { TrendingUp, Target, DollarSign, AlertTriangle, CheckCircle2, XCircle, I
 import { useTheme } from '../context/ThemeContext';
 import { useProfile } from '../context/ProfileContext';
 import { formatAmount } from '../utils/formatters';
+import { RADIUS, TYPOGRAPHY } from '../constants/theme';
 import IncomeExpenseTrendChart from './Charts/IncomeExpenseTrendChart';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -16,7 +17,7 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   const c = gradient
-    ? { ...COLORS, text: '#fff', textSecondary: 'rgba(255,255,255,0.7)', border: 'rgba(255,255,255,0.15)', card: 'rgba(255,255,255,0.9)' }
+    ? { ...COLORS, text: COLORS.onGradient, textSecondary: COLORS.onGradientMuted, border: 'rgba(255,255,255,0.15)', card: 'rgba(255,255,255,0.9)' }
     : COLORS;
 
   const mv = (formatted) => balanceVisible !== false ? formatted : '••••••';
@@ -76,17 +77,17 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
     };
   }, [totals, expenseChange]);
 
-  const scoreColor = score >= 70 ? COLORS.success : score >= 40 ? '#f59e0b' : COLORS.error;
+  const scoreColor = score >= 70 ? COLORS.success : score >= 40 ? COLORS.warning : COLORS.error;
 
   const StatusIcon = ({ status }) => {
-    if (status === STATUS.GOOD) return <CheckCircle2 color={gradient ? '#fff' : COLORS.success} size={16} />;
-    if (status === STATUS.FAIR) return <AlertTriangle color={gradient ? '#fff' : '#f59e0b'} size={16} />;
-    return <XCircle color={gradient ? '#fff' : COLORS.error} size={16} />;
+    if (status === STATUS.GOOD) return <CheckCircle2 color={gradient ? COLORS.onGradient : COLORS.success} size={16} />;
+    if (status === STATUS.FAIR) return <AlertTriangle color={gradient ? COLORS.onGradient : COLORS.warning} size={16} />;
+    return <XCircle color={gradient ? COLORS.onGradient : COLORS.error} size={16} />;
   };
 
   const MetricBar = ({ value, color }) => (
     <View style={[styles.barTrack, { backgroundColor: c.border }]}>
-      <View style={[styles.barFill, { width: `${Math.min(value, 100)}%`, backgroundColor: gradient ? '#fff' : color }]} />
+      <View style={[styles.barFill, { width: `${Math.min(value, 100)}%`, backgroundColor: gradient ? COLORS.onGradient : color }]} />
     </View>
   );
 
@@ -96,15 +97,15 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
         <>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View>
-              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, fontWeight: '600', marginBottom: 2 }}>Total Net Worth</Text>
-              <Text style={{ color: '#fff', fontSize: SCREEN_WIDTH * 0.07, fontWeight: '800' }} numberOfLines={1} adjustsFontSizeToFit>
+              <Text style={{ color: COLORS.onGradientMuted, fontSize: 12, fontWeight: '600', marginBottom: 2 }}>Total Net Worth</Text>
+              <Text style={{ color: COLORS.onGradient, fontSize: TYPOGRAPHY.display.fontSize, fontWeight: TYPOGRAPHY.display.fontWeight }} numberOfLines={1} adjustsFontSizeToFit>
                 {mv(`${currency} ${formatAmount(totals.totalAmount)}`)}
               </Text>
-              <Text style={{ color: expenseChange > 0 ? '#ff5252' : '#00e676', fontSize: 11, fontWeight: '600', marginTop: 2 }}>
+              <Text style={{ color: expenseChange > 0 ? COLORS.error : COLORS.success, fontSize: 11, fontWeight: '600', marginTop: 2 }}>
                 {expenseChange > 0 ? '↑' : '↓'} {Math.abs(expenseChange).toFixed(1)}% vs last month
               </Text>
             </View>
-            <TrendingUp color="rgba(255,255,255,0.4)" size={22} />
+            <TrendingUp color={COLORS.onGradientMuted} size={22} />
           </View>
           <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 16 }} />
         </>
@@ -113,8 +114,8 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
       <View style={styles.header}>
         <Text style={[styles.title, { color: c.text }]}>Financial Health</Text>
         <View style={[styles.scoreCircle, { backgroundColor: gradient ? 'rgba(255,255,255,0.2)' : scoreColor + '20' }]}>
-          <Text style={[styles.scoreNumber, { color: gradient ? '#fff' : scoreColor }]}>{score}</Text>
-          <Text style={[styles.scoreLabel, { color: gradient ? 'rgba(255,255,255,0.7)' : scoreColor }]}>/100</Text>
+          <Text style={[styles.scoreNumber, { color: gradient ? COLORS.onGradient : scoreColor }]}>{score}</Text>
+          <Text style={[styles.scoreLabel, { color: gradient ? COLORS.onGradientMuted : scoreColor }]}>/100</Text>
         </View>
       </View>
 
@@ -125,7 +126,7 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
             <Text style={[styles.metricLabel, { color: c.textSecondary }]}>Savings</Text>
           </View>
           <View style={styles.metricCenter}>
-            <MetricBar value={metrics.savingsRate} color={metrics.savingsStatus === STATUS.GOOD ? COLORS.success : metrics.savingsStatus === STATUS.FAIR ? '#f59e0b' : COLORS.error} />
+            <MetricBar value={metrics.savingsRate} color={metrics.savingsStatus === STATUS.GOOD ? COLORS.success : metrics.savingsStatus === STATUS.FAIR ? COLORS.warning : COLORS.error} />
           </View>
           <View style={styles.metricRight}>
             <Text style={[styles.metricValue, { color: c.text }]}>{Math.round(metrics.savingsRate)}%</Text>
@@ -140,7 +141,7 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
           </View>
           <View style={styles.metricCenter}>
             {metrics.budgetCount > 0 ? (
-              <MetricBar value={metrics.budgetUsage} color={metrics.budgetStatus === STATUS.GOOD ? COLORS.success : metrics.budgetStatus === STATUS.FAIR ? '#f59e0b' : COLORS.error} />
+              <MetricBar value={metrics.budgetUsage} color={metrics.budgetStatus === STATUS.GOOD ? COLORS.success : metrics.budgetStatus === STATUS.FAIR ? COLORS.warning : COLORS.error} />
             ) : (
               <Text style={[styles.noData, { color: c.textSecondary }]}>No budgets set</Text>
             )}
@@ -161,7 +162,7 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
             <Text style={[styles.metricLabel, { color: c.textSecondary }]}>Cash Flow</Text>
           </View>
           <View style={styles.metricCenter}>
-            <Text style={[styles.cashFlowValue, { color: gradient ? '#fff' : (metrics.cashFlow >= 0 ? COLORS.success : COLORS.error) }]}>
+            <Text style={[styles.cashFlowValue, { color: gradient ? COLORS.onGradient : (metrics.cashFlow >= 0 ? COLORS.success : COLORS.error) }]}>
               {metrics.cashFlow >= 0 ? '+' : ''}{currency} {formatAmount(Math.abs(metrics.cashFlow))}
             </Text>
           </View>
@@ -175,7 +176,7 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
 
       {tip ? (
         <View style={[styles.tipRow, { borderTopColor: c.border }]}>
-          <Info color={gradient ? 'rgba(255,255,255,0.7)' : COLORS.primary} size={14} />
+          <Info color={gradient ? COLORS.onGradientMuted : COLORS.primary} size={14} />
           <Text style={[styles.tipText, { color: c.textSecondary }]}>{tip}</Text>
         </View>
       ) : null}
@@ -185,10 +186,10 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
   if (gradient) {
     return (
       <LinearGradient
-        colors={['#4f5ff7', '#7c4dff']}
+        colors={[COLORS.gradientStart, COLORS.gradientEnd]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.card, { borderWidth: 0 }]}
+        style={[styles.card, styles.heroCard, { borderWidth: 0 }]}
       >
         {content}
       </LinearGradient>
@@ -210,6 +211,14 @@ const makeStyles = (COLORS) => StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: COLORS.glassBorder,
+  },
+  heroCard: {
+    borderRadius: RADIUS.xxl,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
   },
   header: {
     flexDirection: 'row',

@@ -104,7 +104,7 @@ const GlobalDrawer = () => {
           <View style={styles.divider} />
           
           <Pressable 
-            style={({ pressed }) => [styles.drawerItem, styles.logoutItem, pressed && { backgroundColor: 'rgba(244, 67, 54, 0.1)' }]} 
+            style={({ pressed }) => [styles.drawerItem, styles.logoutItem, pressed && { backgroundColor: COLORS.error + '1A' }]}
             onPress={handleLogout}
           >
             <LogOut color={COLORS.error} size={24} style={styles.icon} />
@@ -124,7 +124,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: COLORS.overlay,
   },
   drawer: {
     position: 'absolute',
@@ -144,7 +144,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     alignItems: 'center',
     padding: SIZES.padding,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: COLORS.divider,
   },
   headerTitle: {
     color: COLORS.text,
@@ -170,13 +170,13 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: COLORS.divider,
     marginVertical: 10,
     marginHorizontal: SIZES.padding,
   },
   sectionDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: COLORS.divider,
     marginTop: 8,
     marginHorizontal: SIZES.padding,
   },

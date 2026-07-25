@@ -151,11 +151,11 @@ const deriveMetrics = (current, previous) => {
   return { income, expense, net, prevExpense, prevIncome, expenseChange, incomeChange };
 };
 
-const deriveBreakdown = (current, totalExpense) => {
+const deriveBreakdown = (current, totalExpense, fallbackColor) => {
   const map = {};
   current.filter(t => t.is_loan !== 1 && t.type === 'expense').forEach(t => {
     const n = t.categories?.name || 'Other';
-    if (!map[n]) map[n] = { amount: 0, color: t.categories?.color || '#4f5ff7' };
+    if (!map[n]) map[n] = { amount: 0, color: t.categories?.color || fallbackColor };
     map[n].amount += parseFloat(t.amount);
   });
   return Object.entries(map)
@@ -215,7 +215,7 @@ const deriveInsights = (metrics, breakdown, catVariance, fmt) => {
   return tips;
 };
 
-const deriveChartData = (current, sixMonthBars) => {
+const deriveChartData = (current, sixMonthBars, fallbackColor) => {
   const nonLoanCurrent = current.filter(t => t.is_loan !== 1);
   // Monthly grouped data for line + bar charts
   const monthMap = {};
@@ -242,7 +242,7 @@ const deriveChartData = (current, sixMonthBars) => {
   const incomeMap = {};
   nonLoanCurrent.filter(t => t.type === 'income').forEach(t => {
     const n = t.categories?.name || 'Other';
-    if (!incomeMap[n]) incomeMap[n] = { amount: 0, color: t.categories?.color || '#4051b5' };
+    if (!incomeMap[n]) incomeMap[n] = { amount: 0, color: t.categories?.color || fallbackColor };
     incomeMap[n].amount += parseFloat(t.amount);
   });
   const totalIncome = Object.values(incomeMap).reduce((s, v) => s + v.amount, 0);
@@ -282,7 +282,7 @@ const deriveCashFlow = (current) => {
   });
 };
 
-const deriveLedger = (current) => {
+const deriveLedger = (current, loanColor, fallbackColor) => {
   const nonTransfer = current.filter(t => t.type !== 'transfer');
   let balance = 0;
   const txs = [...nonTransfer].sort((a, b) => new Date(a.date) - new Date(b.date)).map(t => {
@@ -294,7 +294,7 @@ const deriveLedger = (current) => {
       dateISO:        t.date,
       description:    t.title || '—',
       category:       t.is_loan ? 'Loan' : (t.categories?.name || 'Other'),
-      categoryColor:  t.is_loan ? '#f59e0b' : (t.categories?.color || '#4051b5'),
+      categoryColor:  t.is_loan ? loanColor : (t.categories?.color || fallbackColor),
       income:         t.type === 'income'  ? a : 0,
       expense:        t.type === 'expense' ? a : 0,
       runningBalance: balance,
@@ -370,12 +370,12 @@ const Reports = () => {
 
   /* ── memoised derived data ───────────────────────────────────────── */
   const metrics        = useMemo(() => deriveMetrics(rawData.current, rawData.previous),                      [rawData]);
-  const breakdown      = useMemo(() => deriveBreakdown(rawData.current, metrics.expense),                      [rawData, metrics.expense]);
+  const breakdown      = useMemo(() => deriveBreakdown(rawData.current, metrics.expense, COLORS.primary),      [rawData, metrics.expense, COLORS.primary]);
   const catVariance    = useMemo(() => deriveCategoryVariance(rawData.current, rawData.previous),             [rawData]);
   const insights       = useMemo(() => deriveInsights(metrics, breakdown, catVariance, fmt),                  [metrics, breakdown, catVariance, fmt]);
-  const chartData      = useMemo(() => deriveChartData(rawData.current, rawData.sixMonthBars),       [rawData]);
+  const chartData      = useMemo(() => deriveChartData(rawData.current, rawData.sixMonthBars, COLORS.primary), [rawData, COLORS.primary]);
   const cashFlowData   = useMemo(() => deriveCashFlow(rawData.current),                              [rawData]);
-  const ledgerData     = useMemo(() => deriveLedger(rawData.current),                                [rawData]);
+  const ledgerData     = useMemo(() => deriveLedger(rawData.current, COLORS.warning, COLORS.primary),         [rawData, COLORS.warning, COLORS.primary]);
 
   const maxBarExpense  = useMemo(
     () => Math.max(...rawData.sixMonthBars.map(b => b.expense), 1),
@@ -447,7 +447,7 @@ const Reports = () => {
           style={{ backgroundColor: COLORS.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 }}
           onPress={fetchData}
         >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Retry</Text>
+          <Text style={{ color: COLORS.onGradient, fontWeight: 'bold', fontSize: 15 }}>Retry</Text>
         </Pressable>
       </SafeAreaView>
     );
@@ -473,7 +473,7 @@ const Reports = () => {
             <Download color={COLORS.textSecondary} size={18} />
           </Pressable>
           <Pressable style={[styles.calendarBtn, isCustomActive && styles.calendarBtnActive]} onPress={openPicker}>
-            <CalendarDays color={isCustomActive ? '#fff' : COLORS.textSecondary} size={18} />
+            <CalendarDays color={isCustomActive ? COLORS.onGradient : COLORS.textSecondary} size={18} />
           </Pressable>
           <HeaderMenu items={[
             { icon: Info, label: 'About This Page', onPress: showPageInfo },
@@ -482,7 +482,7 @@ const Reports = () => {
 
         {/* ── Export menu modal ───────────────────────────────────── */}
         <Modal visible={exportMenuVisible} transparent animationType="fade" onRequestClose={() => setExportMenuVisible(false)}>
-          <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={() => setExportMenuVisible(false)}>
+          <Pressable style={{ flex: 1, backgroundColor: COLORS.overlay }} onPress={() => setExportMenuVisible(false)}>
             <View style={{
               position: 'absolute', top: 60, right: 16,
               backgroundColor: COLORS.card, borderRadius: 16, overflow: 'hidden',
@@ -499,8 +499,8 @@ const Reports = () => {
                 style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: pressed ? COLORS.surface : 'transparent' }]}
                 onPress={() => handleExport('excel')}
               >
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#22c55e' + '22', alignItems: 'center', justifyContent: 'center' }}>
-                  <FileSpreadsheet color="#22c55e" size={18} />
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.success + '22', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileSpreadsheet color={COLORS.success} size={18} />
                 </View>
                 <View>
                   <Text style={{ color: COLORS.text, fontWeight: '700', fontSize: 14 }}>Export as Excel</Text>
@@ -511,8 +511,8 @@ const Reports = () => {
                 style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: pressed ? COLORS.surface : 'transparent' }]}
                 onPress={() => handleExport('pdf')}
               >
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#ef4444' + '22', alignItems: 'center', justifyContent: 'center' }}>
-                  <FileText color="#ef4444" size={18} />
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: COLORS.error + '22', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText color={COLORS.error} size={18} />
                 </View>
                 <View>
                   <Text style={{ color: COLORS.text, fontWeight: '700', fontSize: 14 }}>Export as PDF</Text>
@@ -560,12 +560,12 @@ const Reports = () => {
           {/* Trend badge */}
           <View style={styles.heroTrend}>
             <View style={[styles.heroTrendBadge, {
-              backgroundColor: metrics.expenseChange > 0 ? 'rgba(244,67,54,0.2)' : 'rgba(11,218,115,0.2)',
+              backgroundColor: metrics.expenseChange > 0 ? COLORS.error + '33' : COLORS.success + '33',
             }]}>
               {metrics.expenseChange > 0
-                ? <ArrowUp   color="#f44336" size={12} />
-                : <ArrowDown color="#0bda73" size={12} />}
-              <Text style={[styles.heroTrendText, { color: metrics.expenseChange > 0 ? '#f44336' : '#0bda73' }]}>
+                ? <ArrowUp   color={COLORS.error} size={12} />
+                : <ArrowDown color={COLORS.success} size={12} />}
+              <Text style={[styles.heroTrendText, { color: metrics.expenseChange > 0 ? COLORS.error : COLORS.success }]}>
                 {Math.abs(metrics.expenseChange).toFixed(1)}%
               </Text>
             </View>
@@ -576,12 +576,12 @@ const Reports = () => {
           <View style={styles.heroStatsRow}>
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>Income</Text>
-              <Text style={[styles.heroStatValue, { color: '#0bda73' }]}>{fmt(metrics.income)}</Text>
+              <Text style={[styles.heroStatValue, { color: COLORS.success }]}>{fmt(metrics.income)}</Text>
             </View>
             <View style={styles.heroStatDivider} />
             <View style={styles.heroStat}>
               <Text style={styles.heroStatLabel}>Net</Text>
-              <Text style={[styles.heroStatValue, { color: metrics.net >= 0 ? '#0bda73' : '#f44336' }]}>
+              <Text style={[styles.heroStatValue, { color: metrics.net >= 0 ? COLORS.success : COLORS.error }]}>
                 {metrics.net >= 0 ? '+' : '-'}{fmt(Math.abs(metrics.net))}
               </Text>
             </View>
@@ -618,7 +618,7 @@ const Reports = () => {
                     <View key={i} style={styles.inlineBarWrap}>
                       <View style={[styles.inlineBar, {
                         height: `${h}%`,
-                        backgroundColor: isLast ? COLORS.primary : 'rgba(64,81,181,0.35)',
+                        backgroundColor: isLast ? COLORS.primary : COLORS.primary + '40',
                       }]} />
                       <Text style={[styles.inlineBarLabel, isLast && styles.inlineBarLabelActive]}>
                         {bar.label}
@@ -639,7 +639,7 @@ const Reports = () => {
               </View>
               <View style={styles.kpiCard}>
                 <Text style={styles.kpiLabel}>Savings Rate</Text>
-                <Text style={[styles.kpiValue, { color: metrics.net >= 0 ? '#0bda73' : '#f44336' }]}>
+                <Text style={[styles.kpiValue, { color: metrics.net >= 0 ? COLORS.success : COLORS.error }]}>
                   {metrics.income > 0 ? ((metrics.net / metrics.income) * 100).toFixed(0) : 0}%
                 </Text>
               </View>
@@ -669,9 +669,9 @@ const Reports = () => {
                         {Math.abs(variance) > 1 && (
                           <View style={styles.catVariance}>
                             {variance > 0
-                              ? <ArrowUp color="#f44336" size={11} />
-                              : <ArrowDown color="#0bda73" size={11} />}
-                            <Text style={[styles.catVarianceText, { color: variance > 0 ? '#f44336' : '#0bda73' }]}>
+                              ? <ArrowUp color={COLORS.error} size={11} />
+                              : <ArrowDown color={COLORS.success} size={11} />}
+                            <Text style={[styles.catVarianceText, { color: variance > 0 ? COLORS.error : COLORS.success }]}>
                               {Math.abs(variance).toFixed(0)}%
                             </Text>
                           </View>
@@ -725,9 +725,9 @@ const Reports = () => {
                   .map(([cat, pct], i) => {
                     const catData = breakdown.find(b => b.label === cat);
                     return (
-                      <View key={i} style={[styles.alertCard, { backgroundColor: 'rgba(244,67,54,0.08)', borderLeftWidth: 3, borderLeftColor: '#f44336' }]}>
-                        <View style={[styles.alertIconWrap, { backgroundColor: 'rgba(244,67,54,0.15)' }]}>
-                          <AlertTriangle color="#f44336" size={16} />
+                      <View key={i} style={[styles.alertCard, { backgroundColor: COLORS.error + '14', borderLeftWidth: 3, borderLeftColor: COLORS.error }]}>
+                        <View style={[styles.alertIconWrap, { backgroundColor: COLORS.error + '26' }]}>
+                          <AlertTriangle color={COLORS.error} size={16} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.alertTitle}>{cat}</Text>
@@ -735,7 +735,7 @@ const Reports = () => {
                             {pct.toFixed(0)}% higher than previous period
                           </Text>
                           {catData && (
-                            <Text style={[styles.alertValue, { color: '#f44336' }]}>
+                            <Text style={[styles.alertValue, { color: COLORS.error }]}>
                               {fmt(catData.amount)} spent
                             </Text>
                           )}
@@ -767,16 +767,16 @@ const Reports = () => {
                   <View style={{ flex: 1, padding: 18, paddingBottom: 14, borderRightWidth: 1, borderRightColor: COLORS.divider }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                       <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7 }}>Income</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: metrics.incomeChange >= 0 ? '#0bda7318' : '#f4433618', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: metrics.incomeChange >= 0 ? COLORS.success + '18' : COLORS.error + '18', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
                         {metrics.incomeChange >= 0
-                          ? <ArrowUp   color="#0bda73" size={10} />
-                          : <ArrowDown color="#f44336" size={10} />}
-                        <Text style={{ color: metrics.incomeChange >= 0 ? '#0bda73' : '#f44336', fontSize: 10, fontWeight: '700' }}>
+                          ? <ArrowUp   color={COLORS.success} size={10} />
+                          : <ArrowDown color={COLORS.error} size={10} />}
+                        <Text style={{ color: metrics.incomeChange >= 0 ? COLORS.success : COLORS.error, fontSize: 10, fontWeight: '700' }}>
                           {Math.abs(metrics.incomeChange).toFixed(1)}%
                         </Text>
                       </View>
                     </View>
-                    <Text style={{ color: '#0bda73', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{fmt(metrics.income)}</Text>
+                    <Text style={{ color: COLORS.success, fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{fmt(metrics.income)}</Text>
                     <Text style={{ color: COLORS.textTertiary, fontSize: 10, marginTop: 4 }}>vs prev period</Text>
                   </View>
 
@@ -784,16 +784,16 @@ const Reports = () => {
                   <View style={{ flex: 1, padding: 18, paddingBottom: 14 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                       <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.7 }}>Expense</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: metrics.expenseChange <= 0 ? '#0bda7318' : '#f4433618', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: metrics.expenseChange <= 0 ? COLORS.success + '18' : COLORS.error + '18', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 }}>
                         {metrics.expenseChange <= 0
-                          ? <ArrowDown color="#0bda73" size={10} />
-                          : <ArrowUp   color="#f44336" size={10} />}
-                        <Text style={{ color: metrics.expenseChange <= 0 ? '#0bda73' : '#f44336', fontSize: 10, fontWeight: '700' }}>
+                          ? <ArrowDown color={COLORS.success} size={10} />
+                          : <ArrowUp   color={COLORS.error} size={10} />}
+                        <Text style={{ color: metrics.expenseChange <= 0 ? COLORS.success : COLORS.error, fontSize: 10, fontWeight: '700' }}>
                           {Math.abs(metrics.expenseChange).toFixed(1)}%
                         </Text>
                       </View>
                     </View>
-                    <Text style={{ color: '#f44336', fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{fmt(metrics.expense)}</Text>
+                    <Text style={{ color: COLORS.error, fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{fmt(metrics.expense)}</Text>
                     <Text style={{ color: COLORS.textTertiary, fontSize: 10, marginTop: 4 }}>vs prev period</Text>
                   </View>
                 </View>
@@ -801,11 +801,11 @@ const Reports = () => {
                 {/* Income/Expense ratio bar */}
                 <View style={{ paddingHorizontal: 18, paddingTop: 4, paddingBottom: 6 }}>
                   <View style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.divider, flexDirection: 'row', overflow: 'hidden' }}>
-                    <View style={{ width: `${incRatio}%`, backgroundColor: '#0bda73' }} />
+                    <View style={{ width: `${incRatio}%`, backgroundColor: COLORS.success }} />
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }}>
-                    <Text style={{ color: '#0bda73', fontSize: 10, fontWeight: '600' }}>Income {incRatio.toFixed(0)}%</Text>
-                    <Text style={{ color: '#f44336', fontSize: 10, fontWeight: '600' }}>Expense {(100 - incRatio).toFixed(0)}%</Text>
+                    <Text style={{ color: COLORS.success, fontSize: 10, fontWeight: '600' }}>Income {incRatio.toFixed(0)}%</Text>
+                    <Text style={{ color: COLORS.error, fontSize: 10, fontWeight: '600' }}>Expense {(100 - incRatio).toFixed(0)}%</Text>
                   </View>
                 </View>
 
@@ -813,13 +813,13 @@ const Reports = () => {
                 <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: COLORS.divider }}>
                   <View style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRightWidth: 1, borderRightColor: COLORS.divider }}>
                     <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>Net Balance</Text>
-                    <Text style={{ color: metrics.net >= 0 ? '#0bda73' : '#f44336', fontSize: 17, fontWeight: '800' }}>
+                    <Text style={{ color: metrics.net >= 0 ? COLORS.success : COLORS.error, fontSize: 17, fontWeight: '800' }}>
                       {metrics.net >= 0 ? '+' : ''}{fmt(metrics.net)}
                     </Text>
                   </View>
                   <View style={{ flex: 1, alignItems: 'center', paddingVertical: 14 }}>
                     <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>Savings Rate</Text>
-                    <Text style={{ color: savingsRate >= 0 ? '#0bda73' : '#f44336', fontSize: 17, fontWeight: '800' }}>
+                    <Text style={{ color: savingsRate >= 0 ? COLORS.success : COLORS.error, fontSize: 17, fontWeight: '800' }}>
                       {savingsRate.toFixed(1)}%
                     </Text>
                   </View>
@@ -835,11 +835,11 @@ const Reports = () => {
                   </View>
                   <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#0bda73' }} />
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.success }} />
                       <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600' }}>Income</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f44336' }} />
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.error }} />
                       <Text style={{ color: COLORS.textSecondary, fontSize: 10, fontWeight: '600' }}>Expense</Text>
                     </View>
                   </View>
@@ -883,8 +883,8 @@ const Reports = () => {
                             <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{item.label}</Text>
                             {Math.abs(variance) > 1 && (
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                                {variance > 0 ? <ArrowUp color="#f44336" size={10} /> : <ArrowDown color="#0bda73" size={10} />}
-                                <Text style={{ color: variance > 0 ? '#f44336' : '#0bda73', fontSize: 10, fontWeight: '700' }}>
+                                {variance > 0 ? <ArrowUp color={COLORS.error} size={10} /> : <ArrowDown color={COLORS.success} size={10} />}
+                                <Text style={{ color: variance > 0 ? COLORS.error : COLORS.success, fontSize: 10, fontWeight: '700' }}>
                                   {Math.abs(variance).toFixed(0)}%
                                 </Text>
                               </View>
@@ -913,8 +913,8 @@ const Reports = () => {
                     <Text style={{ color: COLORS.text, fontSize: 15, fontWeight: '700' }}>Savings Growth</Text>
                     <Text style={{ color: COLORS.textSecondary, fontSize: 12, marginTop: 2 }}>Cumulative net balance over time</Text>
                   </View>
-                  <View style={{ backgroundColor: metrics.net >= 0 ? '#0bda7318' : '#f4433618', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
-                    <Text style={{ color: metrics.net >= 0 ? '#0bda73' : '#f44336', fontSize: 10, fontWeight: '700' }}>
+                  <View style={{ backgroundColor: metrics.net >= 0 ? COLORS.success + '18' : COLORS.error + '18', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                    <Text style={{ color: metrics.net >= 0 ? COLORS.success : COLORS.error, fontSize: 10, fontWeight: '700' }}>
                       {metrics.net >= 0 ? 'GROWING' : 'DECLINING'}
                     </Text>
                   </View>
@@ -937,7 +937,7 @@ const Reports = () => {
                           <Text style={{ color: COLORS.text, fontSize: 13, fontWeight: '600', flex: 1 }} numberOfLines={1}>{item.name}</Text>
                         </View>
                         <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                          <Text style={{ color: '#0bda73', fontSize: 13, fontWeight: '700' }}>{fmt(item.amount)}</Text>
+                          <Text style={{ color: COLORS.success, fontSize: 13, fontWeight: '700' }}>{fmt(item.amount)}</Text>
                           <Text style={{ color: COLORS.textSecondary, fontSize: 10, marginTop: 1 }}>{item.percent}%</Text>
                         </View>
                       </View>
@@ -981,13 +981,13 @@ const Reports = () => {
                   style={[styles.toggleBtn, ledgerView === 'TABLE' && styles.toggleBtnActive]}
                   onPress={() => setLedgerView('TABLE')}
                 >
-                  <Table2 color={ledgerView === 'TABLE' ? '#fff' : COLORS.textSecondary} size={15} />
+                  <Table2 color={ledgerView === 'TABLE' ? COLORS.onGradient : COLORS.textSecondary} size={15} />
                 </Pressable>
                 <Pressable
                   style={[styles.toggleBtn, ledgerView === 'CARDS' && styles.toggleBtnActive]}
                   onPress={() => setLedgerView('CARDS')}
                 >
-                  <ListIcon color={ledgerView === 'CARDS' ? '#fff' : COLORS.textSecondary} size={15} />
+                  <ListIcon color={ledgerView === 'CARDS' ? COLORS.onGradient : COLORS.textSecondary} size={15} />
                 </Pressable>
               </View>
             </View>

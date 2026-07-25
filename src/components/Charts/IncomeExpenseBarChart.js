@@ -44,7 +44,7 @@ const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
             <Line
               x1={padding.left} y1={item.y}
               x2={chartWidth} y2={item.y}
-              stroke="rgba(255,255,255,0.05)" strokeWidth="1" strokeDasharray="4,4"
+              stroke={COLORS.divider} strokeWidth="1" strokeDasharray="4,4"
             />
             <SvgText x={padding.left - 6} y={item.y + 4}
               fontSize="9" fill={COLORS.textSecondary} textAnchor="end">
@@ -69,7 +69,7 @@ const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
                 width={barW}
                 height={Math.max(incomeH, 2)}
                 rx={3}
-                fill="#0bda73"
+                fill={COLORS.success}
                 opacity={0.85}
               />
               {/* Expense bar */}
@@ -79,7 +79,7 @@ const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
                 width={barW}
                 height={Math.max(expenseH, 2)}
                 rx={3}
-                fill="#f44336"
+                fill={COLORS.error}
                 opacity={0.85}
               />
               {/* X label */}
@@ -100,11 +100,11 @@ const IncomeExpenseBarChart = ({ data = [], height = 220 }) => {
       {/* Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#0bda73' }]} />
+          <View style={[styles.legendDot, { backgroundColor: COLORS.success }]} />
           <Text style={styles.legendText}>Income</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#f44336' }]} />
+          <View style={[styles.legendDot, { backgroundColor: COLORS.error }]} />
           <Text style={styles.legendText}>Expense</Text>
         </View>
       </View>
