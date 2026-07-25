@@ -91,41 +91,56 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let mounted = true;
 
+    // Falls back to the cached identity so a previously logged-in user is
+    // never blocked from opening the app just because Supabase is unreachable.
+    const enterOfflineMode = async () => {
+      const signedOut = await AsyncStorage.getItem(AUTH_SIGNED_OUT_KEY);
+      if (signedOut === 'true') return; // user explicitly logged out — needs real login
+      const raw = await AsyncStorage.getItem(AUTH_CACHE_KEY);
+      if (!raw) return;
+      try {
+        const cached = JSON.parse(raw);
+        if (mounted) setOfflineUser(cached);
+        // Open SQLite with cached userId — no migration needed (already done)
+        await initDatabase(cached.id, null);
+      } catch (_) {}
+    };
+
     const bootstrap = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // getSession() refreshes an expired token over the network — without
+        // a timeout it can hang indefinitely when there's no internet. Race
+        // it against a short timeout so offline users aren't stuck loading.
+        const sessionPromise = supabase.auth.getSession();
+        const timedOut = Symbol('timeout');
+        const raced = await Promise.race([
+          sessionPromise,
+          new Promise(resolve => setTimeout(() => resolve(timedOut), 4000)),
+        ]);
 
-        if (session?.user) {
-          // Online: full session available
-          if (mounted) setSession(session);
-          await cacheUser(session.user);
-          await initDatabase(session.user.id, session);
-        } else {
-          // No active session — check if user explicitly signed out
-          const signedOut = await AsyncStorage.getItem(AUTH_SIGNED_OUT_KEY);
-          if (signedOut === 'true') {
-            // User logged out on purpose — show login screen
-          } else {
-            // Check for cached identity (offline / token expired scenario)
-            const raw = await AsyncStorage.getItem(AUTH_CACHE_KEY);
-            if (raw) {
-              const cached = JSON.parse(raw);
-              if (mounted) setOfflineUser(cached);
-              // Open SQLite with cached userId — no migration needed (already done)
-              await initDatabase(cached.id, null);
+        if (raced === timedOut) {
+          await enterOfflineMode();
+          // Let the real request keep resolving in the background — if the
+          // network was just slow, upgrade to the online session once it lands.
+          sessionPromise.then(({ data }) => {
+            if (mounted && data?.session?.user) {
+              setSession(data.session);
+              setOfflineUser(null);
+              cacheUser(data.session.user);
+              initDatabase(data.session.user.id, data.session);
             }
-          }
+          }).catch(() => {});
+        } else if (raced.data?.session?.user) {
+          // Online: full session available
+          if (mounted) setSession(raced.data.session);
+          await cacheUser(raced.data.session.user);
+          await initDatabase(raced.data.session.user.id, raced.data.session);
+        } else {
+          await enterOfflineMode();
         }
       } catch (e) {
         // Network error during getSession — try offline cache
-        const raw = await AsyncStorage.getItem(AUTH_CACHE_KEY);
-        if (raw) {
-          try {
-            const cached = JSON.parse(raw);
-            if (mounted) setOfflineUser(cached);
-            await initDatabase(cached.id, null);
-          } catch (_) {}
-        }
+        await enterOfflineMode();
       } finally {
         if (mounted) setLoading(false);
       }

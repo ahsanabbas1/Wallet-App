@@ -32,9 +32,8 @@ const toYMD = (dateStr) => {
 
 export default function FinancialCalendar() {
   const { colors: COLORS } = useTheme();
-  const { session } = useAuth();
+  const { userId } = useAuth();
   const { toggleDrawer } = useDrawer();
-  const userId = session?.user?.id;
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
 
   const today = new Date();
