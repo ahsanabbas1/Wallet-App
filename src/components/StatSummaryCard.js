@@ -55,11 +55,10 @@ const makeStyles = (COLORS) => StyleSheet.create({
     borderRadius: RADIUS.lg,
     borderWidth: 1,
     padding: SPACING.md,
-    shadowColor: COLORS.isDark ? '#000' : COLORS.primary,
+    shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: COLORS.isDark ? 0.2 : 0.08,
+    shadowOpacity: COLORS.isDark ? 0.12 : 0.08,
     shadowRadius: 10,
-    elevation: 3,
   },
   headerRow: {
     flexDirection: 'row',

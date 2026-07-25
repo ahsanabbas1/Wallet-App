@@ -97,7 +97,6 @@ const makeStyles = (COLORS) => StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.06,
     shadowRadius: 24,
-    elevation: 3,
   },
   header: {
     flexDirection: 'row',
