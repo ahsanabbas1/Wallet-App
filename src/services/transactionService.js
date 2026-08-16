@@ -11,6 +11,7 @@ function buildDateClause(options = {}) {
   if      (period === 'TODAY')  { start = new Date(); start.setHours(0, 0, 0, 0); }
   else if (period === '1W')     { start = new Date(); start.setDate(now.getDate() - 7); }
   else if (period === '1M')     { start = new Date(); start.setMonth(now.getMonth() - 1); }
+  else if (period === '3M')     { start = new Date(); start.setMonth(now.getMonth() - 3); }
   else if (period === '6M')     { start = new Date(); start.setMonth(now.getMonth() - 6); }
   else if (period === '1Y')     { start = new Date(); start.setFullYear(now.getFullYear() - 1); }
   else if (period === 'CUSTOM' && customStartDate) { start = new Date(customStartDate); }

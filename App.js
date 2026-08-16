@@ -11,6 +11,7 @@ import { LockProvider, useLock }    from './src/context/LockContext';
 import { LedgerFilterProvider }     from './src/context/LedgerFilterContext';
 import { AccountsFilterProvider }   from './src/context/AccountsFilterContext';
 import { ReportsFilterProvider }    from './src/context/ReportsFilterContext';
+import { AIAssistantFilterProvider } from './src/context/AIAssistantFilterContext';
 import GlobalDrawer                 from './src/components/GlobalDrawer';
 import LockScreen                   from './src/screens/LockScreen/index';
 import { StatusBar }                from 'expo-status-bar';
@@ -120,12 +121,14 @@ const AppContent = () => {
               <LedgerFilterProvider>
                 <AccountsFilterProvider>
                   <ReportsFilterProvider>
-                    <NavigationContainer>
-                      <ThemedShell>
-                        <AppNavigator />
-                        <GlobalDrawer />
-                      </ThemedShell>
-                    </NavigationContainer>
+                    <AIAssistantFilterProvider>
+                      <NavigationContainer>
+                        <ThemedShell>
+                          <AppNavigator />
+                          <GlobalDrawer />
+                        </ThemedShell>
+                      </NavigationContainer>
+                    </AIAssistantFilterProvider>
                   </ReportsFilterProvider>
                 </AccountsFilterProvider>
               </LedgerFilterProvider>

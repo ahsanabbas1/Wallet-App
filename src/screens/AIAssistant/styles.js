@@ -213,4 +213,125 @@ export const makeStyles = (COLORS) => StyleSheet.create({
     thead: { backgroundColor: 'rgba(255,255,255,0.05)' },
     tr: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)' },
   },
+
+  /* ── Period filter modal ─────────────────────────────────────────── */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  filterOption: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  filterOptionText: {
+    color: COLORS.textSecondary,
+    fontSize: 16,
+  },
+  filterOptionActive: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+  },
+
+  /* ── Custom range date picker sheet ───────────────────────────────── */
+  datePickerSheet: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingBottom: 36,
+    paddingHorizontal: 20,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  sheetTitle: {
+    color: COLORS.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateTabs: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    gap: 4,
+  },
+  dateTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  dateTabActive: {
+    backgroundColor: COLORS.primary,
+  },
+  dateTabLabel: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  dateTabLabelActive: { color: '#fff' },
+  dateTabValue: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 3,
+  },
+  dateTabValueActive: { color: 'rgba(255,255,255,0.8)' },
+  rangeHint: {
+    color: COLORS.error,
+    fontSize: 12,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  applyBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  applyBtnDisabled: { opacity: 0.35 },
+  applyBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
 });

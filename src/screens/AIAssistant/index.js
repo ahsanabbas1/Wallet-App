@@ -1,17 +1,37 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MarkdownRender from '../../components/MarkdownRender';
 import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../../context/ThemeContext';
 import { makeStyles } from './styles';
-import { Send, Bot, User, Sparkles, Menu, TrendingUp, PieChart, ShoppingCart, Target, Info, RefreshCw, Trash2, Copy } from 'lucide-react-native';
+import { Send, Bot, User, Sparkles, Menu, TrendingUp, PieChart, ShoppingCart, Target, Info, RefreshCw, Trash2, Copy, CalendarDays, X } from 'lucide-react-native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
+import { useAIAssistantFilter } from '../../context/AIAssistantFilterContext';
 import { fetchUsage, updateUsage, getFinancialContext, saveChatMessage, getChatHistory, clearChatHistory, DAILY_LIMIT } from '../../services/aiService';
+import MiniCalendar from '../../components/Calendar';
 
 const VERCEL_PROXY_URL = 'https://wallet-app-ten-sooty.vercel.app/api/chat';
+const MAX_CUSTOM_RANGE_DAYS = 366;
+
+const today = () => new Date().toISOString().split('T')[0];
+
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${mo[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+};
+
+const PERIOD_OPTIONS = [
+  { label: 'Last 1 Month', value: '1M' },
+  { label: 'Last 3 Months', value: '3M' },
+  { label: 'Last 6 Months', value: '6M' },
+  { label: 'Last 1 Year', value: '1Y' },
+  { label: 'Custom Range', value: 'CUSTOM' },
+];
 
 const formatDateLabel = (dateStr) => {
   const date = new Date(dateStr + 'T00:00:00');
@@ -55,6 +75,22 @@ const AIAssistant = () => {
   const [usageCount, setUsageCount] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
   const userCurrency = profileCurrency || 'PKR';
+
+  const {
+    period, setPeriod,
+    customStartDate, setCustomStartDate,
+    customEndDate, setCustomEndDate,
+  } = useAIAssistantFilter();
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState('FROM');
+
+  const rangeOptions = useMemo(() => ({ period, customStartDate, customEndDate }), [period, customStartDate, customEndDate]);
+  const rangeTooLong = period === 'CUSTOM' && customStartDate && customEndDate &&
+    (new Date(customEndDate) - new Date(customStartDate)) / 86400000 > MAX_CUSTOM_RANGE_DAYS;
+  const rangeLabel = period === 'CUSTOM' && customStartDate && customEndDate
+    ? `${fmtDate(customStartDate)} – ${fmtDate(customEndDate)}`
+    : (PERIOD_OPTIONS.find(p => p.value === period)?.label || 'Last 1 Month');
 
   useEffect(() => {
     if (userId) {
@@ -122,7 +158,7 @@ const AIAssistant = () => {
     if (userId) saveChatMessage(userId, 'user', text);
 
     try {
-      const context = await getFinancialContext(userId, userCurrency, profileName);
+      const context = await getFinancialContext(userId, userCurrency, profileName, rangeOptions);
 
       const response = await fetch(VERCEL_PROXY_URL, {
         method: 'POST',
@@ -174,7 +210,7 @@ const AIAssistant = () => {
     setLoading(true);
 
     try {
-      const context = await getFinancialContext(userId, userCurrency, profileName);
+      const context = await getFinancialContext(userId, userCurrency, profileName, rangeOptions);
 
       const response = await fetch(VERCEL_PROXY_URL, {
         method: 'POST',
@@ -212,7 +248,7 @@ const AIAssistant = () => {
     } finally {
       setLoading(false);
     }
-  }, [messages, loading, usageCount, userId, userCurrency, profileName]);
+  }, [messages, loading, usageCount, userId, userCurrency, profileName, rangeOptions]);
 
   const handleClear = () => {
     Alert.alert('Clear Conversation', 'Delete all chat messages?', [
@@ -236,7 +272,7 @@ const AIAssistant = () => {
     Alert.alert('Copied', 'Response copied to clipboard.');
   };
 
-  const showPageInfo = () => Alert.alert('About This Page', 'Ask questions about your finances. The AI analyzes your data and answers in plain language.');
+  const showPageInfo = () => Alert.alert('About This Page', 'Ask questions about your finances. The AI analyzes your data and answers in plain language. Use the calendar icon to change how far back it looks (up to 1 year, or a custom range).');
 
   const suggestions = [
     { label: 'Monthly summary', icon: TrendingUp, prompt: 'Give me a detailed summary of my spending and income this month.' },
@@ -266,13 +302,16 @@ const AIAssistant = () => {
             <Menu color={COLORS.text} size={24} />
           </TouchableOpacity>
           <Bot color={COLORS.primary} size={28} />
-          <View style={styles.headerTextContainer}>
+          <View style={[styles.headerTextContainer, { flex: 1 }]}>
             <Text style={styles.headerTitle}>AI Assistant</Text>
             <View style={styles.statusContainer}>
               <View style={[styles.statusDot, { backgroundColor: usageCount >= DAILY_LIMIT ? COLORS.error : '#4CAF50' }]} />
-              <Text style={styles.statusText}>{usageCount}/{DAILY_LIMIT} Requests · {userCurrency}</Text>
+              <Text style={styles.statusText} numberOfLines={1}>{usageCount}/{DAILY_LIMIT} Requests · {userCurrency} · {rangeLabel}</Text>
             </View>
           </View>
+          <TouchableOpacity onPress={() => setShowPeriodModal(true)} style={{ padding: 8 }}>
+            <CalendarDays color={COLORS.textSecondary} size={20} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleClear} style={{ padding: 8 }}>
             <Trash2 color={COLORS.textSecondary} size={20} />
           </TouchableOpacity>
@@ -381,6 +420,117 @@ const AIAssistant = () => {
             <Send color={COLORS.text} size={20} />
           </TouchableOpacity>
         </View>
+
+        {/* Period Filter Modal */}
+        <Modal
+          visible={showPeriodModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowPeriodModal(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowPeriodModal(false)}
+          >
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Analysis Period</Text>
+              {PERIOD_OPTIONS.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={styles.filterOption}
+                  onPress={() => {
+                    setPeriod(option.value);
+                    setShowPeriodModal(false);
+                    if (option.value === 'CUSTOM') {
+                      if (!customStartDate) setCustomStartDate(today());
+                      if (!customEndDate) setCustomEndDate(today());
+                      setPickerTab('FROM');
+                      setShowDatePicker(true);
+                    }
+                  }}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    period === option.value && styles.filterOptionActive
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Custom Range Date Picker */}
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowDatePicker(false)}
+          >
+            <TouchableOpacity activeOpacity={1} style={styles.datePickerSheet} onPress={() => {}}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>Select Date Range</Text>
+                <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setShowDatePicker(false)}>
+                  <X color={COLORS.textSecondary} size={16} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.dateTabs}>
+                <TouchableOpacity
+                  style={[styles.dateTab, pickerTab === 'FROM' && styles.dateTabActive]}
+                  onPress={() => setPickerTab('FROM')}
+                >
+                  <Text style={[styles.dateTabLabel, pickerTab === 'FROM' && styles.dateTabLabelActive]}>From</Text>
+                  <Text style={[styles.dateTabValue, pickerTab === 'FROM' && styles.dateTabValueActive]}>
+                    {fmtDate(customStartDate)}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.dateTab, pickerTab === 'TO' && styles.dateTabActive]}
+                  onPress={() => setPickerTab('TO')}
+                >
+                  <Text style={[styles.dateTabLabel, pickerTab === 'TO' && styles.dateTabLabelActive]}>To</Text>
+                  <Text style={[styles.dateTabValue, pickerTab === 'TO' && styles.dateTabValueActive]}>
+                    {fmtDate(customEndDate)}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {pickerTab === 'FROM' ? (
+                <MiniCalendar
+                  selectedDate={customStartDate}
+                  onSelectDate={(d) => {
+                    setCustomStartDate(d);
+                    if (d > customEndDate) setCustomEndDate(d);
+                    setPickerTab('TO');
+                  }}
+                />
+              ) : (
+                <MiniCalendar selectedDate={customEndDate} onSelectDate={setCustomEndDate} />
+              )}
+
+              {rangeTooLong && (
+                <Text style={styles.rangeHint}>Max range is 1 year — please choose a shorter span.</Text>
+              )}
+
+              <TouchableOpacity
+                style={[styles.applyBtn, (customStartDate > customEndDate || rangeTooLong) && styles.applyBtnDisabled]}
+                onPress={() => setShowDatePicker(false)}
+                disabled={customStartDate > customEndDate || rangeTooLong}
+              >
+                <Text style={styles.applyBtnText}>Apply Date Range</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

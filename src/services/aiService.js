@@ -26,15 +26,46 @@ export const updateUsage = async (userId) => {
   return newCount;
 };
 
-export const getFinancialContext = async (userId, userCurrency, profileName) => {
+const PERIOD_LABELS = {
+  '1M': 'Last 1 Month',
+  '3M': 'Last 3 Months',
+  '6M': 'Last 6 Months',
+  '1Y': 'Last 1 Year',
+  CUSTOM: 'Custom Range',
+};
+
+// Groups transactions by "Mon 'YY" label — same pattern as Reports' deriveChartData monthMap
+const buildMonthlyBreakdown = (txns) => {
+  const monthMap = {};
+  txns.forEach(t => {
+    const d = new Date(t.date);
+    const key = `${d.toLocaleString('default', { month: 'short' })} '${String(d.getFullYear()).slice(-2)}`;
+    if (!monthMap[key]) monthMap[key] = { month: key, income: 0, expense: 0, sortDate: new Date(d.getFullYear(), d.getMonth(), 1) };
+    const amt = parseFloat(t.amount);
+    if (t.type === 'income') monthMap[key].income += amt;
+    else monthMap[key].expense += amt;
+  });
+  return Object.values(monthMap)
+    .sort((a, b) => a.sortDate - b.sortDate)
+    .map(({ month, income, expense }) => ({ month, income, expense }));
+};
+
+export const getFinancialContext = async (userId, userCurrency, profileName, rangeOptions) => {
   try {
-    const [txRes, budgetRes, goalRes, shoppingLists, plannedPayments, allCats] = await Promise.all([
+    const [txRes, budgetRes, goalRes, shoppingLists, plannedPayments, allCats, selectedRangeRes] = await Promise.all([
       transactionService.getTransactions(userId, { period: 'ALL' }),
       budgetService.getBudgets(userId),
       savingsGoalService.getSavingsGoals(userId),
       shoppingService.getLists(userId),
       paymentService.getPlannedPayments(userId),
       transactionService.getCategories(userId),
+      rangeOptions
+        ? transactionService.getTransactions(userId, {
+            period: rangeOptions.period,
+            customStartDate: rangeOptions.customStartDate,
+            customEndDate: rangeOptions.customEndDate,
+          })
+        : Promise.resolve(null),
     ]);
 
     const catMap = Object.fromEntries((allCats || []).map(c => [c.id, c]));
@@ -101,6 +132,35 @@ export const getFinancialContext = async (userId, userCurrency, profileName) => 
       .sort((a, b) => b[1] - a[1]).slice(0, 5)
       .map(([name, amount]) => ({ name, amount }));
 
+    let selectedRange = null;
+    if (rangeOptions && selectedRangeRes) {
+      const rangeTxns = (selectedRangeRes.data || []).filter(t => t.is_loan !== 1);
+      const rangeCatBreakdown = {};
+      rangeTxns.filter(t => t.type === 'expense').forEach(t => {
+        const cat = t.categories?.name || 'Uncategorized';
+        rangeCatBreakdown[cat] = (rangeCatBreakdown[cat] || 0) + parseFloat(t.amount);
+      });
+      selectedRange = {
+        label: PERIOD_LABELS[rangeOptions.period] || rangeOptions.period,
+        startDate: rangeOptions.customStartDate || null,
+        endDate: rangeOptions.customEndDate || null,
+        expenses: sumExpenses(rangeTxns),
+        income: sumIncome(rangeTxns),
+        net: sumIncome(rangeTxns) - sumExpenses(rangeTxns),
+        transactionCount: rangeTxns.length,
+        categoryBreakdown: rangeCatBreakdown,
+        monthlyBreakdown: buildMonthlyBreakdown(rangeTxns),
+        recentTransactions: rangeTxns.slice(0, 30).map(t => ({
+          title: t.title,
+          amount: parseFloat(t.amount),
+          type: t.type,
+          category: t.categories?.name || 'Uncategorized',
+          date: t.date,
+          description: t.description,
+        })),
+      };
+    }
+
     const context = {
       userName: profileName || 'User',
       currency,
@@ -125,6 +185,7 @@ export const getFinancialContext = async (userId, userCurrency, profileName) => 
         totalTransactions: transactions.length,
         topSpendingCategories: topCategories,
       },
+      selectedRange,
       recentTransactions: transactions.slice(0, 20).map(t => ({
         title: t.title,
         amount: parseFloat(t.amount),
