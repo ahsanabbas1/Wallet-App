@@ -15,10 +15,21 @@ import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useAccountsFilter } from '../../context/AccountsFilterContext';
 import { SIZES } from '../../constants/theme';
 import { makeStyles } from './styles';
 import { accountService } from '../../services/accountService';
 import HeaderPlusButton from '../../components/HeaderPlusButton';
+import MiniCalendar from '../../components/Calendar';
+
+const today = () => new Date().toISOString().split('T')[0];
+
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${mo[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+};
 
 /* ─── constants ────────────────────────────────────────────────────────── */
 
@@ -74,11 +85,17 @@ const Accounts = () => {
   const [acctIcon, setAcctIcon] = useState('Wallet');
   const [saving, setSaving] = useState(false);
   /* ── details tab state ──────────────────────────────────────────── */
-  const [detailsTab, setDetailsTab] = useState('accounts'); // 'accounts' | 'details'
-  const [detailsAccountId, setDetailsAccountId] = useState(null); // null = All
-  const [detailsPeriod, setDetailsPeriod] = useState('ALL'); // 1W,1M,3M,6M,1Y,ALL
+  const {
+    detailsTab, setDetailsTab, // 'accounts' | 'details'
+    detailsAccountId, setDetailsAccountId, // null = All
+    detailsPeriod, setDetailsPeriod, // 1W,1M,3M,6M,1Y,ALL,CUSTOM
+    customStartDate, setCustomStartDate,
+    customEndDate, setCustomEndDate,
+  } = useAccountsFilter();
   const [detailsData, setDetailsData] = useState({ transactions: [], spent: 0, received: 0, count: 0 });
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState('FROM');
 
   /* ── transfer modal state ───────────────────────────────────────── */
   const [showTransfer, setShowTransfer] = useState(false);
@@ -120,14 +137,14 @@ const Accounts = () => {
     if (!userId) return;
     setDetailsLoading(true);
     try {
-      const data = await accountService.getTransactionsByAccount(userId, acctId, period);
+      const data = await accountService.getTransactionsByAccount(userId, acctId, period, customStartDate, customEndDate);
       setDetailsData(data);
     } catch (e) {
       setDetailsData({ transactions: [], spent: 0, received: 0, count: 0 });
     } finally {
       setDetailsLoading(false);
     }
-  }, [userId]);
+  }, [userId, customStartDate, customEndDate]);
 
   useEffect(() => {
     if (detailsTab === 'details') fetchDetails(detailsAccountId, detailsPeriod);
@@ -300,17 +317,20 @@ const Accounts = () => {
             <View style={styles.totalCard}>
               <Text style={styles.totalLabel}>Cash in Hands</Text>
               <Text style={styles.totalAmount}>{fmt(totalBalance, currency)}</Text>
-              <Text style={styles.totalSub}>{accounts.length} account{accounts.length !== 1 ? 's' : ''} · This month</Text>
+              <Text style={styles.totalSub}>{accounts.length} account{accounts.length !== 1 ? 's' : ''}</Text>
 
               {accounts.length > 0 && (
-                <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
-                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>− {fmt(totalMonthlySpent, currency)}</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Spent</Text>
-                  </View>
-                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
-                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>+ {fmt(totalMonthlyIn, currency)}</Text>
-                    <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Received</Text>
+                <View style={{ marginTop: 16 }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 10, fontWeight: '600', marginBottom: 6 }}>This month</Text>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>− {fmt(totalMonthlySpent, currency)}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Spent</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 10, alignItems: 'center' }}>
+                      <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800' }}>+ {fmt(totalMonthlyIn, currency)}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 10, marginTop: 2 }}>Total Received</Text>
+                    </View>
                   </View>
                 </View>
               )}
@@ -457,11 +477,20 @@ const Accounts = () => {
                 { key: '6M', label: '6M' },
                 { key: '1Y', label: '1Y' },
                 { key: 'ALL', label: 'All' },
+                { key: 'CUSTOM', label: 'Custom' },
               ].map(p => (
                 <TouchableOpacity
                   key={p.key}
                   style={[styles.detailsPeriodBtn, detailsPeriod === p.key && styles.detailsPeriodBtnActive]}
-                  onPress={() => setDetailsPeriod(p.key)}
+                  onPress={() => {
+                    if (p.key === 'CUSTOM') {
+                      if (!customStartDate) setCustomStartDate(today());
+                      if (!customEndDate) setCustomEndDate(today());
+                      setPickerTab('FROM');
+                      setShowDatePicker(true);
+                    }
+                    setDetailsPeriod(p.key);
+                  }}
                 >
                   <Text style={[styles.detailsPeriodText, detailsPeriod === p.key && styles.detailsPeriodTextActive]}>
                     {p.label}
@@ -469,6 +498,14 @@ const Accounts = () => {
                 </TouchableOpacity>
               ))}
             </View>
+            {detailsPeriod === 'CUSTOM' && (
+              <TouchableOpacity
+                style={styles.customRangeRow}
+                onPress={() => { setPickerTab('FROM'); setShowDatePicker(true); }}
+              >
+                <Text style={styles.customRangeText}>{fmtDate(customStartDate)} — {fmtDate(customEndDate)}</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Summary card */}
             <View style={[styles.detailsSummaryCard, { marginHorizontal: SIZES.padding, marginTop: 8 }]}>
@@ -554,6 +591,70 @@ const Accounts = () => {
       <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 24 }]} onPress={openAdd}>
         <Plus color="#fff" size={26} />
       </TouchableOpacity>
+
+      {/* ══════════════════════════════════════
+          CUSTOM RANGE DATE PICKER
+      ══════════════════════════════════════ */}
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowDatePicker(false)}>
+          <Pressable style={styles.datePickerSheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select Date Range</Text>
+              <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setShowDatePicker(false)}>
+                <X color={COLORS.textSecondary} size={16} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateTabs}>
+              <TouchableOpacity
+                style={[styles.dateTab, pickerTab === 'FROM' && styles.dateTabActive]}
+                onPress={() => setPickerTab('FROM')}
+              >
+                <Text style={[styles.dateTabLabel, pickerTab === 'FROM' && styles.dateTabLabelActive]}>From</Text>
+                <Text style={[styles.dateTabValue, pickerTab === 'FROM' && styles.dateTabValueActive]}>
+                  {fmtDate(customStartDate)}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dateTab, pickerTab === 'TO' && styles.dateTabActive]}
+                onPress={() => setPickerTab('TO')}
+              >
+                <Text style={[styles.dateTabLabel, pickerTab === 'TO' && styles.dateTabLabelActive]}>To</Text>
+                <Text style={[styles.dateTabValue, pickerTab === 'TO' && styles.dateTabValueActive]}>
+                  {fmtDate(customEndDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {pickerTab === 'FROM' ? (
+              <MiniCalendar
+                selectedDate={customStartDate}
+                onSelectDate={(d) => {
+                  setCustomStartDate(d);
+                  if (d > customEndDate) setCustomEndDate(d);
+                  setPickerTab('TO');
+                }}
+              />
+            ) : (
+              <MiniCalendar selectedDate={customEndDate} onSelectDate={setCustomEndDate} />
+            )}
+
+            <TouchableOpacity
+              style={[styles.applyBtn, customStartDate > customEndDate && styles.applyBtnDisabled]}
+              onPress={() => setShowDatePicker(false)}
+              disabled={customStartDate > customEndDate}
+            >
+              <Text style={styles.applyBtnText}>Apply Date Range</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ══════════════════════════════════════
           ADD / EDIT ACCOUNT MODAL

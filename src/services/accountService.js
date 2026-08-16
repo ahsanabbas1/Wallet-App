@@ -1,8 +1,23 @@
 import { getDb, generateId } from '../lib/db';
 import { transactionService } from './transactionService';
 
-function buildDateRange(period) {
+function buildDateRange(period, customStartDate, customEndDate) {
   if (period === 'ALL') return { clause: '', params: [] };
+  if (period === 'CUSTOM') {
+    const clauses = [];
+    const params = [];
+    if (customStartDate) {
+      clauses.push('date >= ?');
+      params.push(new Date(customStartDate).toISOString());
+    }
+    if (customEndDate) {
+      const end = new Date(customEndDate);
+      end.setHours(23, 59, 59, 999);
+      clauses.push('date <= ?');
+      params.push(end.toISOString());
+    }
+    return { clause: clauses.length ? ` AND ${clauses.join(' AND ')}` : '', params };
+  }
   const now = new Date();
   let start;
   switch (period) {
@@ -57,9 +72,9 @@ export const accountService = {
     }));
   },
 
-  async getTransactionsByAccount(userId, accountId, period = 'ALL') {
+  async getTransactionsByAccount(userId, accountId, period = 'ALL', customStartDate, customEndDate) {
     const db = getDb();
-    const { clause, params } = buildDateRange(period);
+    const { clause, params } = buildDateRange(period, customStartDate, customEndDate);
     const accountFilter = accountId ? ' AND account_id = ?' : ' AND account_id IS NOT NULL';
     const acctParams = accountId ? [accountId] : [];
 

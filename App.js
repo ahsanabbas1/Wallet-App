@@ -9,6 +9,7 @@ import { ProfileProvider }          from './src/context/ProfileContext';
 import { ThemeProvider, useTheme }  from './src/context/ThemeContext';
 import { LockProvider, useLock }    from './src/context/LockContext';
 import { LedgerFilterProvider }     from './src/context/LedgerFilterContext';
+import { AccountsFilterProvider }   from './src/context/AccountsFilterContext';
 import GlobalDrawer                 from './src/components/GlobalDrawer';
 import LockScreen                   from './src/screens/LockScreen/index';
 import { StatusBar }                from 'expo-status-bar';
@@ -116,12 +117,14 @@ const AppContent = () => {
           <LockGate>
             <DrawerProvider>
               <LedgerFilterProvider>
-                <NavigationContainer>
-                  <ThemedShell>
-                    <AppNavigator />
-                    <GlobalDrawer />
-                  </ThemedShell>
-                </NavigationContainer>
+                <AccountsFilterProvider>
+                  <NavigationContainer>
+                    <ThemedShell>
+                      <AppNavigator />
+                      <GlobalDrawer />
+                    </ThemedShell>
+                  </NavigationContainer>
+                </AccountsFilterProvider>
               </LedgerFilterProvider>
             </DrawerProvider>
           </LockGate>
