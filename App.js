@@ -8,6 +8,7 @@ import { AuthProvider, useAuth }    from './src/context/AuthContext';
 import { ProfileProvider }          from './src/context/ProfileContext';
 import { ThemeProvider, useTheme }  from './src/context/ThemeContext';
 import { LockProvider, useLock }    from './src/context/LockContext';
+import { LedgerFilterProvider }     from './src/context/LedgerFilterContext';
 import GlobalDrawer                 from './src/components/GlobalDrawer';
 import LockScreen                   from './src/screens/LockScreen/index';
 import { StatusBar }                from 'expo-status-bar';
@@ -114,12 +115,14 @@ const AppContent = () => {
         <LockProvider>
           <LockGate>
             <DrawerProvider>
-              <NavigationContainer>
-                <ThemedShell>
-                  <AppNavigator />
-                  <GlobalDrawer />
-                </ThemedShell>
-              </NavigationContainer>
+              <LedgerFilterProvider>
+                <NavigationContainer>
+                  <ThemedShell>
+                    <AppNavigator />
+                    <GlobalDrawer />
+                  </ThemedShell>
+                </NavigationContainer>
+              </LedgerFilterProvider>
             </DrawerProvider>
           </LockGate>
         </LockProvider>

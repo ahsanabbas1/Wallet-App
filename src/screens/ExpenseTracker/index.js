@@ -10,8 +10,19 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProfile } from '../../context/ProfileContext';
+import { useLedgerFilter } from '../../context/LedgerFilterContext';
 import { TextInput } from 'react-native';
 import { transactionService } from '../../services/transactionService';
+import MiniCalendar from '../../components/Calendar';
+
+const today = () => new Date().toISOString().split('T')[0];
+
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${mo[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+};
 
 const formatAmount = (amount) => {
   const num = parseFloat(amount || 0);
@@ -31,12 +42,16 @@ const ExpenseTracker = ({ navigation }) => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState({ income: 0, expense: 0 });
-  const [filterPeriod, setFilterPeriod] = useState('1M'); 
+  const {
+    filterPeriod, setFilterPeriod,
+    customStartDate, setCustomStartDate,
+    customEndDate, setCustomEndDate,
+  } = useLedgerFilter();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pickerTab, setPickerTab] = useState('FROM');
 
   const filterOptions = [
     { label: 'Today', value: 'TODAY' },
@@ -278,35 +293,6 @@ const ExpenseTracker = ({ navigation }) => {
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Filter by Date</Text>
-            {filterPeriod === 'CUSTOM' && (
-              <View style={{ marginBottom: 15 }}>
-                <Text style={{ color: COLORS.textSecondary, marginBottom: 5, fontSize: 12 }}>Start Date (YYYY-MM-DD)</Text>
-                <TextInput
-                  style={{ backgroundColor: COLORS.background, color: COLORS.text, padding: 8, borderRadius: 4, marginBottom: 10 }}
-                  placeholder="2024-01-01"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                  value={customStartDate}
-                  onChangeText={setCustomStartDate}
-                />
-                <Text style={{ color: COLORS.textSecondary, marginBottom: 5, fontSize: 12 }}>End Date (YYYY-MM-DD)</Text>
-                <TextInput
-                  style={{ backgroundColor: COLORS.background, color: COLORS.text, padding: 8, borderRadius: 4, marginBottom: 10 }}
-                  placeholder="2024-12-31"
-                  placeholderTextColor="rgba(255,255,255,0.2)"
-                  value={customEndDate}
-                  onChangeText={setCustomEndDate}
-                />
-                <TouchableOpacity
-                  style={{ backgroundColor: COLORS.primary, padding: 10, borderRadius: 4, alignItems: 'center' }}
-                  onPress={() => {
-                    fetchTransactions();
-                    setShowFilterModal(false);
-                  }}
-                >
-                  <Text style={{ color: COLORS.text, fontWeight: 'bold' }}>Apply Custom Filter</Text>
-                </TouchableOpacity>
-              </View>
-            )}
             {filterOptions.map((option) => (
               <TouchableOpacity
                 key={option.value}
@@ -314,6 +300,12 @@ const ExpenseTracker = ({ navigation }) => {
                 onPress={() => {
                   setFilterPeriod(option.value);
                   setShowFilterModal(false);
+                  if (option.value === 'CUSTOM') {
+                    if (!customStartDate) setCustomStartDate(today());
+                    if (!customEndDate) setCustomEndDate(today());
+                    setPickerTab('FROM');
+                    setShowDatePicker(true);
+                  }
                 }}
               >
                 <Text style={[
@@ -325,6 +317,75 @@ const ExpenseTracker = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Custom Range Date Picker */}
+      <Modal
+        visible={showDatePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDatePicker(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.datePickerSheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Select Date Range</Text>
+              <TouchableOpacity style={styles.sheetCloseBtn} onPress={() => setShowDatePicker(false)}>
+                <X color={COLORS.textSecondary} size={16} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.dateTabs}>
+              <TouchableOpacity
+                style={[styles.dateTab, pickerTab === 'FROM' && styles.dateTabActive]}
+                onPress={() => setPickerTab('FROM')}
+              >
+                <Text style={[styles.dateTabLabel, pickerTab === 'FROM' && styles.dateTabLabelActive]}>From</Text>
+                <Text style={[styles.dateTabValue, pickerTab === 'FROM' && styles.dateTabValueActive]}>
+                  {fmtDate(customStartDate)}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dateTab, pickerTab === 'TO' && styles.dateTabActive]}
+                onPress={() => setPickerTab('TO')}
+              >
+                <Text style={[styles.dateTabLabel, pickerTab === 'TO' && styles.dateTabLabelActive]}>To</Text>
+                <Text style={[styles.dateTabValue, pickerTab === 'TO' && styles.dateTabValueActive]}>
+                  {fmtDate(customEndDate)}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {pickerTab === 'FROM' ? (
+              <MiniCalendar
+                selectedDate={customStartDate}
+                onSelectDate={(d) => {
+                  setCustomStartDate(d);
+                  if (d > customEndDate) setCustomEndDate(d);
+                  setPickerTab('TO');
+                }}
+              />
+            ) : (
+              <MiniCalendar selectedDate={customEndDate} onSelectDate={setCustomEndDate} />
+            )}
+
+            <TouchableOpacity
+              style={[styles.applyBtn, customStartDate > customEndDate && styles.applyBtnDisabled]}
+              onPress={() => {
+                fetchTransactions();
+                setShowDatePicker(false);
+              }}
+              disabled={customStartDate > customEndDate}
+            >
+              <Text style={styles.applyBtnText}>Apply Date Range</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>
