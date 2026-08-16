@@ -27,6 +27,7 @@ import HeaderMenu from '../../components/HeaderMenu';
 import StatSummaryCard from '../../components/StatSummaryCard';
 import InsightsPanel from '../../components/InsightsPanel';
 import NetWorthCard from '../../components/NetWorthCard';
+import RecurringSuggestionsCard from '../../components/RecurringSuggestionsCard';
 import { PERIODS as TREND_PERIODS } from '../../components/Charts/IncomeExpenseTrendChart';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -45,6 +46,8 @@ import { dashboardService } from '../../services/dashboardService';
 import { transactionService } from '../../services/transactionService';
 import { generateNotifications, getUnreadCount } from '../../services/notificationService';
 import { netWorthService } from '../../services/netWorthService';
+import { recurringDetectionService } from '../../services/recurringDetectionService';
+import { paymentService } from '../../services/paymentService';
 import WhatsNewModal from '../../components/WhatsNewModal';
 import { APP_VERSION } from '../../constants/changelog';
 import { getDb } from '../../lib/db';
@@ -79,6 +82,7 @@ const DashboardOverview = () => {
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
   const [netWorthHistory, setNetWorthHistory] = useState([]);
   const [trendTab, setTrendTab] = useState(0); // shared with the Financial Health trend chart
+  const [recurringSuggestions, setRecurringSuggestions] = useState([]);
   const [expenseChange, setExpenseChange] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
   const [balanceVisible, setBalanceVisible] = useState(false);
@@ -118,6 +122,11 @@ const DashboardOverview = () => {
         .then(() => netWorthService.snapshotToday(userId))
         .then(() => netWorthService.getHistoryByPeriod(userId, TREND_PERIODS[trendTab].key))
         .then(setNetWorthHistory)
+        .catch(() => { });
+
+      // Fire-and-forget recurring-transaction detection (non-blocking)
+      recurringDetectionService.detect(userId)
+        .then(setRecurringSuggestions)
         .catch(() => { });
 
       const dashData = await dashboardService.getDashboardData(userId);
@@ -209,7 +218,34 @@ const DashboardOverview = () => {
     );
   }, [userId]);
 
+  const handleAddRecurring = useCallback(async (suggestion) => {
+    try {
+      const nextDateTime = new Date(`${suggestion.suggestedNextDate}T09:00:00`).toISOString();
+      await paymentService.addPlannedPayment({
+        user_id: userId,
+        title: suggestion.title,
+        amount: suggestion.amount,
+        type: suggestion.type,
+        frequency: suggestion.frequency,
+        start_date: suggestion.suggestedNextDate,
+        end_date: null,
+        next_date: nextDateTime,
+        category_id: suggestion.category_id,
+        account_id: suggestion.account_id,
+      });
+      setRecurringSuggestions(prev => prev.filter(s => s.signature !== suggestion.signature));
+      loadDashboardData();
+    } catch (error) {
+      Alert.alert('Error', `Could not add planned payment. ${error.message}`);
+    }
+  }, [userId]);
 
+  const handleDismissRecurring = useCallback(async (suggestion) => {
+    setRecurringSuggestions(prev => prev.filter(s => s.signature !== suggestion.signature));
+    try {
+      await recurringDetectionService.dismiss(userId, suggestion.signature);
+    } catch (_) {}
+  }, [userId]);
 
   const handleDismissWhatsNew = async (dontShowAgain) => {
     setShowWhatsNew(false);
@@ -363,6 +399,12 @@ const DashboardOverview = () => {
             <Text style={styles.actionText}>Planned</Text>
           </Pressable>
         </ScrollView>
+
+        <RecurringSuggestionsCard
+          suggestions={recurringSuggestions}
+          onAdd={handleAddRecurring}
+          onDismiss={handleDismissRecurring}
+        />
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Expense Structure</Text>

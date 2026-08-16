@@ -208,6 +208,17 @@ export async function runMigrations(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_history_user_date ON balance_history(user_id, date);
   `);
 
+  // Dismissed recurring-transaction suggestions (Feature: Recurring Transaction Detection)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS dismissed_recurring_suggestions (
+      id         TEXT PRIMARY KEY,
+      user_id    TEXT NOT NULL,
+      signature  TEXT NOT NULL,
+      created_at TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_dismissed_recurring_user_sig ON dismissed_recurring_suggestions(user_id, signature);
+  `);
+
   // Budget transfers table (Feature: transfer between budget heads)
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS budget_transfers (
