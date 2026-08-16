@@ -196,6 +196,18 @@ export async function runMigrations(db) {
     CREATE INDEX IF NOT EXISTS idx_accounts_user ON accounts(user_id, is_active);
   `);
 
+  // Balance history table (Feature: Net Worth Tracking — one snapshot row per user per day)
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS balance_history (
+      id            TEXT PRIMARY KEY,
+      user_id       TEXT NOT NULL,
+      date          TEXT NOT NULL,
+      total_balance REAL DEFAULT 0,
+      created_at    TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_history_user_date ON balance_history(user_id, date);
+  `);
+
   // Budget transfers table (Feature: transfer between budget heads)
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS budget_transfers (

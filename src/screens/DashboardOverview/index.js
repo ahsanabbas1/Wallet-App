@@ -26,6 +26,8 @@ import HealthScoreCard from '../../components/HealthScoreCard';
 import HeaderMenu from '../../components/HeaderMenu';
 import StatSummaryCard from '../../components/StatSummaryCard';
 import InsightsPanel from '../../components/InsightsPanel';
+import NetWorthCard from '../../components/NetWorthCard';
+import { PERIODS as TREND_PERIODS } from '../../components/Charts/IncomeExpenseTrendChart';
 
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useDrawer } from '../../context/DrawerContext';
@@ -42,6 +44,7 @@ import { formatAmount } from '../../utils/formatters';
 import { dashboardService } from '../../services/dashboardService';
 import { transactionService } from '../../services/transactionService';
 import { generateNotifications, getUnreadCount } from '../../services/notificationService';
+import { netWorthService } from '../../services/netWorthService';
 import WhatsNewModal from '../../components/WhatsNewModal';
 import { APP_VERSION } from '../../constants/changelog';
 import { getDb } from '../../lib/db';
@@ -74,6 +77,8 @@ const DashboardOverview = () => {
     budget: { totalBudget: 0, totalUsed: 0, count: 0 }
   });
   const [categoryBreakdown, setCategoryBreakdown] = useState([]);
+  const [netWorthHistory, setNetWorthHistory] = useState([]);
+  const [trendTab, setTrendTab] = useState(0); // shared with the Financial Health trend chart
   const [expenseChange, setExpenseChange] = useState(0);
   const [performanceMetrics, setPerformanceMetrics] = useState({ balanceScore: 0, cashFlowScore: 0 });
   const [balanceVisible, setBalanceVisible] = useState(false);
@@ -108,6 +113,13 @@ const DashboardOverview = () => {
         .then(() => getUnreadCount(userId).then(setUnreadCount))
         .catch(() => { });
 
+      // Fire-and-forget net worth snapshot + history (non-blocking)
+      netWorthService.backfillIfEmpty(userId)
+        .then(() => netWorthService.snapshotToday(userId))
+        .then(() => netWorthService.getHistoryByPeriod(userId, TREND_PERIODS[trendTab].key))
+        .then(setNetWorthHistory)
+        .catch(() => { });
+
       const dashData = await dashboardService.getDashboardData(userId);
 
 
@@ -124,6 +136,15 @@ const DashboardOverview = () => {
       setLoading(false);
     }
   };
+
+  // Re-fetch just the net worth history when the shared trend period changes
+  // (loadDashboardData only re-runs on focus, not on every tab switch)
+  useEffect(() => {
+    if (!userId || !dbReady) return;
+    netWorthService.getHistoryByPeriod(userId, TREND_PERIODS[trendTab].key)
+      .then(setNetWorthHistory)
+      .catch(() => { });
+  }, [userId, dbReady, trendTab]);
 
   useFocusEffect(
     useCallback(() => {
@@ -263,36 +284,52 @@ const DashboardOverview = () => {
         {/* Dashboard Cards Layout */}
         <View style={{ marginBottom: 24 }}>
           {/* Financial Health (merged Net Worth + Health Score) */}
-          <HealthScoreCard totals={totals} expenseChange={expenseChange} userId={userId} gradient balanceVisible={balanceVisible} />
+          <HealthScoreCard
+            totals={totals}
+            expenseChange={expenseChange}
+            userId={userId}
+            gradient
+            balanceVisible={balanceVisible}
+            trendTab={trendTab}
+            onTrendTabChange={setTrendTab}
+          />
 
-          {(totals.budget.count > 0 || (totals.loan.total > 0 && totals.loan.remaining > 0)) && (
-            <View style={styles.statRow}>
-              {totals.budget.count > 0 && (
-                <StatSummaryCard
-                  icon={PiggyBank}
-                  accentColor={COLORS.primary}
-                  label="Budget"
-                  value={mv(`${currency} ${formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))}`)}
-                  meta={mv(`${((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}% used · ${totals.budget.count} active`)}
-                  progress={totals.budget.totalUsed / (totals.budget.totalBudget || 1)}
-                  progressColor={totals.budget.totalUsed > totals.budget.totalBudget ? COLORS.error : COLORS.primary}
-                  onPress={() => navigation.navigate('Budgeting')}
-                />
-              )}
-              {totals.loan.total > 0 && totals.loan.remaining > 0 && (
-                <StatSummaryCard
-                  icon={Banknote}
-                  accentColor={COLORS.accent}
-                  label="Loans"
-                  value={mv(`${currency} ${formatAmount(totals.loan.remaining)}`)}
-                  meta={mv(`${formatAmount(totals.loan.paid)} paid of ${formatAmount(totals.loan.total)}`)}
-                  progress={totals.loan.paid / (totals.loan.total || 1)}
-                  progressColor={COLORS.accent}
-                  onPress={() => navigation.navigate('Loans')}
-                />
-              )}
-            </View>
-          )}
+          <View style={styles.statRow}>
+            <StatSummaryCard
+              icon={PiggyBank}
+              accentColor={COLORS.primary}
+              label="Budget"
+              value={
+                totals.budget.count > 0
+                  ? mv(`${currency} ${formatAmount(Math.max(0, totals.budget.totalBudget - totals.budget.totalUsed))}`)
+                  : 'No budget'
+              }
+              meta={
+                totals.budget.count > 0
+                  ? mv(`${((totals.budget.totalUsed / (totals.budget.totalBudget || 1)) * 100).toFixed(0)}% used · ${totals.budget.count} active`)
+                  : 'Tap to create one'
+              }
+              progress={totals.budget.count > 0 ? totals.budget.totalUsed / (totals.budget.totalBudget || 1) : 0}
+              progressColor={totals.budget.totalUsed > totals.budget.totalBudget ? COLORS.error : COLORS.primary}
+              onPress={() => navigation.navigate('Budgeting')}
+            />
+            <StatSummaryCard
+              icon={Banknote}
+              accentColor={COLORS.accent}
+              label="Loans"
+              value={
+                totals.loan.total === 0
+                  ? 'No loans'
+                  : totals.loan.remaining > 0
+                    ? mv(`${currency} ${formatAmount(totals.loan.remaining)}`)
+                    : 'Settled'
+              }
+              meta={totals.loan.total > 0 ? mv(`${formatAmount(totals.loan.paid)} paid of ${formatAmount(totals.loan.total)}`) : 'Tap to add one'}
+              progress={totals.loan.total > 0 ? totals.loan.paid / totals.loan.total : 0}
+              progressColor={totals.loan.remaining > 0 ? COLORS.accent : COLORS.success}
+              onPress={() => navigation.navigate('Loans')}
+            />
+          </View>
         </View>
 
         {/* Quick Actions */}
@@ -425,6 +462,15 @@ const DashboardOverview = () => {
 
         {/* Insights Section */}
         <InsightsPanel performanceMetrics={performanceMetrics} totals={totals} />
+
+        {/* Net Worth History — follows the Financial Health trend period above */}
+        <View style={{ marginTop: 24 }}>
+          <NetWorthCard
+            history={netWorthHistory}
+            periodKey={TREND_PERIODS[trendTab].key}
+            balanceVisible={balanceVisible}
+          />
+        </View>
       </ScrollView>
       <WhatsNewModal visible={showWhatsNew} onDismiss={handleDismissWhatsNew} />
       <CurrencyConverterModal visible={showConverter} onClose={() => setShowConverter(false)} />

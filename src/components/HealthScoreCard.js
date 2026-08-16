@@ -11,7 +11,7 @@ import IncomeExpenseTrendChart from './Charts/IncomeExpenseTrendChart';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const STATUS = { GOOD: 'good', FAIR: 'fair', LOW: 'low' };
 
-const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisible }) => {
+const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisible, trendTab, onTrendTabChange }) => {
   const { colors: COLORS } = useTheme();
   const { currency } = useProfile();
   const styles = useMemo(() => makeStyles(COLORS), [COLORS]);
@@ -172,7 +172,7 @@ const HealthScoreCard = ({ totals, expenseChange, userId, gradient, balanceVisib
         </View>
       </View>
 
-      <IncomeExpenseTrendChart userId={userId} light={gradient} />
+      <IncomeExpenseTrendChart userId={userId} light={gradient} activeTab={trendTab} onTabChange={onTrendTabChange} />
 
       {tip ? (
         <View style={[styles.tipRow, { borderTopColor: c.border }]}>

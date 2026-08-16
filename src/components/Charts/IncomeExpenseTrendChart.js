@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useProfile } from '../../context/ProfileContext';
 import { transactionService } from '../../services/transactionService';
 
-const PERIODS = [
+export const PERIODS = [
   { label: 'Monthly', key: '1M', num: 30, type: 'day' },
   { label: '6 Months', key: '6M', num: 6, type: 'month' },
   { label: 'Yearly', key: '1Y', num: 12, type: 'month' },
@@ -57,10 +57,12 @@ function groupByMonth(transactions, numMonths) {
     .map(([_, v]) => ({ ...v, net: v.income - v.expense }));
 }
 
-const IncomeExpenseTrendChart = ({ userId, light }) => {
+const IncomeExpenseTrendChart = ({ userId, light, activeTab: controlledTab, onTabChange }) => {
   const { colors: COLORS } = useTheme();
   const { currency } = useProfile();
-  const [activeTab, setActiveTab] = useState(0);
+  const [internalTab, setInternalTab] = useState(0);
+  const activeTab = controlledTab != null ? controlledTab : internalTab;
+  const setActiveTab = onTabChange || setInternalTab;
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
 

@@ -4,11 +4,11 @@ import { Svg, Polyline, Circle, G, Text as SvgText, Line } from 'react-native-sv
 import { useProfile } from '../../context/ProfileContext';
 import { useTheme } from '../../context/ThemeContext';
 
-const LineChart = ({ data, label, color, height = 250 }) => {
+const LineChart = ({ data, label, color, height = 250, containerWidth }) => {
   const { currency } = useProfile();
   const { colors: COLORS } = useTheme();
   const lineColor = color || COLORS.primary;
-  const { width } = Dimensions.get('window');
+  const width = containerWidth || Dimensions.get('window').width;
   const chartWidth = width - 40;
   const chartHeight = height - 80;
   const padding = 40;
