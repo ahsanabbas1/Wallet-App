@@ -16,6 +16,7 @@ import { useDrawer }       from '../../context/DrawerContext';
 import { useAuth }         from '../../context/AuthContext';
 import { useProfile }      from '../../context/ProfileContext';
 import { useTheme }        from '../../context/ThemeContext';
+import { useReportsFilter } from '../../context/ReportsFilterContext';
 import { getDb }           from '../../lib/db';
 import { transactionService } from '../../services/transactionService';
 import { useFocusEffect }  from '@react-navigation/native';
@@ -321,13 +322,17 @@ const Reports = () => {
   const styles               = useMemo(() => makeStyles(COLORS), [COLORS]);
   const fmt                  = useMemo(() => fmtAmt(currency), [currency]);
 
-  /* ── period / date state ──────────────────────────────────────────── */
-  const [filterPeriod,   setFilterPeriod]   = useState('MONTH');
-  const [customStart,    setCustomStart]    = useState(today());
-  const [customEnd,      setCustomEnd]      = useState(today());
-  const [appliedStart,   setAppliedStart]   = useState('');
-  const [appliedEnd,     setAppliedEnd]     = useState('');
-  const [isCustomActive, setIsCustomActive] = useState(false);
+  /* ── period / date state (persisted across navigation) ─────────────── */
+  const {
+    filterPeriod,   setFilterPeriod,
+    appliedStart,   setAppliedStart,
+    appliedEnd,     setAppliedEnd,
+    isCustomActive, setIsCustomActive,
+    activeTab,      setActiveTab,
+    ledgerView,     setLedgerView,
+  } = useReportsFilter();
+  const [customStart, setCustomStart] = useState(today());
+  const [customEnd,   setCustomEnd]   = useState(today());
 
   /* ── modal ────────────────────────────────────────────────────────── */
   const [pickerVisible,     setPickerVisible]     = useState(false);
@@ -336,8 +341,6 @@ const Reports = () => {
   const [exporting,         setExporting]         = useState(false);
 
   /* ── UI ───────────────────────────────────────────────────────────── */
-  const [activeTab,  setActiveTab]  = useState(0);
-  const [ledgerView, setLedgerView] = useState('TABLE');
   const [loading,    setLoading]    = useState(true);
   const [fetchError, setFetchError] = useState(false);
 
